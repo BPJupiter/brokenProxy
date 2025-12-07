@@ -5,13 +5,11 @@ import sys
 import subprocess
 
 from dnslookup import dns_resolve, DNS_TAG
-from iocolour import bcolours
+from iocolour import *
+from traceroute import traceroute
 
 HOST = '127.0.0.1'
 PORT = 8080
-
-PROXY_TAG = f"{bcolours.OKBLUE}[Proxy]{bcolours.ENDC}"
-ERR_TAG = f"{bcolours.FAIL}[Error]{bcolours.ENDC}"
 
 def get_host_port(url):
     http_pos = url.find(b"http://")
@@ -51,20 +49,8 @@ def handle_client(client_socket):
             return
         print(f"{DNS_TAG} {host} resolved to {destination_ip}")
 
-        try:
-            traceroute = subprocess.run(
-                ["traceroute", "-n", "-q", "1", "-w", "1", destination_ip],
-                capture_output=True,
-                text=True,
-                check=True,
-                timeout=15
-            )
-            print(f"{PROXY_TAG} Traceroute Results:\n{traceroute.stdout.strip()}")
-        except subprocess.CalledProcessError as e:
-            print(f"{ERR_TAG} Traceroute command failed: {e}")
-        except subprocess.TimeoutExpired:
-            print(f"{ERR_TAG} Traceroute timed out.")
-
+        tr_output = traceroute(destination_ip)
+        
         remote_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         remote_socket.connect((destination_ip, port))
 

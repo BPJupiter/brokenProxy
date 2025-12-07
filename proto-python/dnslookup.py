@@ -3,7 +3,10 @@ import dns.query
 import dns.rdatatype
 import dns.resolver
 
-from iocolour import bcolours
+import subprocess
+
+from iocolour import *
+from traceroute import traceroute
 
 ROOT_IP_A = '198.41.0.4'
 ROOT_IP_B = '170.247.170.2'
@@ -23,10 +26,6 @@ ROOT_IP_DICT = {
     "g": ROOT_IP_G
 }
 
-DNS_TAG = f"{bcolours.OKCYAN}[DNS Lookup]{bcolours.ENDC}"
-ERR_TAG = f"{bcolours.FAIL}[Error]{bcolours.ENDC}"
-TIMEOUT_TAG = f"{bcolours.WARNING}[Timeout]{bcolours.ENDC}"
-
 def dns_resolve(root_server, hostname):
     current_nameserver = ROOT_IP_DICT[root_server]
     query_name = dns.name.from_text(hostname)
@@ -36,6 +35,13 @@ def dns_resolve(root_server, hostname):
         # 1. Create a query message for an A record (IPv4 address)
         query = dns.message.make_query(query_name, dns.rdatatype.A)
         query.flags ^= dns.flags.RD
+
+        # TODO: Query database to avoid excessive traceroutes
+
+        # 1.9. Traceroute current nameserver
+        tr_output = traceroute(current_nameserver)
+
+        # TODO: Determine cable and whether or not to forward packet
 
         print(f"{DNS_TAG} Querying NS: {current_nameserver}")
 
@@ -53,7 +59,7 @@ def dns_resolve(root_server, hostname):
 
         # Check if we found the final answer
         if response.answer:
-            print(f"{DNS_TAG} {bcolours.OKGREEN}[Success]{bcolours.ENDC} Found the answer:")
+            print(f"{DNS_TAG} {bcolours.OKGREEN}[Success]{bcolours.ENDC} Found the answer")
             for rrset in response.answer:
                 if rrset.rdtype == dns.rdatatype.A:
                     return str(rrset[0]) # Return the first IPv4 Address
