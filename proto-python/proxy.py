@@ -11,7 +11,7 @@ from traceroute import traceroute
 HOST = '127.0.0.1'
 PORT = 8080
 
-def get_host_port(url):
+def host_port_from_url(url):
     http_pos = url.find(b"http://")
     if http_pos == -1:
         http_pos = url.find(b"https://")
@@ -41,16 +41,16 @@ def handle_client(client_socket):
         first_line = request.split(b'\n')[0]
         url = first_line.split(b' ')[1]
 
-        host, port = get_host_port(url)
+        host, port = host_port_from_url(url)
 
-        destination_ip = dns_resolve("f", host)
+        destination_ip = dns_resolve("j", host)
         if destination_ip == None:
             print(f"{DNS_TAG} {ERR_TAG} Failed to resolve hostname {host}")
             return
         print(f"{DNS_TAG} {host} resolved to {destination_ip}")
 
         tr_output = traceroute(destination_ip)
-        
+
         remote_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         remote_socket.connect((destination_ip, port))
 

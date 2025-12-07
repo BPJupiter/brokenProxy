@@ -15,6 +15,12 @@ ROOT_IP_D = '199.7.91.13'
 ROOT_IP_E = '192.203.230.10'
 ROOT_IP_F = '192.5.5.241'
 ROOT_IP_G = '192.112.36.4'
+ROOT_IP_H = '198.97.190.53'
+ROOT_IP_I = '192.36.148.17'
+ROOT_IP_J = '192.58.128.30'
+ROOT_IP_K = '193.0.14.129'
+ROOT_IP_L = '199.7.83.42'
+ROOT_IP_M = '202.12.27.33'
 
 ROOT_IP_DICT = {
     "a": ROOT_IP_A,
@@ -23,7 +29,13 @@ ROOT_IP_DICT = {
     "d": ROOT_IP_D,
     "e": ROOT_IP_E,
     "f": ROOT_IP_F,
-    "g": ROOT_IP_G
+    "g": ROOT_IP_G,
+    "h": ROOT_IP_H,
+    "i": ROOT_IP_I,
+    "j": ROOT_IP_J,
+    "k": ROOT_IP_K,
+    "l": ROOT_IP_L,
+    "m": ROOT_IP_M
 }
 
 def dns_resolve(root_server, hostname):
