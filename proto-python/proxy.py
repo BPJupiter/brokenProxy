@@ -3,6 +3,7 @@ import threading
 import traceback
 import sys
 import subprocess
+import time
 
 from dnslookup import dns_resolve, DNS_TAG
 from iocolour import *
@@ -65,6 +66,7 @@ def handle_client(client_socket):
             print(f"{PROXY_TAG} Remote socket sent request!")
 
         def tunnel_data(source, destination):
+            source.settimeout(15)
             while True:
                 try:
                     data = source.recv(4096)
@@ -76,6 +78,9 @@ def handle_client(client_socket):
 
         client_to_remote_thread = threading.Thread(target=tunnel_data, args=(client_socket, remote_socket))
         remote_to_client_thread = threading.Thread(target=tunnel_data, args=(remote_socket, client_socket))
+
+        client_to_remote_thread.daemon = True;
+        remote_to_client_thread.daemon = True;
 
         client_to_remote_thread.start()
         remote_to_client_thread.start()
@@ -100,6 +105,7 @@ def handle_client(client_socket):
         client_socket.close()
         if 'remote_socket' in locals():
             remote_socket.close()
+    return
 
 def start_proxy_server():
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -114,7 +120,9 @@ def start_proxy_server():
         print(f"{PROXY_TAG} Accepted connection from {addr[0]}:{addr[1]}")
 
         client_handler = threading.Thread(target=handle_client, args=(client_socket,))
+        client_handler.daemon = True
         client_handler.start()
+        print(f"{bcolours.WARNING}[Info]{bcolours.ENDC} ThreadCount: {threading.active_count()}")
 
 if __name__ == "__main__":
     start_proxy_server()

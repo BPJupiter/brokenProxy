@@ -19,6 +19,3 @@ def traceroute(address: str):
     except subprocess.TimeoutExpired as e:
         print(f"{TRACERT_TAG} {TIMEOUT_TAG} Traceroute timed out.")
         return ""
-
-def traceroute(foo):
-    return
