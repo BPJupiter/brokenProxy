@@ -1,0 +1,27 @@
+#ifndef DNSLOOKUP_H
+#define DNSLOOKUP_H
+
+typedef enum RootServerIndex {
+  A,
+  B,
+  C,
+  D,
+  E,
+  F,
+  G,
+  H,
+  I,
+  J,
+  K,
+  L,
+  M
+} RootServerIndex;
+
+short dns_resolve(unsigned char* host, int query_type, RootServerIndex root_server, unsigned char*** answer_index);
+
+#ifdef DNS_DEBUG
+extern void print_response_info(void*);
+extern void print_response_contents(void*, void*, void*, void*, void*);
+#endif
+
+#endif

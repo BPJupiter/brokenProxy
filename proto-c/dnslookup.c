@@ -1,0 +1,518 @@
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <unistd.h>
+#include <stdarg.h>
+
+#include "dnslookup.h"
+#include "traceroute.h"
+#include "Callisto/callisto.h"
+
+char RootServers[][16] = {
+  "198.41.0.4",
+  "170.247.170.2",
+  "192.33.4.12",
+  "199.7.91.13",
+  "192.203.230.10",
+  "192.5.5.241",
+  "192.112.36.4",
+  "198.97.190.53",
+  "192.36.148.17",
+  "192.58.128.30",
+  "193.0.14.129",
+  "199.7.83.42",
+  "202.12.27.33",
+};
+int dns_server_count = 0;
+
+#define T_A 1 //Ipv4 address
+#define T_NS 2 //Nameserver
+#define T_CNAME 5 //Canonical name
+#define T_SOA 6 //Start of authority zone
+#define T_PTR 12 //Domain name pointer
+#define T_MX 15 //Mail server
+
+static void change_to_dns_name_format(unsigned char*, unsigned char*);
+static unsigned char* read_name(unsigned char*, unsigned char*, int*);
+static int dns_printf(const char *format, ...);
+
+#define printf(...) dns_printf(__VA_ARGS__)
+
+struct DNS_HEADER
+{
+  unsigned short id;
+
+  unsigned char rd :1;
+  unsigned char tc :1;
+  unsigned char aa :1;
+  unsigned char opcode :4;
+  unsigned char qr :1;
+
+  unsigned char rcode :4;
+  unsigned char cd :1;
+  unsigned char ad :1;
+  unsigned char z :1;
+  unsigned char ra :1;
+
+  unsigned short q_count;
+  unsigned short ans_count;
+  unsigned short auth_count;
+  unsigned short add_count;
+};
+
+//Constant sized fields of query structure
+struct QUESTION
+{
+  unsigned short qtype;
+  unsigned short qclass;
+};
+
+//Constant sized fields of the resource record structure
+#pragma pack(push, 1)
+struct R_DATA
+{
+  unsigned short type;
+  unsigned short _class;
+  unsigned int ttl;
+  unsigned short data_len;
+};
+#pragma pack(pop)
+
+//Pointers to resource record contents
+struct RES_RECORD
+{
+  unsigned char *name;
+  struct R_DATA *resource;
+  unsigned char *rdata;
+};
+
+//Structure of a query
+typedef struct
+{
+  unsigned char *name;
+  struct QUESTION *ques;
+} QUERY;
+
+int main(int argc, char *argv[])
+{
+  unsigned char hostname[100];
+
+  //Get the hostname from the terminal
+  printf("Enter Hostname to Lookup : ");
+  scanf("%s", hostname);
+
+  //Now get the ip of this hostname, A record
+  unsigned char** answers;
+  int n_ans = dns_resolve(hostname, T_A, J, &answers);
+  for (int i = 0; i < n_ans; i++) {
+    free(answers[i]);
+  }
+
+  if (n_ans > 0) free(answers);
+
+  #ifdef C_MEMORY_DEBUG
+  c_debug_mem_print(0);
+  #endif
+  return 0;
+}
+
+//Perform a DNS query by sending a packet
+short dns_resolve(unsigned char *host, int query_type, RootServerIndex root_server, unsigned char*** answer_index)
+{
+  unsigned char buf[65536], *qname, *reader, current_nameserver[256];
+  int i, j, stop, s;
+
+  struct sockaddr_in a;
+
+  struct RES_RECORD answers[20], auth[20], addit[20]; //Replies from DNS server
+  struct sockaddr_in dest;
+
+  struct DNS_HEADER *dns = NULL;
+  struct QUESTION *qinfo = NULL;
+
+  printf("Starting iterative resolution for: %s\n", host);
+
+  s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+
+  dest.sin_family = AF_INET;
+  dest.sin_port = htons(53);
+
+  struct timeval timeout;
+  timeout.tv_sec = 5;
+  timeout.tv_usec = 0;
+
+  if (setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout)) < 0)
+    perror("Failed setting socket options! : ");
+  if (setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, (const char*)&timeout, sizeof(timeout)) < 0)
+    perror("Failed setting socket options! : ");
+
+  strcpy(current_nameserver, RootServers[root_server]);
+
+  while (true)
+  {
+    dest.sin_addr.s_addr = inet_addr(current_nameserver);
+
+    //Set the DNS structure to standard queries
+    dns = (struct DNS_HEADER *)&buf;
+
+    dns->id = (unsigned short) htons(getpid());
+    dns->qr = 0;
+    dns->opcode = 0;
+    dns->aa = 0;
+    dns->tc = 0;
+    dns->rd = 1;
+    dns->ra = 0;
+    dns->z = 0;
+    dns->ad = 0;
+    dns->cd = 0;
+    dns->rcode = 0;
+    dns->q_count = htons(1); // we have 1 question
+    dns->ans_count = 0;
+    dns->auth_count = 0;
+    dns->add_count = 0;
+
+    qname = (unsigned char*)&buf[sizeof(struct DNS_HEADER)];
+
+    change_to_dns_name_format(qname, host);
+    qinfo = (struct QUESTION*)&buf[sizeof(struct DNS_HEADER) + (strlen((const char*)qname) + 1)]; // fill
+
+    qinfo->qtype = htons(query_type);
+    qinfo->qclass = htons(1); // it is indeed internet
+
+    printf("Querying NS: %s\n", inet_ntoa(dest.sin_addr));
+    if (sendto(s, (char*)buf, sizeof(struct DNS_HEADER) + (strlen((const char*)qname)+1) + sizeof(struct QUESTION), 0, (struct sockaddr*)&dest, sizeof(dest)) < 0)
+    {
+      perror("sendto failed\n");
+      run_deferred();
+      return 0;
+    }
+
+    //Recv ans
+    i = sizeof(dest);
+    if (recvfrom(s, (char*)buf, 65536, 0, (struct sockaddr*)&dest, (socklen_t*)&i ) < 0)
+    {
+      perror("recvfrom failed\n");
+      run_deferred();
+      return 0;
+    }
+
+    dns = (struct DNS_HEADER*) buf;
+
+    // move ahead of dns header and query field
+    reader = &buf[sizeof(struct DNS_HEADER) + (strlen((const char*)qname)+1) + sizeof(struct QUESTION)];
+
+    #ifdef DNS_DEBUG
+    print_response_info((void*)dns);
+    #endif
+
+    // Start reading answers
+    stop = 0;
+
+    for (i = 0; i < ntohs(dns->ans_count); i++)
+    {
+      answers[i].name = read_name(reader, buf, &stop);
+      reader = reader + stop;
+
+      answers[i].resource = (struct R_DATA*)reader;
+      reader = reader + sizeof(struct R_DATA);
+
+      if (ntohs(answers[i].resource->type) == T_A) // is ipv4 addr?
+      {
+        answers[i].rdata = (unsigned char*)malloc(ntohs(answers[i].resource->data_len)+1);
+        defer(free, answers[i].rdata);
+
+        for (j = 0; j < ntohs(answers[i].resource->data_len); j++)
+        {
+          answers[i].rdata[j] = reader[j];
+        }
+
+        answers[i].rdata[ntohs(answers[i].resource->data_len)] = '\0';
+
+        reader = reader + ntohs(answers[i].resource->data_len);
+      }
+      else
+      {
+        printf("%hu\n", ntohs(answers[i].resource->type));
+        answers[i].rdata = read_name(reader, buf, &stop);
+        reader = reader + stop;
+      }
+    }
+
+    // read authorities
+    for (i = 0; i < ntohs(dns->auth_count); i++)
+    {
+      auth[i].name = read_name(reader, buf, &stop);
+      reader += stop;
+
+      auth[i].resource = (struct R_DATA*)reader;
+      reader += sizeof(struct R_DATA);
+
+      auth[i].rdata = read_name(reader, buf, &stop);
+      reader += stop;
+    }
+
+    //read Additional
+    for (i = 0; i < ntohs(dns->add_count); i++)
+    {
+      addit[i].name = read_name(reader, buf, &stop);
+      reader += stop;
+
+      addit[i].resource = (struct R_DATA*)reader;
+      reader += sizeof(struct R_DATA);
+
+      if (ntohs(addit[i].resource->type) == T_A)
+      {
+        addit[i].rdata = (unsigned char*)malloc(ntohs(addit[i].resource->data_len)+1);
+        defer(free, addit[i].rdata);
+        for (j = 0; j < ntohs(addit[i].resource->data_len); j++)
+          addit[i].rdata[j] = reader[j];
+
+        addit[i].rdata[ntohs(addit[i].resource->data_len)] = '\0';
+        reader += ntohs(addit[i].resource->data_len);
+      }
+      else
+      {
+        addit[i].rdata = NULL;
+        reader += ntohs(addit[i].resource->data_len);
+      }
+    }
+
+    //print answers
+    #ifdef DNS_DEBUG
+    print_response_contents((void*)dns, (void*)answers, (void*)auth, (void*)addit, (void*)&a);
+    #endif
+
+    if (ntohs(dns->ans_count) > 0)
+    {
+      printf("Found answers.\n");
+      *answer_index = (unsigned char**)malloc(ntohs(dns->ans_count) * sizeof(unsigned char*));
+      for (i = 0; i < ntohs(dns->ans_count); i++)
+      {
+        long *p;
+        p = (long*)answers[i].rdata;
+        a.sin_addr.s_addr = (*p);
+
+        *answer_index[i] = (unsigned char*)malloc(333 * sizeof(unsigned char));
+        strcpy(*answer_index[i], inet_ntoa(a.sin_addr));
+      }
+      run_deferred();
+      return ntohs(dns->ans_count);
+    }
+
+    if (ntohs(dns->auth_count == 0))
+    {
+      printf("No answer or authority records found. Cannot resolve iteratively.");
+      run_deferred();
+      return 0;
+    }
+
+    char next_ns_name[256] = "\0";
+    int found_ip = 0;
+    for (i = 0; i < ntohs(dns->auth_count); i++)
+    {
+      // currently finds first matching nammeserver that is ipv4 and has a glue record
+      if (ntohs(auth[i].resource->type) != T_NS) continue;
+
+      strcpy(next_ns_name, auth[i].rdata);
+
+      for (j = 0; j < ntohs(dns->add_count); j++)
+      {
+        if (strcmp(addit[j].name, next_ns_name) == 0 && ntohs(addit[j].resource->type) == T_A)
+        {
+          long *p;
+          p = (long*)addit[j].rdata;
+          a.sin_addr.s_addr = (*p);
+          strcpy(current_nameserver, inet_ntoa(a.sin_addr));
+          printf("Found glue record IP: %s\n", current_nameserver);
+          found_ip = 1;
+          break;
+        }
+      }
+      if (found_ip)
+        break;
+    }
+    if (!found_ip) {
+      printf("No answer or authority with matching additional record found. Cannot resolve.\n");
+      run_deferred();
+      return 0;
+    }
+  }
+
+  run_deferred();
+  return ntohs(dns->ans_count);
+}
+
+u_char* read_name(unsigned char* reader, unsigned char* buffer, int* count)
+{
+  unsigned char* name;
+  unsigned int p = 0, jumped = 0, offset;
+  int i, j;
+
+  *count = 1;
+  name = (unsigned char*)malloc(256);
+  defer(free, name);
+
+  name[0] = '\0';
+
+  // Handle message compression
+  while (*reader != 0)
+  {
+    if ((*reader & 0b11000000) == 0b11000000)
+    {
+      // grab the 14 bit offset after the two 1s
+      offset = (*reader)*256 + *(reader+1) - 49152; // 49152 = 11000000 00000000
+      reader = buffer + offset - 1;
+      jumped = 1; // we have jumped to another location so counting wont go up
+    }
+    else
+    {
+      name[p++] = *reader;
+    }
+
+    reader++;
+
+    if (jumped == 0)
+    {
+      (*count)++;
+    }
+  }
+
+  name[p] = '\0'; // string complete
+  if (jumped == 1)
+  {
+    (*count)++; //number of steps weve moved forward in the packet;
+  }
+
+  //convert www6gooogle3com to www.google.com
+  for (i = 0; i < (int)strlen((const char*)name); i++)
+  {
+    p = name[i];
+    for (j = 0; j < (int)p; j++)
+    {
+      name[i] = name[i+1];
+      i++;
+    }
+    name[i] = '.';
+  }
+  name[i-1] = '\0'; //remove the last dot
+  return name;
+}
+
+void change_to_dns_name_format(unsigned char* dns, unsigned char* host)
+{
+  unsigned char* dnsstart = dns;
+  int lock = 0, i;
+  strcat((char*)host,".");
+
+  for (i = 0; i < strlen((char*) host); i++)
+  {
+    if (host[i]=='.')
+    {
+      *dns++ = i - lock;
+      for (; lock < i; lock++)
+      {
+        *dns++ = host[lock];
+      }
+      lock++; // or lock=i+1
+    }
+  }
+  *dns++ = '\0';
+}
+
+int dns_printf(const char *format, ...)
+{
+  va_list args;
+  int ret;
+  char* msg = "\x1b[34m[DNS]\x1b[0m ";
+  fprintf(stdout, "%s", msg);
+
+  va_start(args, format);
+
+  ret = vprintf(format, args);
+
+  va_end(args);
+
+  return ret;
+}
+
+// debug printing
+void print_response_info(void* dns_ptr)
+{
+  struct DNS_HEADER* dns = (struct DNS_HEADER*)dns_ptr;
+  printf("The response contains : \n");
+  printf("%d Questions.\n", ntohs(dns->q_count));
+  printf("%d Answers.\n", ntohs(dns->ans_count));
+  printf("%d Authoritative Servers.\n", ntohs(dns->auth_count));
+  printf("%d Additional Records.\n\n", ntohs(dns->add_count));
+}
+
+void print_response_contents(void* dns_ptr, void* answers_ptr, void* auth_ptr, void* addit_ptr, void* a_ptr)
+{
+  struct DNS_HEADER* dns = (struct DNS_HEADER*)dns_ptr;
+  struct RES_RECORD* answers = (struct RES_RECORD*)answers_ptr;
+  struct RES_RECORD* auth = (struct RES_RECORD*)auth_ptr;
+  struct RES_RECORD* addit = (struct RES_RECORD*)addit_ptr;
+  struct sockaddr_in a = *((struct sockaddr_in*)a_ptr);
+
+  int i;
+
+  printf("Answer Records : %d \n", ntohs(dns->ans_count));
+  for (i = 0; i < ntohs(dns->ans_count); i++)
+  {
+    printf("Name : %s ", answers[i].name);
+
+    if (ntohs(answers[i].resource->type) == T_A)
+    {
+      long *p;
+      p = (long*)answers[i].rdata;
+      a.sin_addr.s_addr = (*p);
+      fprintf(stdout, "has IPv4 address : %s", inet_ntoa(a.sin_addr));
+    }
+
+    if (ntohs(answers[i].resource->type) == T_CNAME)
+    {
+      //Canonical name for an alias
+      fprintf(stdout, "has alias name : %s", answers[i].rdata);
+    }
+
+    fprintf(stdout, "\n");
+  }
+
+  //print authorities
+  printf("Authoritative Records : %d \n", ntohs(dns->auth_count));
+  for (i = 0; i < ntohs(dns->auth_count); i++)
+  {
+    printf("Name : %s ", auth[i].name);
+    if (ntohs(auth[i].resource->type) == T_NS)
+    {
+      fprintf(stdout, "has nameserver : %s", auth[i].rdata);
+    }
+    else
+    {
+      fprintf(stdout, "RR Type code %d", ntohs(auth[i].resource->type));
+    }
+    fprintf(stdout, "\n");
+  }
+
+  //print additional resource records
+  printf("Additional Records : %d \n", ntohs(dns->add_count));
+  for (i = 0; i < ntohs(dns->add_count); i++)
+  {
+    printf("Name : %s ", addit[i].name);
+    if (ntohs(addit[i].resource->type) == T_A)
+    {
+      long *p;
+      p = (long*)addit[i].rdata;
+      a.sin_addr.s_addr = (*p);
+      fprintf(stdout, "has IPv4 address : %s", inet_ntoa(a.sin_addr));
+    }
+    else
+    {
+      fprintf(stdout, "RR Type code %d", ntohs(addit[i].resource->type));
+    }
+    fprintf(stdout, "\n");
+  }
+}
