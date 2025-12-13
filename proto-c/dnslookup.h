@@ -17,6 +17,13 @@ typedef enum RootServerIndex {
   M
 } RootServerIndex;
 
+#define T_A 1 //Ipv4 address
+#define T_NS 2 //Nameserver
+#define T_CNAME 5 //Canonical name
+#define T_SOA 6 //Start of authority zone
+#define T_PTR 12 //Domain name pointer
+#define T_MX 15 //Mail server
+
 short dns_resolve(unsigned char* host, int query_type, RootServerIndex root_server, unsigned char*** answer_index);
 
 #ifdef DNS_DEBUG

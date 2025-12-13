@@ -6,6 +6,7 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <stdarg.h>
+#include <errno.h>
 
 #include "dnslookup.h"
 #include "traceroute.h"
@@ -28,16 +29,11 @@ char RootServers[][16] = {
 };
 int dns_server_count = 0;
 
-#define T_A 1 //Ipv4 address
-#define T_NS 2 //Nameserver
-#define T_CNAME 5 //Canonical name
-#define T_SOA 6 //Start of authority zone
-#define T_PTR 12 //Domain name pointer
-#define T_MX 15 //Mail server
-
 static void change_to_dns_name_format(unsigned char*, unsigned char*);
 static unsigned char* read_name(unsigned char*, unsigned char*, int*);
 static int dns_printf(const char *format, ...);
+
+static void print_response_contents(void* dns_ptr, void* answers_ptr, void* auth_ptr, void* addit_ptr, void* a_ptr);
 
 #define printf(...) dns_printf(__VA_ARGS__)
 
@@ -61,6 +57,17 @@ struct DNS_HEADER
   unsigned short ans_count;
   unsigned short auth_count;
   unsigned short add_count;
+};
+
+struct SOA_DATA
+{
+  unsigned char *mname;
+  unsigned char *rname;
+  unsigned int serial;
+  unsigned int refresh;
+  unsigned int retry;
+  unsigned int expire;
+  unsigned int minimum;
 };
 
 //Constant sized fields of query structure
@@ -96,6 +103,7 @@ typedef struct
   struct QUESTION *ques;
 } QUERY;
 
+#ifdef DNS_PROGRAM
 int main(int argc, char *argv[])
 {
   unsigned char hostname[100];
@@ -118,6 +126,7 @@ int main(int argc, char *argv[])
   #endif
   return 0;
 }
+#endif
 
 //Perform a DNS query by sending a packet
 short dns_resolve(unsigned char *host, int query_type, RootServerIndex root_server, unsigned char*** answer_index)
@@ -153,6 +162,12 @@ short dns_resolve(unsigned char *host, int query_type, RootServerIndex root_serv
 
   while (true)
   {
+    //is current nameserver reachable? (traceroute)
+    char traceroute_out[1024];
+    traceroute(current_nameserver, traceroute_out, 1024);
+    //TODO: Query database to avoid excessive traceroute
+    //TODO: Determine cable and whether or not to foward packet
+
     dest.sin_addr.s_addr = inet_addr(current_nameserver);
 
     //Set the DNS structure to standard queries
@@ -192,13 +207,18 @@ short dns_resolve(unsigned char *host, int query_type, RootServerIndex root_serv
 
     //Recv ans
     i = sizeof(dest);
-    if (recvfrom(s, (char*)buf, 65536, 0, (struct sockaddr*)&dest, (socklen_t*)&i ) < 0)
+    int bytes_recvd;
+    do {
+      bytes_recvd = recvfrom(s, (char*)buf, 65536, 0, (struct sockaddr*)&dest, (socklen_t*)&i);
+    } while (bytes_recvd < 0 && errno == EINTR);
+
+    if (bytes_recvd < 0)
     {
       perror("recvfrom failed\n");
       run_deferred();
       return 0;
     }
-
+    
     dns = (struct DNS_HEADER*) buf;
 
     // move ahead of dns header and query field
@@ -219,25 +239,20 @@ short dns_resolve(unsigned char *host, int query_type, RootServerIndex root_serv
       answers[i].resource = (struct R_DATA*)reader;
       reader = reader + sizeof(struct R_DATA);
 
-      if (ntohs(answers[i].resource->type) == T_A) // is ipv4 addr?
+      switch (ntohs(answers[i].resource->type))
       {
-        answers[i].rdata = (unsigned char*)malloc(ntohs(answers[i].resource->data_len)+1);
-        defer(free, answers[i].rdata);
-
-        for (j = 0; j < ntohs(answers[i].resource->data_len); j++)
-        {
-          answers[i].rdata[j] = reader[j];
-        }
-
-        answers[i].rdata[ntohs(answers[i].resource->data_len)] = '\0';
-
-        reader = reader + ntohs(answers[i].resource->data_len);
-      }
-      else
-      {
-        printf("%hu\n", ntohs(answers[i].resource->type));
-        answers[i].rdata = read_name(reader, buf, &stop);
-        reader = reader + stop;
+        case T_A:
+          answers[i].rdata = (unsigned char*)malloc(ntohs(answers[i].resource->data_len)+1);
+          defer(free, answers[i].rdata);
+          for (j = 0; j < ntohs(answers[i].resource->data_len); j++)
+            answers[i].rdata[j] = reader[j];
+          answers[i].rdata[ntohs(answers[i].resource->data_len)] = '\0';
+          reader = reader + ntohs(answers[i].resource->data_len);
+        break;
+        default:
+          answers[i].rdata = read_name(reader, buf, &stop);
+          reader = reader + stop;
+        break;
       }
     }
 
@@ -250,8 +265,28 @@ short dns_resolve(unsigned char *host, int query_type, RootServerIndex root_serv
       auth[i].resource = (struct R_DATA*)reader;
       reader += sizeof(struct R_DATA);
 
-      auth[i].rdata = read_name(reader, buf, &stop);
-      reader += stop;
+      switch (ntohs(auth[i].resource->type))
+      {
+        case T_NS:
+          auth[i].rdata = read_name(reader, buf, &stop);
+          reader += stop;
+        break;
+        case T_SOA:
+          //Read MNAME
+          auth[i].rdata = read_name(reader, buf, &stop);
+          reader += stop;
+          //Read RNAME
+          unsigned char *rname = read_name(reader, buf, &stop);
+          reader += stop;
+          //Adv 20 bytes
+          reader += (5 * sizeof(unsigned int));
+          //NOTE: May need to access SOA fields later?
+        break;
+        default:
+          auth[i].rdata = NULL;
+          reader += ntohs(auth[i].resource->data_len);
+        break;
+      }
     }
 
     //read Additional
@@ -287,24 +322,42 @@ short dns_resolve(unsigned char *host, int query_type, RootServerIndex root_serv
 
     if (ntohs(dns->ans_count) > 0)
     {
-      printf("Found answers.\n");
-      *answer_index = (unsigned char**)malloc(ntohs(dns->ans_count) * sizeof(unsigned char*));
-      for (i = 0; i < ntohs(dns->ans_count); i++)
+      switch (ntohs(answers[0].resource->type))
       {
-        long *p;
-        p = (long*)answers[i].rdata;
-        a.sin_addr.s_addr = (*p);
+        case T_A:
+          printf("Found final answers.\n");
+          *answer_index = (unsigned char**)malloc(ntohs(dns->ans_count) * sizeof(unsigned char*));
+          for (i = 0; i < ntohs(dns->ans_count); i++)
+          {
+            long *p;
+            p = (long*)answers[i].rdata;
+            a.sin_addr.s_addr = (*p);
 
-        *answer_index[i] = (unsigned char*)malloc(333 * sizeof(unsigned char));
-        strcpy(*answer_index[i], inet_ntoa(a.sin_addr));
+            (*answer_index)[i] = (unsigned char*)malloc(256 * sizeof(unsigned char));
+            strcpy((char*)(*answer_index)[i], inet_ntoa(a.sin_addr));
+          }
+          run_deferred();
+          return ntohs(dns->ans_count);
+        break;
+        case T_CNAME:
+          printf("Found CNAME alias: %s. Requerying...\n", answers[0].rdata);
+          unsigned char* new_host = answers[0].rdata;
+          short final_ans_count = dns_resolve(new_host, query_type, root_server, answer_index);
+          run_deferred();
+          return final_ans_count;
+        break;
+        default:
+          printf("Unknown RR Type code : %d\n", ntohs(answers[0].resource->type));
+          run_deferred();
+          return ntohs(dns->ans_count);
+        break;
       }
-      run_deferred();
-      return ntohs(dns->ans_count);
     }
 
     if (ntohs(dns->auth_count == 0))
     {
-      printf("No answer or authority records found. Cannot resolve iteratively.");
+      printf("No answer or authority records found. Cannot resolve iteratively.\n");
+      print_response_contents((void*)dns, (void*)answers, (void*)auth, (void*)addit, (void*)&a);
       run_deferred();
       return 0;
     }
@@ -316,11 +369,11 @@ short dns_resolve(unsigned char *host, int query_type, RootServerIndex root_serv
       // currently finds first matching nammeserver that is ipv4 and has a glue record
       if (ntohs(auth[i].resource->type) != T_NS) continue;
 
-      strcpy(next_ns_name, auth[i].rdata);
+      strcpy(next_ns_name, (char*)auth[i].rdata);
 
       for (j = 0; j < ntohs(dns->add_count); j++)
       {
-        if (strcmp(addit[j].name, next_ns_name) == 0 && ntohs(addit[j].resource->type) == T_A)
+        if (strcmp((char*)addit[j].name, next_ns_name) == 0 && ntohs(addit[j].resource->type) == T_A)
         {
           long *p;
           p = (long*)addit[j].rdata;
@@ -334,8 +387,28 @@ short dns_resolve(unsigned char *host, int query_type, RootServerIndex root_serv
       if (found_ip)
         break;
     }
-    if (!found_ip) {
-      printf("No answer or authority with matching additional record found. Cannot resolve.\n");
+    if (!found_ip && strlen(next_ns_name) > 0) {
+      printf("No glue record found. Recrusively resolving nameserver: %s\n", next_ns_name);
+
+      unsigned char** ns_answers;
+      int ns_count = dns_resolve((unsigned char*)next_ns_name, T_A, root_server, &ns_answers);
+
+      if (ns_count > 0)
+      {
+        strcpy(current_nameserver, (char*)ns_answers[0]);
+        printf("Resolved nameserver to: %s\n", current_nameserver);
+        found_ip = 1;
+
+        for (i = 0; i < ns_count; i++)
+          free(ns_answers[i]);
+        free(ns_answers);
+      }
+    }
+
+    if (!found_ip)
+    {
+      printf("No answer or authority with matching additional record found. OR SOA. Cannot resolve.\n");
+      //print_response_contents((void*)dns, (void*)answers, (void*)auth, (void*)addit, (void*)&a);
       run_deferred();
       return 0;
     }
@@ -401,10 +474,12 @@ u_char* read_name(unsigned char* reader, unsigned char* buffer, int* count)
   return name;
 }
 
-void change_to_dns_name_format(unsigned char* dns, unsigned char* host)
+void change_to_dns_name_format(unsigned char* dns, unsigned char* hostname)
 {
   unsigned char* dnsstart = dns;
   int lock = 0, i;
+  unsigned char host[256];
+  strcpy(host, hostname);
   strcat((char*)host,".");
 
   for (i = 0; i < strlen((char*) host); i++)

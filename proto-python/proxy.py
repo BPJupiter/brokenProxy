@@ -53,6 +53,7 @@ def handle_client(client_socket):
         tr_output = traceroute(destination_ip)
 
         remote_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        print(f"{destination_ip}:{port}")
         remote_socket.connect((destination_ip, port))
 
         print(f"{PROXY_TAG} Accepted request for: {host}:{port}")

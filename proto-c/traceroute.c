@@ -25,14 +25,14 @@ int traceroute(const char* address, char* output, size_t output_len)
   {
     l += strlen(line)+1;
     if (l+1 > output_len) {
-      printf("%s %s Output buffer too small at: %s: %d", TR_TAG, ERR_TAG, __FILE__, __LINE__);
+      printf("%s %s Output buffer too small at: %s: %d\n", TR_TAG, ERR_TAG, __FILE__, __LINE__);
       output[0] = '\0';
       return 1;
     }
     strcat(output, line);
   }
 
-  printf("%s Tracerotue on %s", TR_TAG, address);
+  printf("%s Tracerotue on %s\n", TR_TAG, address);
 
   pclose(fp);
 

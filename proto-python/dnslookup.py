@@ -73,6 +73,7 @@ def dns_resolve(root_server, hostname):
         if response.answer:
             print(f"{DNS_TAG} {bcolours.OKGREEN}[Success]{bcolours.ENDC} Found the answer")
             for rrset in response.answer:
+                print(f"fouuund ya answer mun: {str(rrset[0])}")
                 return str(rrset[0])
             break
 
