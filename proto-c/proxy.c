@@ -14,6 +14,8 @@
 
 #include "dnslookup.h"
 #include "traceroute.h"
+#include "Callisto/callisto.h"
+#include "memory_usage.h"
 
 #define PROXY_HOST "127.0.0.1"
 #define PROXY_PORT 8080
@@ -22,6 +24,8 @@
 
 static pthread_mutex_t thread_count_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int active_thread_count = 0;
+
+static pthread_mutex_t c_mem_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 typedef struct {
   int client_fd;
@@ -35,6 +39,28 @@ typedef struct {
 
 static int proxy_printf(const char *format, ...);
 #define printf(...) proxy_printf(__VA_ARGS__)
+
+#ifdef C_MEMORY_DEBUG
+
+void c_mem_mutex_lock(void* mutex)
+{
+  pthread_mutex_lock((pthread_mutex_t*)mutex);
+}
+
+void c_mem_mutex_unlock(void* mutex)
+{
+  pthread_mutex_unlock((pthread_mutex_t*)mutex);
+}
+
+void signal_handler(int sig)
+{
+  printf("Caught signal %d\n", sig);
+  //c_debug_memory();
+  c_debug_mem_print(0);
+  exit(sig);
+}
+
+#endif
 
 int host_port_from_url(const char *url, char *host, int *port)
 {
@@ -120,6 +146,7 @@ void *handle_client(void *arg) {
   pthread_mutex_unlock(&thread_count_mutex);
 
   printf("\x1b[33m[Info]\x1b[0m ThreadCount: %d\n", current_count);
+  printf("Thread %ld: %s KB\n", (long)arg, get_memory_usage_str_kb());
 
   // Receive initial request
   int n = recv(client_fd, buffer, BUFFER_SIZE - 1, 0);
@@ -238,6 +265,11 @@ cleanup:
 }
 
 int main(int argc, char *argv[]) {
+  #ifdef C_MEMORY_DEBUG
+  c_debug_memory_init(c_mem_mutex_lock, c_mem_mutex_unlock, &c_mem_mutex);
+  signal(SIGINT, signal_handler);
+  #endif
+
   int proxy_port = PROXY_PORT;
 
   // Ignore SIGPIPE - prevents crash when writing to closed socket
@@ -277,6 +309,7 @@ int main(int argc, char *argv[]) {
 
   // Accept connections and spawn threads
   while (1) {
+    printf("Memory (KB): %s\n", get_memory_usage_str_kb());
     client_info_t *client_info = malloc(sizeof(client_info_t));
     socklen_t client_len = sizeof(client_info->client_addr);
 
