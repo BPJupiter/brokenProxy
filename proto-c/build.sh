@@ -9,8 +9,9 @@ gcc Callisto/c_defer.c -c $@ && object_files+="c_defer.o "
 
 gcc traceroute.c -c $@ && object_files+="traceroute.o "
 gcc dnslookup.c -c $@ && object_files+="dnslookup.o "
-
 gcc proxy.c -c $@ && object_files+="proxy.o "
+
+gcc main.c -c $@ && object_files+="main.o "
 
 gcc $object_files -o test $@ -lm -lpthread -g -Wall -Wextra
 

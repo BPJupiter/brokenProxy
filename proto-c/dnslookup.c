@@ -9,32 +9,9 @@
 #include <errno.h>
 
 #include "dnslookup.h"
-#include "traceroute.h"
 #include "Callisto/callisto.h"
 
-char RootServers[][16] = {
-  "198.41.0.4",
-  "170.247.170.2",
-  "192.33.4.12",
-  "199.7.91.13",
-  "192.203.230.10",
-  "192.5.5.241",
-  "192.112.36.4",
-  "198.97.190.53",
-  "192.36.148.17",
-  "192.58.128.30",
-  "193.0.14.129",
-  "199.7.83.42",
-  "202.12.27.33",
-};
-int dns_server_count = 0;
-
-static void change_to_dns_name_format(unsigned char*, unsigned char*);
-static unsigned char* read_name(unsigned char*, unsigned char*, int*);
 static int dns_printf(const char *format, ...);
-
-void print_response_contents(void* dns_ptr, void* answers_ptr, void* auth_ptr, void* addit_ptr, void* a_ptr);
-
 #define printf(...) dns_printf(__VA_ARGS__)
 
 typedef union {
@@ -108,6 +85,30 @@ typedef struct
   struct QUESTION *ques;
 } QUERY;
 
+static void change_to_dns_name_format(unsigned char*, unsigned char*);
+static unsigned char* read_name(unsigned char*, unsigned char*, int*);
+
+void print_response_contents(void* dns_ptr, void* answers_ptr, void* auth_ptr, void* addit_ptr, void* a_ptr);
+
+char RootServers[][16] = {
+  "198.41.0.4",
+  "170.247.170.2",
+  "192.33.4.12",
+  "199.7.91.13",
+  "192.203.230.10",
+  "192.5.5.241",
+  "192.112.36.4",
+  "198.97.190.53",
+  "192.36.148.17",
+  "192.58.128.30",
+  "193.0.14.129",
+  "199.7.83.42",
+  "202.12.27.33",
+};
+int dns_server_count = 16;
+
+int (*dns_traceroute)(const char* ip, char* out_buf, size_t out_size) = NULL;
+
 #ifdef DNS_PROGRAM
 int main(int argc, char *argv[])
 {
@@ -132,6 +133,11 @@ int main(int argc, char *argv[])
   return 0;
 }
 #endif
+
+void dns_init(int (*tracert)(const char* ip, char* out_buf, size_t out_size))
+{
+  dns_traceroute = tracert;
+}
 
 //Perform a DNS query by sending a packet
 short dns_resolve(unsigned char *host, int query_type, RootServerIndex root_server, unsigned char*** answer_index)
@@ -168,11 +174,14 @@ short dns_resolve(unsigned char *host, int query_type, RootServerIndex root_serv
   while (1)
   {
     //is current nameserver reachable? (traceroute)
-    char traceroute_out[1024];
-    traceroute(current_nameserver, traceroute_out, 1024);
-    //TODO: Query database to avoid excessive traceroute
-    //TODO: Determine cable and whether or not to foward packet
-
+    if (dns_traceroute != NULL)
+    {
+      char traceroute_out[1024];
+      dns_traceroute(current_nameserver, traceroute_out, 1024);
+      //TODO: Query database to avoid excessive traceroute
+      //TODO: Determine cable and whether or not to foward packet
+    }
+    
     dest.sin_addr.s_addr = inet_addr(current_nameserver);
 
     //Set the DNS structure to standard queries

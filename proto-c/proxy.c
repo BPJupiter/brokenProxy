@@ -12,20 +12,15 @@
 #include <signal.h>
 #include <fcntl.h>
 
-#include "dnslookup.h"
-#include "traceroute.h"
 #include "Callisto/callisto.h"
 #include "memory_usage.h"
 
 #define PROXY_HOST "127.0.0.1"
-#define PROXY_PORT 8080
 #define BUFFER_SIZE 4096
 #define MAX_CLIENTS 8
 
-static pthread_mutex_t thread_count_mutex = PTHREAD_MUTEX_INITIALIZER;
-static int active_thread_count = 0;
-
-static pthread_mutex_t c_mem_mutex = PTHREAD_MUTEX_INITIALIZER;
+static int proxy_printf(const char *format, ...);
+#define printf(...) proxy_printf(__VA_ARGS__)
 
 typedef struct {
   int client_fd;
@@ -37,30 +32,36 @@ typedef struct {
   int dest_fd;
 } tunnel_args_t;
 
-static int proxy_printf(const char *format, ...);
-#define printf(...) proxy_printf(__VA_ARGS__)
-
 #ifdef C_MEMORY_DEBUG
+  void c_mem_mutex_lock(void* mutex) {
+    pthread_mutex_lock((pthread_mutex_t*)mutex);
+  }
 
-void c_mem_mutex_lock(void* mutex)
-{
-  pthread_mutex_lock((pthread_mutex_t*)mutex);
-}
+  void c_mem_mutex_unlock(void* mutex) {
+    pthread_mutex_unlock((pthread_mutex_t*)mutex);
+  }
 
-void c_mem_mutex_unlock(void* mutex)
-{
-  pthread_mutex_unlock((pthread_mutex_t*)mutex);
-}
-
-void signal_handler(int sig)
-{
-  printf("Caught signal %d\n", sig);
-  //c_debug_memory();
-  c_debug_mem_print(0);
-  exit(sig);
-}
-
+  void signal_handler(int sig) {
+    printf("Caught signal %d\n", sig);
+    //c_debug_memory();
+    c_debug_mem_print(0);
+    exit(sig);
+  }
 #endif
+
+static pthread_mutex_t thread_count_mutex = PTHREAD_MUTEX_INITIALIZER;
+static int active_thread_count = 0;
+
+static pthread_mutex_t c_mem_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+int (*proxy_get_ip_addresses)(unsigned char* hostname, unsigned char*** answer_index) = NULL;
+int (*proxy_traceroute)(const char* ip, char* out_buf, size_t out_size) = NULL;
+
+void proxy_init(int (*hostname_resolver)(unsigned char* hostname, unsigned char*** answer_index), int (*tracert)(const char* ip, char* out_buf, size_t out_size))
+{
+  proxy_get_ip_addresses = hostname_resolver;
+  proxy_traceroute = tracert;
+}
 
 int host_port_from_url(const char *url, char *host, int *port)
 {
@@ -181,7 +182,7 @@ void *handle_client(void *arg) {
 
   // Resolve hostname using custom DNS resolver
   unsigned char **answers;
-  int n_ans = dns_resolve((unsigned char *)host, T_A, J, &answers);
+  int n_ans = proxy_get_ip_addresses((unsigned char *)host, &answers);
 
   if (n_ans <= 0) {
     printf("\x1b[31m[Error]\x1b[0m Failed to resolve hostname: %s\n", host);
@@ -193,7 +194,7 @@ void *handle_client(void *arg) {
 
   // Perform traceroute
   char tr_output[1024];
-  traceroute(destination_ip, tr_output, sizeof(tr_output));
+  proxy_traceroute(destination_ip, tr_output, sizeof(tr_output));
 
   // Connect to remote server
   remote_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -264,20 +265,14 @@ cleanup:
   return NULL;
 }
 
-int main(int argc, char *argv[]) {
+int proxy_start(int proxy_port) {
   #ifdef C_MEMORY_DEBUG
   c_debug_memory_init(c_mem_mutex_lock, c_mem_mutex_unlock, &c_mem_mutex);
   signal(SIGINT, signal_handler);
   #endif
 
-  int proxy_port = PROXY_PORT;
-
   // Ignore SIGPIPE - prevents crash when writing to closed socket
   signal(SIGPIPE, SIG_IGN);
-
-  if (argc > 1) {
-    proxy_port = atoi(argv[1]);
-  }
 
   int server_fd = socket(AF_INET, SOCK_STREAM, 0);
   if (server_fd < 0) {

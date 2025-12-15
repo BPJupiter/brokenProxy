@@ -32,7 +32,7 @@ int traceroute(const char* address, char* output, size_t output_len)
     strcat(output, line);
   }
 
-  printf("%s Tracerotue on %s\n", TR_TAG, address);
+  printf("%s Traceroute on %s\n", TR_TAG, address);
 
   pclose(fp);
 
