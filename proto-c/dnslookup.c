@@ -228,7 +228,10 @@ short dns_resolve(unsigned char *host, int query_type, RootServerIndex root_serv
 
     if (bytes_recvd < 0)
     {
-      perror("recvfrom failed\n");
+      if (errno == EAGAIN)
+        printf("\x1b[33m[Timeout]\x1b[0m Recvieve from %s timed out.\n", inet_ntoa(dest.sin_addr));
+      else
+        perror("recvfrom failed\n");
       run_deferred();
       return 0;
     }
