@@ -11,6 +11,7 @@
 #include <stdarg.h>
 #include <signal.h>
 #include <fcntl.h>
+#include <time.h>
 
 #include "Callisto/callisto.h"
 #include "memory_usage.h"
@@ -30,6 +31,8 @@ typedef struct {
 typedef struct {
   int source_fd;
   int dest_fd;
+  struct timespec start_time;
+  int measure_latency;
 } tunnel_args_t;
 
 #ifdef C_MEMORY_DEBUG
@@ -104,6 +107,7 @@ int host_port_from_url(const char *url, char *host, int *port)
 void *tunnel_data(void *arg) {
   tunnel_args_t *args = (tunnel_args_t *)arg;
   char buffer[BUFFER_SIZE];
+  int first_packet = 1;
 
   struct timeval timeout;
   timeout.tv_sec = 15;
@@ -114,6 +118,19 @@ void *tunnel_data(void *arg) {
     int n = recv(args->source_fd, buffer, BUFFER_SIZE, 0);
     if (n <= 0) {
       break;
+    }
+
+    if (first_packet && args->measure_latency)
+    {
+      struct timespec now;
+      clock_gettime(CLOCK_MONOTONIC, &now);
+
+      double elapsed_ms = (now.tv_sec - args->start_time.tv_sec) * 1000.0;
+      elapsed_ms += (now.tv_nsec - args->start_time.tv_nsec) / 1000000.0;
+
+      printf("\x1b[32m[Latency]\x1b[0m Response time: %.2f ms\n", elapsed_ms);
+
+      first_packet = 0;
     }
 
     int sent = 0;
@@ -195,6 +212,7 @@ void *handle_client(void *arg) {
   // Perform traceroute
   char tr_output[1024];
   proxy_traceroute(destination_ip, tr_output, sizeof(tr_output));
+  printf("%s\n", tr_output);
 
   // Connect to remote server
   remote_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -241,10 +259,14 @@ void *handle_client(void *arg) {
   tunnel_args_t *c2r_args = malloc(sizeof(tunnel_args_t));
   c2r_args->source_fd = client_fd;
   c2r_args->dest_fd = remote_fd;
+  c2r_args->measure_latency = 0;
 
   tunnel_args_t *r2c_args = malloc(sizeof(tunnel_args_t));
   r2c_args->source_fd = remote_fd;
   r2c_args->dest_fd = client_fd;
+  r2c_args->measure_latency = 1;
+
+  clock_gettime(CLOCK_MONOTONIC, &r2c_args->start_time);
 
   pthread_create(&client_to_remote_thread, NULL, tunnel_data, c2r_args);
   pthread_create(&remote_to_client_thread, NULL, tunnel_data, r2c_args);

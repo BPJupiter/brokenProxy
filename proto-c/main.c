@@ -10,11 +10,13 @@ int no_traceroute(const char* ip, char* out_buf, size_t out_size) {}
 
 int get_ip_addresses(unsigned char* hostname, unsigned char*** answer_index)
 {
-  return dns_resolve(hostname, T_A, J, answer_index);
+  return dns_resolve(hostname, T_A, E, answer_index);
 }
 
 int main(int argc, char *argv[])
 {
+  //TODO: Set "ping mode" where requests are limited to a given ms of latency, else they get dropped.
+  // I suggest 80ms for limiting requests to NZ/AUS. All other connections seem to be of reliably higher latency
   int proxy_port = PROXY_PORT;
 
   if (argc > 1)
