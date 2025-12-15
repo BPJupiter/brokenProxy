@@ -23,6 +23,7 @@ typedef enum RootServerIndex {
 #define T_SOA 6 //Start of authority zone
 #define T_PTR 12 //Domain name pointer
 #define T_MX 15 //Mail server
+#define T_AAAA 28 //IPv6 address 
 
 short dns_resolve(unsigned char* host, int query_type, RootServerIndex root_server, unsigned char*** answer_index);
 

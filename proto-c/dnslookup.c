@@ -33,9 +33,14 @@ static void change_to_dns_name_format(unsigned char*, unsigned char*);
 static unsigned char* read_name(unsigned char*, unsigned char*, int*);
 static int dns_printf(const char *format, ...);
 
-static void print_response_contents(void* dns_ptr, void* answers_ptr, void* auth_ptr, void* addit_ptr, void* a_ptr);
+void print_response_contents(void* dns_ptr, void* answers_ptr, void* auth_ptr, void* addit_ptr, void* a_ptr);
 
 #define printf(...) dns_printf(__VA_ARGS__)
+
+typedef union {
+  struct sockaddr_in ipv4;
+  struct sockaddr_in6 ipv6;
+} sockaddr_inet;
 
 struct DNS_HEADER
 {
@@ -134,7 +139,7 @@ short dns_resolve(unsigned char *host, int query_type, RootServerIndex root_serv
   unsigned char buf[65536], *qname, *reader, current_nameserver[256];
   int i, j, stop, s;
 
-  struct sockaddr_in a;
+  sockaddr_inet a;
 
   struct RES_RECORD answers[20], auth[20], addit[20]; //Replies from DNS server
   struct sockaddr_in dest;
@@ -160,7 +165,7 @@ short dns_resolve(unsigned char *host, int query_type, RootServerIndex root_serv
 
   strcpy(current_nameserver, RootServers[root_server]);
 
-  while (true)
+  while (1)
   {
     //is current nameserver reachable? (traceroute)
     char traceroute_out[1024];
@@ -249,6 +254,14 @@ short dns_resolve(unsigned char *host, int query_type, RootServerIndex root_serv
           answers[i].rdata[ntohs(answers[i].resource->data_len)] = '\0';
           reader = reader + ntohs(answers[i].resource->data_len);
         break;
+        case T_AAAA:
+          answers[i].rdata = (unsigned char*)malloc(ntohs(answers[i].resource->data_len)+1);
+          defer(free, answers[i].rdata);
+          for (j = 0; j < ntohs(answers[i].resource->data_len); j++)
+            answers[i].rdata[j] = reader[j];
+          answers[i].rdata[ntohs(answers[i].resource->data_len)] = '\0';
+          reader = reader + ntohs(answers[i].resource->data_len);
+        break;
         default:
           answers[i].rdata = read_name(reader, buf, &stop);
           reader = reader + stop;
@@ -298,20 +311,30 @@ short dns_resolve(unsigned char *host, int query_type, RootServerIndex root_serv
       addit[i].resource = (struct R_DATA*)reader;
       reader += sizeof(struct R_DATA);
 
-      if (ntohs(addit[i].resource->type) == T_A)
+      switch (ntohs(addit[i].resource->type))
       {
-        addit[i].rdata = (unsigned char*)malloc(ntohs(addit[i].resource->data_len)+1);
-        defer(free, addit[i].rdata);
-        for (j = 0; j < ntohs(addit[i].resource->data_len); j++)
-          addit[i].rdata[j] = reader[j];
+        case T_A:
+          addit[i].rdata = (unsigned char*)malloc(ntohs(addit[i].resource->data_len)+1);
+          defer(free, addit[i].rdata);
+          for (j = 0; j < ntohs(addit[i].resource->data_len); j++)
+            addit[i].rdata[j] = reader[j];
 
-        addit[i].rdata[ntohs(addit[i].resource->data_len)] = '\0';
-        reader += ntohs(addit[i].resource->data_len);
-      }
-      else
-      {
-        addit[i].rdata = NULL;
-        reader += ntohs(addit[i].resource->data_len);
+          addit[i].rdata[ntohs(addit[i].resource->data_len)] = '\0';
+          reader += ntohs(addit[i].resource->data_len);
+        break;
+        case T_AAAA:
+          addit[i].rdata = (unsigned char*)malloc(ntohs(addit[i].resource->data_len)+1);
+          defer(free, addit[i].rdata);
+          for (j = 0; j < ntohs(addit[i].resource->data_len); j++)
+            addit[i].rdata[j] = reader[j];
+
+          addit[i].rdata[ntohs(addit[i].resource->data_len)] = '\0';
+          reader += ntohs(addit[i].resource->data_len);
+        break;
+        default:
+          addit[i].rdata = NULL;
+          reader += ntohs(addit[i].resource->data_len);
+        break;
       }
     }
 
@@ -322,19 +345,19 @@ short dns_resolve(unsigned char *host, int query_type, RootServerIndex root_serv
 
     if (ntohs(dns->ans_count) > 0)
     {
-      switch (ntohs(answers[0].resource->type))
+      switch (ntohs(answers[0].resource->type)) // TODO: make sure final resource type is the same as the requested type.
       {
         case T_A:
-          printf("Found final answers.\n");
+          printf("Found A record.\n");
           *answer_index = (unsigned char**)malloc(ntohs(dns->ans_count) * sizeof(unsigned char*));
           for (i = 0; i < ntohs(dns->ans_count); i++)
           {
             long *p;
             p = (long*)answers[i].rdata;
-            a.sin_addr.s_addr = (*p);
+            a.ipv4.sin_addr.s_addr = (*p);
 
             (*answer_index)[i] = (unsigned char*)malloc(256 * sizeof(unsigned char));
-            strcpy((char*)(*answer_index)[i], inet_ntoa(a.sin_addr));
+            strcpy((char*)(*answer_index)[i], inet_ntoa(a.ipv4.sin_addr));
           }
           run_deferred();
           return ntohs(dns->ans_count);
@@ -345,6 +368,23 @@ short dns_resolve(unsigned char *host, int query_type, RootServerIndex root_serv
           short final_ans_count = dns_resolve(new_host, query_type, root_server, answer_index);
           run_deferred();
           return final_ans_count;
+        break;
+        case T_AAAA:
+          printf("Found AAAA record.\n");
+          *answer_index = (unsigned char**)malloc(ntohs(dns->ans_count) * sizeof(unsigned char*));
+          for (i = 0; i < ntohs(dns->ans_count); i++)
+          {
+            unsigned char *p;
+            p = (unsigned char*)answers[i].rdata;
+            memcpy(&a.ipv6.sin6_addr, p, sizeof(struct in6_addr));
+
+            (*answer_index)[i] = (unsigned char*)malloc(256 * sizeof(unsigned char));
+            const char *r = inet_ntop(AF_INET6, &a.ipv6.sin6_addr, (char*)(*answer_index)[i], INET6_ADDRSTRLEN);
+            if (r == NULL)
+              strcpy((char*)(*answer_index[i]), "IPv6 Conversion Error");
+          }
+          run_deferred();
+          return ntohs(dns->ans_count);
         break;
         default:
           printf("Unknown RR Type code : %d\n", ntohs(answers[0].resource->type));
@@ -373,15 +413,28 @@ short dns_resolve(unsigned char *host, int query_type, RootServerIndex root_serv
 
       for (j = 0; j < ntohs(dns->add_count); j++)
       {
-        if (strcmp((char*)addit[j].name, next_ns_name) == 0 && ntohs(addit[j].resource->type) == T_A)
+        if (strcmp((char*)addit[j].name, next_ns_name) == 0 )
         {
-          long *p;
-          p = (long*)addit[j].rdata;
-          a.sin_addr.s_addr = (*p);
-          strcpy(current_nameserver, inet_ntoa(a.sin_addr));
-          printf("Found glue record IP: %s\n", current_nameserver);
-          found_ip = 1;
-          break;
+          if (ntohs(addit[j].resource->type) == T_A)
+          {
+            long *p;
+            p = (long*)addit[j].rdata;
+            a.ipv4.sin_addr.s_addr = (*p);
+            strcpy(current_nameserver, inet_ntoa(a.ipv4.sin_addr));
+            printf("Found IPv4 glue record: %s\n", current_nameserver);
+            found_ip = 1;
+            break;
+          }
+          if (0)//(ntohs(addit[j].resource->type) == T_AAAA)
+          {
+            unsigned char *p;
+            p = (unsigned char*)addit[j].rdata;
+            memcpy(&a.ipv6.sin6_addr, p, sizeof(struct in6_addr));
+            const char* r = inet_ntop(AF_INET6, &a.ipv6.sin6_addr, current_nameserver, INET6_ADDRSTRLEN);
+            printf("Found IPv6 glue record: %s\n", current_nameserver);
+            found_ip = 1;
+            break;
+          }
         }
       }
       if (found_ip)
@@ -530,7 +583,7 @@ void print_response_contents(void* dns_ptr, void* answers_ptr, void* auth_ptr, v
   struct RES_RECORD* answers = (struct RES_RECORD*)answers_ptr;
   struct RES_RECORD* auth = (struct RES_RECORD*)auth_ptr;
   struct RES_RECORD* addit = (struct RES_RECORD*)addit_ptr;
-  struct sockaddr_in a = *((struct sockaddr_in*)a_ptr);
+  sockaddr_inet a = *((sockaddr_inet*)a_ptr);
 
   int i;
 
@@ -539,18 +592,25 @@ void print_response_contents(void* dns_ptr, void* answers_ptr, void* auth_ptr, v
   {
     printf("Name : %s ", answers[i].name);
 
-    if (ntohs(answers[i].resource->type) == T_A)
+    switch (ntohs(answers[i].resource->type))
     {
-      long *p;
-      p = (long*)answers[i].rdata;
-      a.sin_addr.s_addr = (*p);
-      fprintf(stdout, "has IPv4 address : %s", inet_ntoa(a.sin_addr));
-    }
-
-    if (ntohs(answers[i].resource->type) == T_CNAME)
-    {
-      //Canonical name for an alias
-      fprintf(stdout, "has alias name : %s", answers[i].rdata);
+      case T_A:
+        long *p;
+        p = (long*)answers[i].rdata;
+        a.ipv4.sin_addr.s_addr = (*p);
+        fprintf(stdout, "has IPv4 address : %s", inet_ntoa(a.ipv4.sin_addr));
+      break;
+      case T_CNAME:
+        //Canonical name for an alias
+        fprintf(stdout, "has alias name : %s", answers[i].rdata);
+      break;
+      case T_AAAA:
+        unsigned char *p6;
+        p6 = (unsigned char*)answers[i].rdata;
+        memcpy(&a.ipv6.sin6_addr, p6, sizeof(struct in6_addr));
+        char ipv6_str[INET6_ADDRSTRLEN];
+        fprintf(stdout, "has IPv6 address: %s", inet_ntop(AF_INET6, &a.ipv6.sin6_addr, ipv6_str, INET6_ADDRSTRLEN));
+      break;
     }
 
     fprintf(stdout, "\n");
@@ -577,17 +637,26 @@ void print_response_contents(void* dns_ptr, void* answers_ptr, void* auth_ptr, v
   for (i = 0; i < ntohs(dns->add_count); i++)
   {
     printf("Name : %s ", addit[i].name);
-    if (ntohs(addit[i].resource->type) == T_A)
+    switch (ntohs(addit[i].resource->type))
     {
-      long *p;
-      p = (long*)addit[i].rdata;
-      a.sin_addr.s_addr = (*p);
-      fprintf(stdout, "has IPv4 address : %s", inet_ntoa(a.sin_addr));
+      case T_A:
+        long *p;
+        p = (long*)addit[i].rdata;
+        a.ipv4.sin_addr.s_addr = (*p);
+        fprintf(stdout, "has IPv4 address : %s", inet_ntoa(a.ipv4.sin_addr));
+      break;
+      case T_AAAA:
+        unsigned char *p6;
+        p6 = (unsigned char*)addit[i].rdata;
+        memcpy(&a.ipv6.sin6_addr, p6, sizeof(struct in6_addr));
+        char ipv6_str[INET6_ADDRSTRLEN];
+        fprintf(stdout, "has IPv6 address : %s", inet_ntop(AF_INET6, &a.ipv6.sin6_addr, ipv6_str, INET6_ADDRSTRLEN));
+      break;
+      default:
+        fprintf(stdout, "RR Type code %d", ntohs(addit[i].resource->type));
+      break;
     }
-    else
-    {
-      fprintf(stdout, "RR Type code %d", ntohs(addit[i].resource->type));
-    }
+
     fprintf(stdout, "\n");
   }
 }
