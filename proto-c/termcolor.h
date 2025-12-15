@@ -10,6 +10,7 @@
 #define ANSI_COLOR_END      "\x1b[0m"
 
 #define TR_TAG    ANSI_COLOR_CYAN"[Traceroute]"ANSI_COLOR_END
+#define PING_TAG  ANSI_COLOR_CYAN"[Ping]"ANSI_COLOR_END
 #define DNS_TAG   ANSI_COLOR_BLUE"[DNS Lookup]"ANSI_COLOR_END
 #define PROXY_TAG "[Proxy]"
 

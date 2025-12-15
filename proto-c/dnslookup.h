@@ -25,7 +25,7 @@ typedef enum RootServerIndex {
 #define T_MX 15 //Mail server
 #define T_AAAA 28 //IPv6 address 
 
-void dns_init(int (*tracert)(const char* ip, char* out_buf, size_t out_size));
+void dns_init(double (*tracert)(const char* ip, char* out_buf, size_t out_size), double rtt_cutoff);
 short dns_resolve(unsigned char* host, int query_type, RootServerIndex root_server, unsigned char*** answer_index);
 
 #ifdef DNS_DEBUG

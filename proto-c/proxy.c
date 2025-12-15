@@ -57,13 +57,15 @@ static int active_thread_count = 0;
 
 static pthread_mutex_t c_mem_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-int (*proxy_get_ip_addresses)(unsigned char* hostname, unsigned char*** answer_index) = NULL;
-int (*proxy_traceroute)(const char* ip, char* out_buf, size_t out_size) = NULL;
+unsigned short (*proxy_get_ip_addresses)(unsigned char* hostname, unsigned char*** answer_index) = NULL;
+double (*proxy_traceroute)(const char* ip, char* out_buf, size_t out_size) = NULL;
+double proxy_rtt_cutoff = 9999.0f;
 
-void proxy_init(int (*hostname_resolver)(unsigned char* hostname, unsigned char*** answer_index), int (*tracert)(const char* ip, char* out_buf, size_t out_size))
+void proxy_init(unsigned short (*hostname_resolver)(unsigned char* hostname, unsigned char*** answer_index), double (*tracert)(const char* ip, char* out_buf, size_t out_size), double rtt_cutoff)
 {
   proxy_get_ip_addresses = hostname_resolver;
   proxy_traceroute = tracert;
+  proxy_rtt_cutoff = rtt_cutoff;
 }
 
 int host_port_from_url(const char *url, char *host, int *port)
@@ -128,7 +130,7 @@ void *tunnel_data(void *arg) {
       double elapsed_ms = (now.tv_sec - args->start_time.tv_sec) * 1000.0;
       elapsed_ms += (now.tv_nsec - args->start_time.tv_nsec) / 1000000.0;
 
-      printf("\x1b[32m[Latency]\x1b[0m Response time: %.2f ms\n", elapsed_ms);
+      printf("\x1b[32m[Latency]\x1b[0m First data packet arrived after : %.2f ms\n", elapsed_ms);
 
       first_packet = 0;
     }
@@ -201,7 +203,13 @@ void *handle_client(void *arg) {
   unsigned char **answers;
   int n_ans = proxy_get_ip_addresses((unsigned char *)host, &answers);
 
-  if (n_ans <= 0) {
+  if (n_ans == (int)((unsigned short)-1))
+  {
+    printf("DNS RTT Exceeded %.2lf ms! Packet dropped!\n", proxy_rtt_cutoff);
+    goto cleanup;
+  }
+
+  if (n_ans == 0) {
     printf("\x1b[31m[Error]\x1b[0m Failed to resolve hostname: %s\n", host);
     goto cleanup;
   }
@@ -210,9 +218,17 @@ void *handle_client(void *arg) {
   printf("%s resolved to %s\n", host, destination_ip);
 
   // Perform traceroute
-  char tr_output[1024];
-  proxy_traceroute(destination_ip, tr_output, sizeof(tr_output));
-  printf("%s\n", tr_output);
+  if (proxy_traceroute != NULL)
+  {
+    char tr_output[1024];
+    double latency = proxy_traceroute(destination_ip, tr_output, sizeof(tr_output));
+    if (latency > proxy_rtt_cutoff) {
+      printf("Request RTT Exceeded %.2lf ms! Packet dropped!\n", proxy_rtt_cutoff);
+      for (int i = 0; i < n_ans; i++) free(answers[i]);
+      free(answers);
+      goto cleanup;
+    }
+  }
 
   // Connect to remote server
   remote_fd = socket(AF_INET, SOCK_STREAM, 0);

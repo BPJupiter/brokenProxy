@@ -107,7 +107,8 @@ char RootServers[][16] = {
 };
 int dns_server_count = 16;
 
-int (*dns_traceroute)(const char* ip, char* out_buf, size_t out_size) = NULL;
+double (*dns_traceroute)(const char* ip, char* out_buf, size_t out_size) = NULL;
+double dns_rtt_cutoff = 9999.0f;
 
 #ifdef DNS_PROGRAM
 int main(int argc, char *argv[])
@@ -134,9 +135,10 @@ int main(int argc, char *argv[])
 }
 #endif
 
-void dns_init(int (*tracert)(const char* ip, char* out_buf, size_t out_size))
+void dns_init(double (*tracert)(const char* ip, char* out_buf, size_t out_size), double rtt_cutoff)
 {
   dns_traceroute = tracert;
+  dns_rtt_cutoff = rtt_cutoff;
 }
 
 //Perform a DNS query by sending a packet
@@ -173,19 +175,22 @@ short dns_resolve(unsigned char *host, int query_type, RootServerIndex root_serv
 
   while (1)
   {
+    //Set the DNS structure to standard queries
+    dns = (struct DNS_HEADER *)&buf;
+
     //is current nameserver reachable? (traceroute)
     if (dns_traceroute != NULL)
     {
       char traceroute_out[1024];
-      dns_traceroute(current_nameserver, traceroute_out, 1024);
+      double latency = dns_traceroute(current_nameserver, traceroute_out, 1024);
+      if (latency > dns_rtt_cutoff) {
+        dns->ans_count = -1;
+        break;
+      }
       //TODO: Query database to avoid excessive traceroute
       //TODO: Determine cable and whether or not to foward packet
     }
-    
     dest.sin_addr.s_addr = inet_addr(current_nameserver);
-
-    //Set the DNS structure to standard queries
-    dns = (struct DNS_HEADER *)&buf;
 
     dns->id = (unsigned short) htons(getpid());
     dns->qr = 0;
