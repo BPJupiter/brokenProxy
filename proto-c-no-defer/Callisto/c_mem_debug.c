@@ -300,7 +300,7 @@ void c_debug_mem_reset()
     c_alloc_mutex_unlock(c_alloc_mutex);
 }
 
-void c_debug_mem_check_defer(void (*func)(void*), void* arg)
+void c_debug_mem_check_defer(DeferredList* dl, void (*func)(void*), void* arg)
 {
-  if (func == free) defer(c_debug_mem_free, arg);
+  if (func == free) defer(dl, c_debug_mem_free, arg);
 }

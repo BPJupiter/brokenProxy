@@ -1,46 +1,61 @@
 #include "callisto.h"
-#include <pthread.h>
+#include <stdlib.h>
+#include <stdio.h>
 
 #ifdef C_MEMORY_DEBUG
 #undef defer
 #endif
-#define MAX_DEFERRED 1024
+#define MAX_DEFERRED 256
 
 typedef struct {
   void (*func)(void*);
   void* arg;
 } DeferredCall;
 
-static pthread_mutex_t deferredCalls_mutex = PTHREAD_MUTEX_INITIALIZER;
-DeferredCall deferredCalls[MAX_DEFERRED];
+struct _DeferredList {
+  DeferredCall* deferredCalls;
+  int deferredCount;
+};
 
-static pthread_mutex_t deferredCount_mutex = PTHREAD_MUTEX_INITIALIZER;
-int deferredCount = 0;
-
-void defer(void (*func)(void*), void* arg)
+DeferredList deferred_init()
 {
-  pthread_mutex_lock(&deferredCalls_mutex);
-  pthread_mutex_lock(&deferredCount_mutex);
-  if (deferredCount < MAX_DEFERRED)
-  {
-    deferredCalls[deferredCount].func = func;
-    deferredCalls[deferredCount].arg = arg;
-    deferredCount++;
+  DeferredList deferredCallList;
+  deferredCallList.deferredCalls = malloc(sizeof(DeferredCall) * MAX_DEFERRED);
+  if (deferredCallList.deferredCalls == NULL) {
+    perror("Could not initialise deferredCalls array\n.");
+    deferredCallList.deferredCount = -1;
+    return deferredCallList;
   }
-  pthread_mutex_unlock(&deferredCalls_mutex);
-  pthread_mutex_unlock(&deferredCount_mutex);
+  deferredCallList.deferredCount = 0;
+  return deferredCallList;
 }
 
-void run_deferred()
+void defer(DeferredList* deferredList, void (*func)(void*), void* arg)
 {
-  pthread_mutex_lock(&deferredCalls_mutex);
-  pthread_mutex_lock(&deferredCount_mutex);
+  DeferredCall *deferredCalls = deferredList->deferredCalls;
+  int *deferredCount = &(deferredList->deferredCount);
+  if (*deferredCount < MAX_DEFERRED)
+  {
+    deferredCalls[*deferredCount].func = func;
+    deferredCalls[*deferredCount].arg = arg;
+    (*deferredCount)++;
+  }
+  else
+  {
+    printf("_DeferredList full! Could not defer function!\n");
+  }
+}
+
+void deferred_run(DeferredList* deferredList)
+{
   int i;
-  for (i = deferredCount - 1; i >= 0; i--)
+  DeferredCall *deferredCalls = deferredList->deferredCalls;
+  int *deferredCount = &(deferredList->deferredCount);
+
+  for (i = 0; i < *deferredCount; i++)
   {
     deferredCalls[i].func(deferredCalls[i].arg);
   }
-  deferredCount = 0;
-  pthread_mutex_unlock(&deferredCalls_mutex);
-  pthread_mutex_unlock(&deferredCount_mutex);
+  free(deferredCalls);
+  *deferredCount = 0;
 }
