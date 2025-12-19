@@ -2,6 +2,9 @@
 # DNS_DEBUG
 # DNS_PROGRAM
 # C_MEMORY_DEBUG
+# ROOT_SERVER=[A...M]
+# NO_TRACERT
+# PING
 
 object_files=""
 gcc Callisto/c_mem_debug.c -c $@ && object_files+="c_mem_debug.o "

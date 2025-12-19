@@ -139,14 +139,12 @@ void *tunnel_data(void *arg) {
     while (sent < n) {
       int s = send(args->dest_fd, buffer + sent, n - sent, 0);
       if (s <= 0) {
-        free(args);
         return NULL;
       }
       sent += s;
     }
   }
 
-  free(args);
   return NULL;
 }
 
@@ -290,6 +288,9 @@ void *handle_client(void *arg) {
   // Wait for both threads to complete
   pthread_join(client_to_remote_thread, NULL);
   pthread_join(remote_to_client_thread, NULL);
+
+  free(c2r_args);
+  free(r2c_args);
 
 cleanup:
   if (client_fd >= 0) close(client_fd);
