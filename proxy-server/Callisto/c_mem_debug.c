@@ -8,7 +8,6 @@
 #undef malloc
 #undef realloc
 #undef free
-#undef defer
 #endif
 
 extern void c_debug_mem_print(unsigned int min_allocs);
@@ -90,9 +89,9 @@ void c_debug_mem_add(void *pointer, unsigned int size, char *file, unsigned int 
   {
     if (line == c_alloc_lines[i].line)
     {
-      for (j = 0; file[j] != 0 && file[j] == c_alloc_lines[i].file[j]; j++)
-        if (file[j] == c_alloc_lines[i].file[j])
-          break;
+      for (j = 0; file[j] != 0 && file[j] == c_alloc_lines[i].file[j]; j++);
+      if (file[j] == c_alloc_lines[i].file[j])
+        break;
     }
   }
   if (i < c_alloc_line_count)

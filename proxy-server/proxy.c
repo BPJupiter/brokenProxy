@@ -52,6 +52,12 @@ void proxy_init(unsigned short (*hostname_resolver)(unsigned char* hostname, uns
   proxy_rtt_cutoff = rtt_cutoff;
 }
 
+void free_answers(unsigned char** answers, int n_ans)
+{
+  for (int i = 0; i < n_ans; i++) free(answers[i]);
+  free(answers);
+}
+
 int host_port_from_url(const char *url, char *host, int *port)
 {
   const char *http_pos = strstr(url, "http://");
@@ -87,6 +93,62 @@ int host_port_from_url(const char *url, char *host, int *port)
     }
     return 0;
   }
+}
+
+void get_settings_page(char* buffer, int client_fd)
+{
+  FILE *fp = fopen("./settings-page/index.html", "rb");
+  if (!fp) {
+    printf("404 File not found");
+    return;
+  }
+  fseek(fp, 0L, SEEK_END);
+  long content_length = ftell(fp);
+  rewind(fp);
+
+  char *html_content = (char*)malloc(content_length);
+  fread(html_content, 1, content_length, fp);
+  fclose(fp);
+
+  snprintf(buffer, BUFFER_SIZE,
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/html\r\n"
+            "Content-Length: %d\r\n"
+            "Connection: close\r\n"
+            "\r\n"
+            "%s",
+            content_length, html_content);
+  send(client_fd, buffer, strlen(buffer), 0);
+  free(html_content);
+}
+
+void get_favicon(char* buffer, int client_fd)
+{
+  FILE *fp = fopen("./settings-page/favicon.ico", "rb");
+  if (!fp) {
+    printf("404 File not found\n");
+    return;
+  }
+  fseek(fp, 0L, SEEK_END);
+  long content_length = ftell(fp);
+  rewind(fp);
+
+  char headers[256];
+  int header_len = snprintf(headers, sizeof(headers),
+                            "HTTP/1.1 200 OK\r\n"
+                            "Content-Type: image/x-icon\r\n"
+                            "Content-Length: %ld\r\n"
+                            "Connection: close\r\n"
+                            "\r\n",
+                            content_length);
+  send(client_fd, headers, header_len, 0);
+  char file_buffer[4096];
+  size_t bytes_read;
+  while ((bytes_read = fread(file_buffer, 1, sizeof(file_buffer), fp)) > 0) {
+    send(client_fd, file_buffer, bytes_read, 0);
+  }
+
+  fclose(fp);
 }
 
 // Tunnel data from source to destination
@@ -206,17 +268,30 @@ void *handle_client(void *arg) {
     double latency = proxy_traceroute(destination_ip, tr_output, sizeof(tr_output));
     if (latency > proxy_rtt_cutoff) {
       printf("Request RTT Exceeded %.2lf ms! Packet dropped!\n", proxy_rtt_cutoff);
-      for (int i = 0; i < n_ans; i++) free(answers[i]);
-      free(answers);
+      free_answers(answers, n_ans);
       goto cleanup;
     }
+  }
+
+  // Load proxy settings page if requested
+  if (strstr(first_line, "GET") != NULL && strcmp(host, "/") == 0) {
+    get_settings_page(buffer, client_fd);
+
+    free_answers(answers, n_ans);
+    goto cleanup;
+  }
+
+  if (strstr(first_line, "GET") != NULL && strcmp(host, "/favicon.ico") == 0) {
+    get_favicon(buffer, client_fd);
+
+    free_answers(answers, n_ans);
+    goto cleanup;
   }
 
   // Connect to remote server
   remote_fd = socket(AF_INET, SOCK_STREAM, 0);
   if (remote_fd < 0) {
-    for (int i = 0; i < n_ans; i++) free(answers[i]);
-    free(answers);
+    free_answers(answers, n_ans);
     goto cleanup;
   }
 
@@ -229,8 +304,7 @@ void *handle_client(void *arg) {
   if (connect(remote_fd, (struct sockaddr *)&remote_addr, sizeof(remote_addr)) < 0) {
     printf("\x1b[31m[Error]\x1b[0m Failed to connect to %s:%d - %s\n", 
            destination_ip, port, strerror(errno));
-    for (int i = 0; i < n_ans; i++) free(answers[i]);
-    free(answers);
+    free_answers(answers, n_ans);
     goto cleanup;
   }
 
@@ -247,9 +321,7 @@ void *handle_client(void *arg) {
     printf("Remote socket sent request!\n");
   }
 
-  // Free DNS answers
-  for (int i = 0; i < n_ans; i++) free(answers[i]);
-  free(answers);
+  free_answers(answers, n_ans);
 
   // Create bidirectional tunnel
   pthread_t client_to_remote_thread, remote_to_client_thread;
@@ -273,8 +345,8 @@ void *handle_client(void *arg) {
   pthread_join(client_to_remote_thread, NULL);
   pthread_join(remote_to_client_thread, NULL);
 
-  // we gotta fre e the (c2r_args);
-  // we gotta fre e the (r2c_args);
+  free(c2r_args);
+  free(r2c_args);
 
 cleanup:
   if (client_fd >= 0) close(client_fd);

@@ -1,6 +1,8 @@
 #ifndef CALYPSO_H
 #define CALYPSO_H
 
+#include <stdlib.h>
+
 typedef struct _DeferredList DeferredList;
 
 extern DeferredList deferred_init();
