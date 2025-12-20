@@ -145,7 +145,7 @@ void dns_init(double (*tracert)(const char* ip, char* out_buf, size_t out_size),
 //Perform a DNS query by sending a packet
 short dns_resolve(unsigned char *host, int query_type, RootServerIndex root_server, unsigned char*** answer_index)
 {
-  if (strcmp(host, "/") == 0 || strcmp(host, "/favicon.ico") == 0) {
+  if (strcmp(host, "/") == 0 || strcmp(host, "/favicon.ico") == 0 || strcmp(host, "/index.css") == 0) {
     *answer_index = (unsigned char**)malloc(1 * sizeof(unsigned char*));
     (*answer_index)[0] = (unsigned char*)malloc(256 * sizeof(unsigned char));
     strcpy((char*)(*answer_index)[0], "127.0.0.1");

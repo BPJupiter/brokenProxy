@@ -95,9 +95,12 @@ int host_port_from_url(const char *url, char *host, int *port)
   }
 }
 
-void get_settings_page(char* buffer, int client_fd)
+void get_text_file(char* filename, char* buffer, int client_fd)
 {
-  FILE *fp = fopen("./settings-page/index.html", "rb");
+  char path[64];
+  strcpy(path, "./settings-page/");
+  strcat(path, filename);
+  FILE *fp = fopen(path, "rb");
   if (!fp) {
     printf("404 File not found");
     return;
@@ -106,20 +109,28 @@ void get_settings_page(char* buffer, int client_fd)
   long content_length = ftell(fp);
   rewind(fp);
 
-  char *html_content = (char*)malloc(content_length);
-  fread(html_content, 1, content_length, fp);
+  char *text_content = (char*)malloc(content_length);
+  fread(text_content, 1, content_length, fp);
   fclose(fp);
+
+  char extension[8];
+  if (strstr(filename, ".html") != NULL) {
+    strcpy(extension, "html");
+  }
+  if (strstr(filename, ".css") != NULL) {
+    strcpy(extension, "css");
+  }
 
   snprintf(buffer, BUFFER_SIZE,
             "HTTP/1.1 200 OK\r\n"
-            "Content-Type: text/html\r\n"
+            "Content-Type: text/%s\r\n"
             "Content-Length: %d\r\n"
             "Connection: close\r\n"
             "\r\n"
             "%s",
-            content_length, html_content);
+            extension, content_length, text_content);
   send(client_fd, buffer, strlen(buffer), 0);
-  free(html_content);
+  free(text_content);
 }
 
 void get_favicon(char* buffer, int client_fd)
@@ -274,16 +285,16 @@ void *handle_client(void *arg) {
   }
 
   // Load proxy settings page if requested
-  if (strstr(first_line, "GET") != NULL && strcmp(host, "/") == 0) {
-    get_settings_page(buffer, client_fd);
-
-    free_answers(answers, n_ans);
-    goto cleanup;
-  }
-
-  if (strstr(first_line, "GET") != NULL && strcmp(host, "/favicon.ico") == 0) {
-    get_favicon(buffer, client_fd);
-
+  if (strstr(first_line, "GET") != NULL) {
+    if (strcmp(host, "/") == 0) {
+      get_text_file("index.html", buffer, client_fd);
+    }
+    if (strcmp(host, "/index.css") == 0) {
+      get_text_file("index.css", buffer, client_fd);
+    }
+    if (strstr(first_line, "GET") != NULL && strcmp(host, "/favicon.ico") == 0) {
+      get_favicon(buffer, client_fd);
+    }
     free_answers(answers, n_ans);
     goto cleanup;
   }

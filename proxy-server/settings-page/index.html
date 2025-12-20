@@ -4,20 +4,7 @@
     <meta charset="utf-8" />
     <title>Broken Proxy Settings</title>
 
-    <style type="text/css">
-    body {
-      margin: 40px auto;
-      max-width: 650px;
-      line-height: 1.6;
-      font-size: 18px;
-      color: #444;
-      background-color: #EEEEEE;
-      padding: 0 10px;
-    }
-    h1, h2, h3 {
-      line-height: 1.2;
-    }
-    </style>
+    <link rel="stylesheet" type="text/css" href="./index.css">
   </head>
   <body>
     <header>
@@ -26,5 +13,8 @@
       </h1>
       <aside>Frances Telfar : University of Auckland</aside>
     </header>
+    <hr>
+    <label for="maxLatency">Maximum allowed latency (ms):</label>
+    <input type="number" id="maxLatency" name="maxLatency" min="0" max="9999.0">
   </body>
 </html>
