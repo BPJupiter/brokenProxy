@@ -10,6 +10,8 @@ object_files=""
 gcc Callisto/c_mem_debug.c -c $@ && object_files+="c_mem_debug.o "
 gcc Callisto/c_defer.c -c $@ && object_files+="c_defer.o "
 
+gcc cjson/cJSON.c -c $@ && object_files+="cJSON.o "
+
 gcc traceroute.c -c $@ && object_files+="traceroute.o "
 gcc dnslookup.c -c $@ && object_files+="dnslookup.o "
 gcc proxy.c -c $@ && object_files+="proxy.o "

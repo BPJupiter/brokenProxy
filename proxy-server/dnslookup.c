@@ -109,7 +109,7 @@ char RootServers[][16] = {
 int dns_server_count = 16;
 
 double (*dns_traceroute)(const char* ip, char* out_buf, size_t out_size) = NULL;
-double dns_rtt_cutoff = 9999.0f;
+extern double rtt_cutoff;
 
 #ifdef DNS_PROGRAM
 int main(int argc, char *argv[])
@@ -136,16 +136,21 @@ int main(int argc, char *argv[])
 }
 #endif
 
-void dns_init(double (*tracert)(const char* ip, char* out_buf, size_t out_size), double rtt_cutoff)
+void dns_init(double (*tracert)(const char* ip, char* out_buf, size_t out_size))
 {
   dns_traceroute = tracert;
-  dns_rtt_cutoff = rtt_cutoff;
 }
 
 //Perform a DNS query by sending a packet
 short dns_resolve(unsigned char *host, int query_type, RootServerIndex root_server, unsigned char*** answer_index)
 {
-  if (strcmp(host, "/") == 0 || strcmp(host, "/favicon.ico") == 0 || strcmp(host, "/index.css") == 0) {
+  if (strcmp(host, "/") == 0
+    || strcmp(host, "/favicon.ico") == 0
+    || strcmp(host, "/style.css") == 0
+    || strcmp(host, "/script.js") == 0
+    || strcmp(host, "/settings.json") == 0
+    || strstr(host, "/settings?rtt=") != NULL
+  ) {
     *answer_index = (unsigned char**)malloc(1 * sizeof(unsigned char*));
     (*answer_index)[0] = (unsigned char*)malloc(256 * sizeof(unsigned char));
     strcpy((char*)(*answer_index)[0], "127.0.0.1");
@@ -200,7 +205,7 @@ short dns_resolve(unsigned char *host, int query_type, RootServerIndex root_serv
     {
       char traceroute_out[1024];
       double latency = dns_traceroute(current_nameserver, traceroute_out, 1024);
-      if (latency > dns_rtt_cutoff) {
+      if (latency > rtt_cutoff) {
         dns->ans_count = -1;
         break;
       }

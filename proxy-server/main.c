@@ -10,6 +10,8 @@
 
 #define PROXY_PORT 8080
 
+double rtt_cutoff = 9999.0f;
+
 double no_traceroute(const char* ip, char* out_buf, size_t out_size) {}
 
 #ifdef C_MEMORY_DEBUG
@@ -51,7 +53,6 @@ int main(int argc, char *argv[])
   //TODO: Set "ping mode" where requests are limited to a given ms of latency, else they get dropped.
   // I suggest 80ms for limiting requests to NZ/AUS. All other connections seem to be of reliably higher latency
   int proxy_port = PROXY_PORT;
-  double rtt_cutoff = 9999.0f;
 
   if (argc > 1)
     proxy_port = atoi(argv[1]);
@@ -65,14 +66,14 @@ int main(int argc, char *argv[])
   #endif
 
   #if defined(NO_TRACERT)
-    dns_init(no_traceroute, rtt_cutoff);
-    proxy_init(get_ip_addresses, no_traceroute, rtt_cutoff);
+    dns_init(no_traceroute);
+    proxy_init(get_ip_addresses, no_traceroute);
   #elif defined(PING)
-    dns_init(ping, rtt_cutoff);
-    proxy_init(get_ip_addresses, ping, rtt_cutoff);
+    dns_init(ping);
+    proxy_init(get_ip_addresses, ping);
   #else
-    dns_init(traceroute, rtt_cutoff);
-    proxy_init(get_ip_addresses, traceroute, rtt_cutoff);
+    dns_init(traceroute);
+    proxy_init(get_ip_addresses, traceroute);
   #endif
 
   proxy_start(proxy_port);

@@ -15,6 +15,7 @@
 
 #include "Callisto/callisto.h"
 #include "memory_usage.h"
+#include "cjson/cJSON.h"
 
 #define PROXY_HOST "127.0.0.1"
 #define BUFFER_SIZE 4096
@@ -43,13 +44,12 @@ static int active_thread_count = 0;
 
 unsigned short (*proxy_get_ip_addresses)(unsigned char* hostname, unsigned char*** answer_index) = NULL;
 double (*proxy_traceroute)(const char* ip, char* out_buf, size_t out_size) = NULL;
-double proxy_rtt_cutoff = 9999.0f;
+extern double rtt_cutoff;
 
-void proxy_init(unsigned short (*hostname_resolver)(unsigned char* hostname, unsigned char*** answer_index), double (*tracert)(const char* ip, char* out_buf, size_t out_size), double rtt_cutoff)
+void proxy_init(unsigned short (*hostname_resolver)(unsigned char* hostname, unsigned char*** answer_index), double (*tracert)(const char* ip, char* out_buf, size_t out_size))
 {
   proxy_get_ip_addresses = hostname_resolver;
   proxy_traceroute = tracert;
-  proxy_rtt_cutoff = rtt_cutoff;
 }
 
 void free_answers(unsigned char** answers, int n_ans)
@@ -113,17 +113,23 @@ void get_text_file(char* filename, char* buffer, int client_fd)
   fread(text_content, 1, content_length, fp);
   fclose(fp);
 
-  char extension[8];
+  char extension[32];
   if (strstr(filename, ".html") != NULL) {
-    strcpy(extension, "html");
+    strcpy(extension, "text/html");
   }
-  if (strstr(filename, ".css") != NULL) {
-    strcpy(extension, "css");
+  else if (strstr(filename, ".css") != NULL) {
+    strcpy(extension, "text/css");
+  }
+  else if (strstr(filename, ".json") != NULL) {
+    strcpy(extension, "application/json");
+  }
+  else if (strstr(filename, ".js") != NULL) {
+    strcpy(extension, "text/javascript");
   }
 
   snprintf(buffer, BUFFER_SIZE,
             "HTTP/1.1 200 OK\r\n"
-            "Content-Type: text/%s\r\n"
+            "Content-Type: %s\r\n"
             "Content-Length: %d\r\n"
             "Connection: close\r\n"
             "\r\n"
@@ -160,6 +166,61 @@ void get_favicon(char* buffer, int client_fd)
   }
 
   fclose(fp);
+}
+
+void parse_settings(char* host, double* rtt)
+{
+  char *rtt_p = strstr(host, "rtt=");
+  int rtt_i = atoi(rtt_p+4);
+  *rtt = (double)rtt_i;
+}
+
+void update_json_settings(char* host)
+{
+  double rtt;
+  parse_settings(host, &rtt);
+  FILE *fp = fopen("./settings-page/settings.json", "r");
+  if (fp == NULL) {
+    printf("Error opening settings.json file!\n");
+    return;
+  }
+
+  char buffer[1024];
+  int len = fread(buffer, 1, sizeof(buffer), fp);
+  fclose(fp);
+
+  cJSON *json = cJSON_Parse(buffer);
+  if (json == NULL) {
+    const char *error_ptr = cJSON_GetErrorPtr();
+    if (error_ptr != NULL) {
+      printf("Error: %s\n", error_ptr);
+    }
+    cJSON_Delete(json);
+    return;
+  }
+
+  cJSON *settings = cJSON_GetObjectItemCaseSensitive(json, "settings");
+  if (!cJSON_IsObject(settings)) {
+    printf("Error: settings is not an object!\n");
+    cJSON_Delete(json);
+    return;
+  }
+  cJSON *maxLatency = cJSON_GetObjectItemCaseSensitive(settings, "maxLatency");
+  if (!cJSON_IsNumber(maxLatency)) {
+    printf("Error: maxLatency is not a number!\n");
+    cJSON_Delete(json);
+    return;
+  }
+  cJSON_SetNumberValue(maxLatency, rtt);
+  char *new_json = cJSON_Print(json);
+  fp = fopen("./settings-page/settings.json", "w");
+  if (fp) {
+    fputs(new_json, fp);
+    fclose(fp);
+  }
+  free(new_json);
+  cJSON_Delete(json);
+  return;
 }
 
 // Tunnel data from source to destination
@@ -260,7 +321,7 @@ void *handle_client(void *arg) {
 
   if (n_ans == (int)((unsigned short)-1))
   {
-    printf("DNS RTT Exceeded %.2lf ms! Packet dropped!\n", proxy_rtt_cutoff);
+    printf("DNS RTT Exceeded %.2lf ms! Packet dropped!\n", rtt_cutoff);
     goto cleanup;
   }
 
@@ -277,23 +338,33 @@ void *handle_client(void *arg) {
   {
     char tr_output[1024];
     double latency = proxy_traceroute(destination_ip, tr_output, sizeof(tr_output));
-    if (latency > proxy_rtt_cutoff) {
-      printf("Request RTT Exceeded %.2lf ms! Packet dropped!\n", proxy_rtt_cutoff);
+    if (latency > rtt_cutoff) {
+      printf("Request RTT Exceeded %.2lf ms! Packet dropped!\n", rtt_cutoff);
       free_answers(answers, n_ans);
       goto cleanup;
     }
   }
 
   // Load proxy settings page if requested
-  if (strstr(first_line, "GET") != NULL) {
+  if (strstr(first_line, "GET") != NULL)
+  {
     if (strcmp(host, "/") == 0) {
       get_text_file("index.html", buffer, client_fd);
     }
-    if (strcmp(host, "/index.css") == 0) {
-      get_text_file("index.css", buffer, client_fd);
+    else if (strcmp(host, "/style.css") == 0) {
+      get_text_file("style.css", buffer, client_fd);
     }
-    if (strstr(first_line, "GET") != NULL && strcmp(host, "/favicon.ico") == 0) {
+    else if (strcmp(host, "/script.js") == 0) {
+      get_text_file("script.js", buffer, client_fd);
+    }
+    else if (strcmp(host, "/settings.json") == 0) {
+      get_text_file("settings.json", buffer, client_fd);
+    }
+    else if (strcmp(host, "/favicon.ico") == 0) {
       get_favicon(buffer, client_fd);
+    }
+    else if (strstr(host, "/settings") != NULL) {
+      update_json_settings(host);
     }
     free_answers(answers, n_ans);
     goto cleanup;
@@ -371,6 +442,45 @@ cleanup:
   return NULL;
 }
 
+void update_proxy_settings()
+{
+  FILE *fp = fopen("./settings-page/settings.json", "r");
+  if (fp == NULL) {
+    printf("Error opening settings.json file!\n");
+    return;
+  }
+
+  char buffer[1024];
+  int len = fread(buffer, 1, sizeof(buffer), fp);
+  fclose(fp);
+
+  cJSON *json = cJSON_Parse(buffer);
+  if (json == NULL) {
+    const char *error_ptr = cJSON_GetErrorPtr();
+    if (error_ptr != NULL) {
+      printf("Error: %s\n", error_ptr);
+    }
+    cJSON_Delete(json);
+    return;
+  }
+
+  cJSON *settings = cJSON_GetObjectItemCaseSensitive(json, "settings");
+  if (!cJSON_IsObject(settings)) {
+    printf("Error: settings is not an object!\n");
+    cJSON_Delete(json);
+    return;
+  }
+  cJSON *maxLatency = cJSON_GetObjectItemCaseSensitive(settings, "maxLatency");
+  if (!cJSON_IsNumber(maxLatency)) {
+    printf("Error: maxLatency is not a number!\n");
+    cJSON_Delete(json);
+    return;
+  }
+  rtt_cutoff = maxLatency->valuedouble;
+  cJSON_Delete(json);
+  return;
+}
+
 int proxy_start(int proxy_port) {
   /*
   #ifdef C_MEMORY_DEBUG
@@ -415,6 +525,8 @@ int proxy_start(int proxy_port) {
     printf("Memory (KB): %s\n", get_memory_usage_str_kb());
     client_info_t *client_info = malloc(sizeof(client_info_t));
     socklen_t client_len = sizeof(client_info->client_addr);
+
+    update_proxy_settings();
 
     client_info->client_fd = accept(server_fd, 
                                     (struct sockaddr *)&client_info->client_addr, 
