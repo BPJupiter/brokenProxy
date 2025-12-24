@@ -1,21 +1,21 @@
+#include <arpa/inet.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <pthread.h>
+#include <signal.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <errno.h>
-#include <pthread.h>
-#include <stdarg.h>
-#include <signal.h>
-#include <fcntl.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "Callisto/callisto.h"
-#include "memory_usage.h"
 #include "cjson/cJSON.h"
+#include "memory_usage.h"
 
 #define PROXY_HOST "127.0.0.1"
 #define BUFFER_SIZE 4096
@@ -24,37 +24,42 @@
 static int proxy_printf(const char *format, ...);
 #define printf(...) proxy_printf(__VA_ARGS__)
 
-typedef struct {
+typedef struct
+{
   int client_fd;
   struct sockaddr_in client_addr;
 } client_info_t;
 
-typedef struct {
+typedef struct
+{
   int source_fd;
   int dest_fd;
   struct timespec start_time;
   int measure_latency;
 } tunnel_args_t;
 
-
 static pthread_mutex_t thread_count_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int active_thread_count = 0;
 
-//static pthread_mutex_t c_mem_mutex = PTHREAD_MUTEX_INITIALIZER;
-
-unsigned short (*proxy_get_ip_addresses)(unsigned char* hostname, unsigned char*** answer_index) = NULL;
-double (*proxy_traceroute)(const char* ip, char* out_buf, size_t out_size) = NULL;
+unsigned short (*proxy_get_ip_addresses)(unsigned char *hostname,
+                                         unsigned char ***answer_index) = NULL;
+double (*proxy_traceroute)(const char *ip, char *out_buf,
+                           size_t out_size) = NULL;
 extern double rtt_cutoff;
 
-void proxy_init(unsigned short (*hostname_resolver)(unsigned char* hostname, unsigned char*** answer_index), double (*tracert)(const char* ip, char* out_buf, size_t out_size))
+void proxy_init(
+  unsigned short (*hostname_resolver)(unsigned char *hostname,
+                                      unsigned char ***answer_index),
+  double (*tracert)(const char *ip, char *out_buf, size_t out_size))
 {
   proxy_get_ip_addresses = hostname_resolver;
   proxy_traceroute = tracert;
 }
 
-void free_answers(unsigned char** answers, int n_ans)
+void free_answers(unsigned char **answers, int n_ans)
 {
-  for (int i = 0; i < n_ans; i++) free(answers[i]);
+  for (int i = 0; i < n_ans; i++)
+    free(answers[i]);
   free(answers);
 }
 
@@ -63,7 +68,8 @@ int host_port_from_url(const char *url, char *host, int *port)
   const char *http_pos = strstr(url, "http://");
   const char *https_pos = strstr(url, "https://");
 
-  if (http_pos != NULL) {
+  if (http_pos != NULL)
+  {
     const char *temp = http_pos + 7;
     const char *slash = strchr(temp, '/');
     int host_len = slash ? (slash - temp) : strlen(temp);
@@ -71,7 +77,9 @@ int host_port_from_url(const char *url, char *host, int *port)
     host[host_len] = '\0';
     *port = 80;
     return 0;
-  } else if (https_pos != NULL) {
+  }
+  else if (https_pos != NULL)
+  {
     const char *temp = https_pos + 8;
     const char *slash = strchr(temp, '/');
     int host_len = slash ? (slash - temp) : strlen(temp);
@@ -79,15 +87,20 @@ int host_port_from_url(const char *url, char *host, int *port)
     host[host_len] = '\0';
     *port = 443;
     return 0;
-  } else {
+  }
+  else
+  {
     // No protocol, parse as host:port
     const char *colon = strchr(url, ':');
-    if (colon) {
+    if (colon)
+    {
       int host_len = colon - url;
       strncpy(host, url, host_len);
       host[host_len] = '\0';
       *port = atoi(colon + 1);
-    } else {
+    }
+    else
+    {
       strcpy(host, url);
       *port = 80;
     }
@@ -95,13 +108,14 @@ int host_port_from_url(const char *url, char *host, int *port)
   }
 }
 
-void get_text_file(char* filename, char* buffer, int client_fd)
+void get_text_file(char *filename, char *buffer, int client_fd)
 {
   char path[64];
   strcpy(path, "./settings-page/");
   strcat(path, filename);
   FILE *fp = fopen(path, "rb");
-  if (!fp) {
+  if (!fp)
+  {
     printf("404 File not found");
     return;
   }
@@ -109,40 +123,45 @@ void get_text_file(char* filename, char* buffer, int client_fd)
   long content_length = ftell(fp);
   rewind(fp);
 
-  char *text_content = (char*)malloc(content_length);
+  char *text_content = (char *)malloc(content_length);
   fread(text_content, 1, content_length, fp);
   fclose(fp);
 
   char extension[32];
-  if (strstr(filename, ".html") != NULL) {
+  if (strstr(filename, ".html") != NULL)
+  {
     strcpy(extension, "text/html");
   }
-  else if (strstr(filename, ".css") != NULL) {
+  else if (strstr(filename, ".css") != NULL)
+  {
     strcpy(extension, "text/css");
   }
-  else if (strstr(filename, ".json") != NULL) {
+  else if (strstr(filename, ".json") != NULL)
+  {
     strcpy(extension, "application/json");
   }
-  else if (strstr(filename, ".js") != NULL) {
+  else if (strstr(filename, ".js") != NULL)
+  {
     strcpy(extension, "text/javascript");
   }
 
   snprintf(buffer, BUFFER_SIZE,
-            "HTTP/1.1 200 OK\r\n"
-            "Content-Type: %s\r\n"
-            "Content-Length: %d\r\n"
-            "Connection: close\r\n"
-            "\r\n"
-            "%s",
-            extension, content_length, text_content);
+           "HTTP/1.1 200 OK\r\n"
+           "Content-Type: %s\r\n"
+           "Content-Length: %ld\r\n"
+           "Connection: close\r\n"
+           "\r\n"
+           "%s",
+           extension, content_length, text_content);
   send(client_fd, buffer, strlen(buffer), 0);
   free(text_content);
 }
 
-void get_favicon(char* buffer, int client_fd)
+void get_favicon(char *buffer, int client_fd)
 {
   FILE *fp = fopen("./settings-page/favicon.ico", "rb");
-  if (!fp) {
+  if (!fp)
+  {
     printf("404 File not found\n");
     return;
   }
@@ -161,26 +180,28 @@ void get_favicon(char* buffer, int client_fd)
   send(client_fd, headers, header_len, 0);
   char file_buffer[4096];
   size_t bytes_read;
-  while ((bytes_read = fread(file_buffer, 1, sizeof(file_buffer), fp)) > 0) {
+  while ((bytes_read = fread(file_buffer, 1, sizeof(file_buffer), fp)) > 0)
+  {
     send(client_fd, file_buffer, bytes_read, 0);
   }
 
   fclose(fp);
 }
 
-void parse_settings(char* host, double* rtt)
+void parse_settings(char *host, double *rtt)
 {
   char *rtt_p = strstr(host, "rtt=");
-  int rtt_i = atoi(rtt_p+4);
+  int rtt_i = atoi(rtt_p + 4);
   *rtt = (double)rtt_i;
 }
 
-void update_json_settings(char* host)
+void update_json_settings(char *host)
 {
   double rtt;
   parse_settings(host, &rtt);
   FILE *fp = fopen("./settings-page/settings.json", "r");
-  if (fp == NULL) {
+  if (fp == NULL)
+  {
     printf("Error opening settings.json file!\n");
     return;
   }
@@ -190,9 +211,11 @@ void update_json_settings(char* host)
   fclose(fp);
 
   cJSON *json = cJSON_Parse(buffer);
-  if (json == NULL) {
+  if (json == NULL)
+  {
     const char *error_ptr = cJSON_GetErrorPtr();
-    if (error_ptr != NULL) {
+    if (error_ptr != NULL)
+    {
       printf("Error: %s\n", error_ptr);
     }
     cJSON_Delete(json);
@@ -200,13 +223,15 @@ void update_json_settings(char* host)
   }
 
   cJSON *settings = cJSON_GetObjectItemCaseSensitive(json, "settings");
-  if (!cJSON_IsObject(settings)) {
+  if (!cJSON_IsObject(settings))
+  {
     printf("Error: settings is not an object!\n");
     cJSON_Delete(json);
     return;
   }
   cJSON *maxLatency = cJSON_GetObjectItemCaseSensitive(settings, "maxLatency");
-  if (!cJSON_IsNumber(maxLatency)) {
+  if (!cJSON_IsNumber(maxLatency))
+  {
     printf("Error: maxLatency is not a number!\n");
     cJSON_Delete(json);
     return;
@@ -214,7 +239,8 @@ void update_json_settings(char* host)
   cJSON_SetNumberValue(maxLatency, rtt);
   char *new_json = cJSON_Print(json);
   fp = fopen("./settings-page/settings.json", "w");
-  if (fp) {
+  if (fp)
+  {
     fputs(new_json, fp);
     fclose(fp);
   }
@@ -224,7 +250,8 @@ void update_json_settings(char* host)
 }
 
 // Tunnel data from source to destination
-void *tunnel_data(void *arg) {
+void *tunnel_data(void *arg)
+{
   tunnel_args_t *args = (tunnel_args_t *)arg;
   char buffer[BUFFER_SIZE];
   int first_packet = 1;
@@ -232,11 +259,14 @@ void *tunnel_data(void *arg) {
   struct timeval timeout;
   timeout.tv_sec = 60;
   timeout.tv_usec = 0;
-  setsockopt(args->source_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+  setsockopt(args->source_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout,
+             sizeof(timeout));
 
-  while (1) {
+  while (1)
+  {
     int n = recv(args->source_fd, buffer, BUFFER_SIZE, 0);
-    if (n <= 0) {
+    if (n <= 0)
+    {
       break;
     }
 
@@ -248,15 +278,19 @@ void *tunnel_data(void *arg) {
       double elapsed_ms = (now.tv_sec - args->start_time.tv_sec) * 1000.0;
       elapsed_ms += (now.tv_nsec - args->start_time.tv_nsec) / 1000000.0;
 
-      printf("\x1b[32m[Latency]\x1b[0m First data packet arrived after : %.2f ms\n", elapsed_ms);
+      printf("\x1b[32m[Latency]\x1b[0m First data packet arrived after : %.2f "
+             "ms\n",
+             elapsed_ms);
 
       first_packet = 0;
     }
 
     int sent = 0;
-    while (sent < n) {
+    while (sent < n)
+    {
       int s = send(args->dest_fd, buffer + sent, n - sent, 0);
-      if (s <= 0) {
+      if (s <= 0)
+      {
         return NULL;
       }
       sent += s;
@@ -267,7 +301,8 @@ void *tunnel_data(void *arg) {
 }
 
 // Handle individual client connection
-void *handle_client(void *arg) {
+void *handle_client(void *arg)
+{
   client_info_t *client_info = (client_info_t *)arg;
   int client_fd = client_info->client_fd;
   char buffer[BUFFER_SIZE];
@@ -286,14 +321,16 @@ void *handle_client(void *arg) {
 
   // Receive initial request
   int n = recv(client_fd, buffer, BUFFER_SIZE - 1, 0);
-  if (n <= 0) {
+  if (n <= 0)
+  {
     goto cleanup;
   }
   buffer[n] = '\0';
 
   // Parse first line - split by newline
   char *first_line_end = strchr(buffer, '\n');
-  if (!first_line_end) {
+  if (!first_line_end)
+  {
     goto cleanup;
   }
 
@@ -304,14 +341,16 @@ void *handle_client(void *arg) {
 
   // Parse: METHOD URL VERSION
   char method[16], url_buf[512], version[16];
-  if (sscanf(first_line, "%s %s %s", method, url_buf, version) != 3) {
+  if (sscanf(first_line, "%s %s %s", method, url_buf, version) != 3)
+  {
     goto cleanup;
   }
 
   url = url_buf;
 
   // Extract host and port from URL
-  if (host_port_from_url(url, host, &port) != 0) {
+  if (host_port_from_url(url, host, &port) != 0)
+  {
     goto cleanup;
   }
 
@@ -325,7 +364,8 @@ void *handle_client(void *arg) {
     goto cleanup;
   }
 
-  if (n_ans == 0) {
+  if (n_ans == 0)
+  {
     printf("\x1b[31m[Error]\x1b[0m Failed to resolve hostname: %s\n", host);
     goto cleanup;
   }
@@ -337,8 +377,10 @@ void *handle_client(void *arg) {
   if (proxy_traceroute != NULL)
   {
     char tr_output[1024];
-    double latency = proxy_traceroute(destination_ip, tr_output, sizeof(tr_output));
-    if (latency > rtt_cutoff) {
+    double latency =
+      proxy_traceroute(destination_ip, tr_output, sizeof(tr_output));
+    if (latency > rtt_cutoff)
+    {
       printf("Request RTT Exceeded %.2lf ms! Packet dropped!\n", rtt_cutoff);
       free_answers(answers, n_ans);
       goto cleanup;
@@ -346,24 +388,31 @@ void *handle_client(void *arg) {
   }
 
   // Load proxy settings page if requested
+  // This code sucks. But its short enough that i dont care.
   if (strstr(first_line, "GET") != NULL)
   {
-    if (strcmp(host, "/") == 0) {
+    if (strcmp(host, "/") == 0)
+    {
       get_text_file("index.html", buffer, client_fd);
     }
-    else if (strcmp(host, "/style.css") == 0) {
+    else if (strcmp(host, "/style.css") == 0)
+    {
       get_text_file("style.css", buffer, client_fd);
     }
-    else if (strcmp(host, "/script.js") == 0) {
+    else if (strcmp(host, "/script.js") == 0)
+    {
       get_text_file("script.js", buffer, client_fd);
     }
-    else if (strcmp(host, "/settings.json") == 0) {
+    else if (strcmp(host, "/settings.json") == 0)
+    {
       get_text_file("settings.json", buffer, client_fd);
     }
-    else if (strcmp(host, "/favicon.ico") == 0) {
+    else if (strcmp(host, "/favicon.ico") == 0)
+    {
       get_favicon(buffer, client_fd);
     }
-    else if (strstr(host, "/settings") != NULL) {
+    else if (strstr(host, "/settings") != NULL)
+    {
       update_json_settings(host);
     }
     free_answers(answers, n_ans);
@@ -372,7 +421,8 @@ void *handle_client(void *arg) {
 
   // Connect to remote server
   remote_fd = socket(AF_INET, SOCK_STREAM, 0);
-  if (remote_fd < 0) {
+  if (remote_fd < 0)
+  {
     free_answers(answers, n_ans);
     goto cleanup;
   }
@@ -383,8 +433,10 @@ void *handle_client(void *arg) {
   remote_addr.sin_port = htons(port);
   remote_addr.sin_addr.s_addr = inet_addr(destination_ip);
 
-  if (connect(remote_fd, (struct sockaddr *)&remote_addr, sizeof(remote_addr)) < 0) {
-    printf("\x1b[31m[Error]\x1b[0m Failed to connect to %s:%d - %s\n", 
+  if (connect(remote_fd, (struct sockaddr *)&remote_addr, sizeof(remote_addr)) <
+      0)
+  {
+    printf("\x1b[31m[Error]\x1b[0m Failed to connect to %s:%d - %s\n",
            destination_ip, port, strerror(errno));
     free_answers(answers, n_ans);
     goto cleanup;
@@ -393,11 +445,14 @@ void *handle_client(void *arg) {
   printf("Accepted request for: %s:%d\n", host, port);
 
   // Handle CONNECT method (HTTPS tunnel)
-  if (strstr(first_line, "CONNECT") != NULL) {
+  if (strstr(first_line, "CONNECT") != NULL)
+  {
     const char *response = "HTTP/1.1 200 Connection Established\r\n\r\n";
     send(client_fd, response, strlen(response), 0);
     printf("Client established connection!\n");
-  } else {
+  }
+  else
+  {
     // Regular HTTP - forward the initial request
     send(remote_fd, buffer, n, 0);
     printf("Remote socket sent request!\n");
@@ -431,8 +486,10 @@ void *handle_client(void *arg) {
   free(r2c_args);
 
 cleanup:
-  if (client_fd >= 0) close(client_fd);
-  if (remote_fd >= 0) close(remote_fd);
+  if (client_fd >= 0)
+    close(client_fd);
+  if (remote_fd >= 0)
+    close(remote_fd);
   free(client_info);
 
   pthread_mutex_lock(&thread_count_mutex);
@@ -445,7 +502,8 @@ cleanup:
 void update_proxy_settings()
 {
   FILE *fp = fopen("./settings-page/settings.json", "r");
-  if (fp == NULL) {
+  if (fp == NULL)
+  {
     printf("Error opening settings.json file!\n");
     return;
   }
@@ -455,9 +513,11 @@ void update_proxy_settings()
   fclose(fp);
 
   cJSON *json = cJSON_Parse(buffer);
-  if (json == NULL) {
+  if (json == NULL)
+  {
     const char *error_ptr = cJSON_GetErrorPtr();
-    if (error_ptr != NULL) {
+    if (error_ptr != NULL)
+    {
       printf("Error: %s\n", error_ptr);
     }
     cJSON_Delete(json);
@@ -465,13 +525,15 @@ void update_proxy_settings()
   }
 
   cJSON *settings = cJSON_GetObjectItemCaseSensitive(json, "settings");
-  if (!cJSON_IsObject(settings)) {
+  if (!cJSON_IsObject(settings))
+  {
     printf("Error: settings is not an object!\n");
     cJSON_Delete(json);
     return;
   }
   cJSON *maxLatency = cJSON_GetObjectItemCaseSensitive(settings, "maxLatency");
-  if (!cJSON_IsNumber(maxLatency)) {
+  if (!cJSON_IsNumber(maxLatency))
+  {
     printf("Error: maxLatency is not a number!\n");
     cJSON_Delete(json);
     return;
@@ -481,19 +543,21 @@ void update_proxy_settings()
   return;
 }
 
-int proxy_start(int proxy_port) {
+int proxy_start(int proxy_port)
+{
   /*
-  #ifdef C_MEMORY_DEBUG
-  c_debug_memory_init(c_mem_mutex_lock, c_mem_mutex_unlock, &c_mem_mutex);
-  signal(SIGINT, signal_handler);
-  #endif
-  */
+   #ifdef C_MEMORY_DEBUG
+     c_debug_memory_init(c_mem_mutex_lock, c_mem_mutex_unlock, &c_mem_mutex);
+     signal(SIGINT, signal_handler);
+   #endif
+   */
 
   // Ignore SIGPIPE - prevents crash when writing to closed socket
   signal(SIGPIPE, SIG_IGN);
 
   int server_fd = socket(AF_INET, SOCK_STREAM, 0);
-  if (server_fd < 0) {
+  if (server_fd < 0)
+  {
     perror("socket");
     exit(1);
   }
@@ -508,12 +572,14 @@ int proxy_start(int proxy_port) {
   addr.sin_addr.s_addr = inet_addr(PROXY_HOST);
   addr.sin_port = htons(proxy_port);
 
-  if (bind(server_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+  if (bind(server_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0)
+  {
     perror("bind");
     exit(1);
   }
 
-  if (listen(server_fd, MAX_CLIENTS) < 0) {
+  if (listen(server_fd, MAX_CLIENTS) < 0)
+  {
     perror("listen");
     exit(1);
   }
@@ -521,18 +587,19 @@ int proxy_start(int proxy_port) {
   printf("Proxy server listening on %s:%d\n", PROXY_HOST, proxy_port);
 
   // Accept connections and spawn threads
-  while (1) {
+  while (1)
+  {
     printf("Memory (KB): %s\n", get_memory_usage_str_kb());
     client_info_t *client_info = malloc(sizeof(client_info_t));
     socklen_t client_len = sizeof(client_info->client_addr);
 
     update_proxy_settings();
 
-    client_info->client_fd = accept(server_fd, 
-                                    (struct sockaddr *)&client_info->client_addr, 
-                                    &client_len);
+    client_info->client_fd = accept(
+      server_fd, (struct sockaddr *)&client_info->client_addr, &client_len);
 
-    if (client_info->client_fd < 0) {
+    if (client_info->client_fd < 0)
+    {
       perror("accept");
       free(client_info);
       continue;
@@ -547,7 +614,8 @@ int proxy_start(int proxy_port) {
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 
-    if (pthread_create(&thread, &attr, handle_client, client_info) != 0) {
+    if (pthread_create(&thread, &attr, handle_client, client_info) != 0)
+    {
       perror("pthread_create");
       close(client_info->client_fd);
       free(client_info);
@@ -560,7 +628,8 @@ int proxy_start(int proxy_port) {
   return 0;
 }
 
-int proxy_printf(const char *format, ...) {
+int proxy_printf(const char *format, ...)
+{
   va_list args;
   int ret;
   char *msg = "\x1b[35m[Proxy]\x1b[0m ";

@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-double traceroute(const char* address, char* output, size_t output_len)
+double traceroute(const char *address, char *output, size_t output_len)
 {
   FILE *fp;
   char line[512];
@@ -25,8 +25,9 @@ double traceroute(const char* address, char* output, size_t output_len)
   size_t l = 0;
   while (fgets(line, sizeof(line), fp) != NULL)
   {
-    l += strlen(line)+1;
-    if (l+1 > output_len) {
+    l += strlen(line) + 1;
+    if (l + 1 > output_len)
+    {
       printf("%s %s Output buffer too small at: %s: %d\n", TR_TAG, ERR_TAG, __FILE__, __LINE__);
       output[0] = '\0';
       return -1;
@@ -34,14 +35,16 @@ double traceroute(const char* address, char* output, size_t output_len)
     strcat(output, line);
   }
   char *gap1 = strstr(line, "  ");
-  if (gap1 != NULL) {
-    char *gap2 = strstr(gap1+2, "  ");
-    if (gap2 != NULL) {
+  if (gap1 != NULL)
+  {
+    char *gap2 = strstr(gap1 + 2, "  ");
+    if (gap2 != NULL)
+    {
       char *ms = strstr(line, " ms");
       if (ms != NULL)
       {
         *ms = '\0';
-        latency = atof(gap2+2);
+        latency = atof(gap2 + 2);
       }
     }
   }
@@ -53,7 +56,7 @@ double traceroute(const char* address, char* output, size_t output_len)
   return latency;
 }
 
-double ping(const char* address, char* output, size_t output_len)
+double ping(const char *address, char *output, size_t output_len)
 {
   FILE *fp;
   char line[512];
@@ -73,8 +76,9 @@ double ping(const char* address, char* output, size_t output_len)
   size_t l = 0;
   while (fgets(line, sizeof(line), fp) != NULL)
   {
-    l += strlen(line)+1;
-    if (l+1 > output_len) {
+    l += strlen(line) + 1;
+    if (l + 1 > output_len)
+    {
       printf("%s %s Output buffer too small at: %s: %d", PING_TAG, ERR_TAG, __FILE__, __LINE__);
       output[0] = '\0';
       return -1;
@@ -82,12 +86,13 @@ double ping(const char* address, char* output, size_t output_len)
     strcat(output, line);
   }
   char *rtt_info = strstr(line, "= ");
-  if (rtt_info != NULL) {
+  if (rtt_info != NULL)
+  {
     char *slash = strstr(rtt_info, "/");
     if (slash != NULL)
     {
       *slash = '\0';
-      latency = atof(rtt_info+2);
+      latency = atof(rtt_info + 2);
     }
   }
 

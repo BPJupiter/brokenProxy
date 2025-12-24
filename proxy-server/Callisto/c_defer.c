@@ -7,13 +7,15 @@
 #endif
 #define MAX_DEFERRED 256
 
-typedef struct {
-  void (*func)(void*);
-  void* arg;
+typedef struct
+{
+  void (*func)(void *);
+  void *arg;
 } DeferredCall;
 
-struct _DeferredList {
-  DeferredCall* deferredCalls;
+struct _DeferredList
+{
+  DeferredCall *deferredCalls;
   int deferredCount;
 };
 
@@ -21,7 +23,8 @@ DeferredList deferred_init()
 {
   DeferredList deferredCallList;
   deferredCallList.deferredCalls = malloc(sizeof(DeferredCall) * MAX_DEFERRED);
-  if (deferredCallList.deferredCalls == NULL) {
+  if (deferredCallList.deferredCalls == NULL)
+  {
     perror("Could not initialise deferredCalls array\n.");
     deferredCallList.deferredCount = -1;
     return deferredCallList;
@@ -30,7 +33,7 @@ DeferredList deferred_init()
   return deferredCallList;
 }
 
-void defer(DeferredList* deferredList, void (*func)(void*), void* arg)
+void defer(DeferredList *deferredList, void (*func)(void *), void *arg)
 {
   DeferredCall *deferredCalls = deferredList->deferredCalls;
   int *deferredCount = &(deferredList->deferredCount);
@@ -46,7 +49,7 @@ void defer(DeferredList* deferredList, void (*func)(void*), void* arg)
   }
 }
 
-void deferred_run(DeferredList* deferredList)
+void deferred_run(DeferredList *deferredList)
 {
   int i;
   DeferredCall *deferredCalls = deferredList->deferredCalls;

@@ -1,5 +1,5 @@
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "callisto.h"
@@ -16,12 +16,14 @@ extern void c_debug_mem_print(unsigned int min_allocs);
 #define C_MEMORY_MAGIC_NUMBER 132
 #define C_MEMORY_MAX_ALLOCS ((int)1 << 16)
 
-typedef struct {
+typedef struct
+{
   unsigned int size;
   void *buf;
 } STMemAllocBuf;
 
-typedef struct {
+typedef struct
+{
   unsigned int line;
   char file[256];
   STMemAllocBuf *allocs;
@@ -47,7 +49,7 @@ void c_debug_memory_init(void (*lock)(void *mutex), void (*unlock)(void *mutex),
 
 int c_debug_memory()
 {
-  int output = false;
+  int output = 0;
   unsigned int i, j, k;
   if (c_alloc_mutex != NULL)
     c_alloc_mutex_lock(c_alloc_mutex);
@@ -65,7 +67,8 @@ int c_debug_memory()
           break;
       if (k < C_MEMORY_OVER_ALLOC)
       {
-        printf("MEM ERROR: Overshoot at line %u in file %s\n", c_alloc_lines[i].line, c_alloc_lines[i].file);
+        printf("MEM ERROR: Overshoot at line %u in file %s\n",
+               c_alloc_lines[i].line, c_alloc_lines[i].file);
         {
           unsigned int *X = NULL;
           X[0] = 0;
@@ -89,7 +92,8 @@ void c_debug_mem_add(void *pointer, unsigned int size, char *file, unsigned int 
   {
     if (line == c_alloc_lines[i].line)
     {
-      for (j = 0; file[j] != 0 && file[j] == c_alloc_lines[i].file[j]; j++);
+      for (j = 0; file[j] != 0 && file[j] == c_alloc_lines[i].file[j]; j++)
+        ;
       if (file[j] == c_alloc_lines[i].file[j])
         break;
     }
@@ -99,13 +103,16 @@ void c_debug_mem_add(void *pointer, unsigned int size, char *file, unsigned int 
     if (c_alloc_lines[i].alloc_allocated == c_alloc_lines[i].alloc_count)
     {
       c_alloc_lines[i].alloc_allocated += C_MEMORY_MAX_ALLOCS;
-      c_alloc_lines[i].allocs = realloc(c_alloc_lines[i].allocs, (sizeof *c_alloc_lines[i].allocs) * c_alloc_lines[i].alloc_allocated);
+      c_alloc_lines[i].allocs = realloc(c_alloc_lines[i].allocs,
+                                        (sizeof *c_alloc_lines[i].allocs) * c_alloc_lines[i].alloc_allocated);
     }
     c_alloc_lines[i].allocs[c_alloc_lines[i].alloc_count].size = size;
     c_alloc_lines[i].allocs[c_alloc_lines[i].alloc_count++].buf = pointer;
     c_alloc_lines[i].size += size;
     c_alloc_lines[i].allocated++;
-  }else {
+  }
+  else
+  {
     if (i < C_MEMORY_MAX_ALLOCS)
     {
       c_alloc_lines[i].line = line;
@@ -135,7 +142,8 @@ void *c_debug_mem_malloc(unsigned int size, char *file, unsigned int line)
 
   if (pointer == NULL)
   {
-    printf("MEM ERROR: Malloc returns NULL when trying to allocated %u bytes at line %u in file %s\n", size, line, file);
+    printf("MEM ERROR: Malloc returns NULL when trying to allocated %u bytes at line %u in file %s\n",
+           size, line, file);
     if (c_alloc_mutex != NULL)
       c_alloc_mutex_unlock(c_alloc_mutex);
     c_debug_mem_print(0);
@@ -162,9 +170,11 @@ int c_debug_mem_remove(void *buf)
           if (((unsigned char *)buf)[c_alloc_lines[i].allocs[j].size + k] != C_MEMORY_MAGIC_NUMBER)
             break;
         if (k < C_MEMORY_OVER_ALLOC)
-          printf("MEM ERROR: Overshoot at line %u in file %s\n", c_alloc_lines[i].line, c_alloc_lines[i].file);
+          printf("MEM ERROR: Overshoot at line %u in file %s\n",
+                 c_alloc_lines[i].line, c_alloc_lines[i].file);
         c_alloc_lines[i].size -= c_alloc_lines[i].allocs[j].size;
-        c_alloc_lines[i].allocs[j] = c_alloc_lines[i].allocs[--c_alloc_lines[i].alloc_count];
+        c_alloc_lines[i].allocs[j] =
+          c_alloc_lines[i].allocs[--c_alloc_lines[i].alloc_count];
         c_alloc_lines[i].freed++;
         return 1;
       }
@@ -206,7 +216,8 @@ void *c_debug_mem_realloc(void *pointer, unsigned int size, char *file, unsigned
   }
   if (i == c_alloc_line_count)
   {
-    printf("Callisto Mem debugger error. Trying to reallocate pointer %p in %s line %u. Pointer has never been allocated\n", pointer, file, line);
+    printf("Callisto Mem debugger error. Trying to reallocate pointer %p in %s line %u. Pointer has never been allocated\n",
+           pointer, file, line);
     for (i = 0; i < c_alloc_line_count; i++)
     {
       for (j = 0; j < c_alloc_lines[i].alloc_count; j++)
@@ -217,7 +228,8 @@ void *c_debug_mem_realloc(void *pointer, unsigned int size, char *file, unsigned
         {
           if (&buf[k] == pointer)
           {
-            printf("Trying to reallocate pointer %u bytes (out of %u) in to allocate made in %s on line %u.\n", k, c_alloc_lines[i].allocs[j].size, c_alloc_lines[i].file, c_alloc_lines[i].line);
+            printf("Trying to reallocate pointer %u bytes (out of %u) in to allocate made in %s on line %u.\n",
+                   k, c_alloc_lines[i].allocs[j].size, c_alloc_lines[i].file, c_alloc_lines[i].line);
           }
         }
       }
@@ -232,7 +244,8 @@ void *c_debug_mem_realloc(void *pointer, unsigned int size, char *file, unsigned
   pointer2 = malloc(size + C_MEMORY_OVER_ALLOC);
   if (pointer2 == NULL)
   {
-    printf("MEM ERROR: Realloc returns NULL when trying to allocate %u bytes at line %u in file %s\n", size, line, file);
+    printf("MEM ERROR: Realloc returns NULL when trying to allocate %u bytes at line %u in file %s\n",
+           size, line, file);
     if (c_alloc_mutex != NULL)
       c_alloc_mutex_unlock(c_alloc_mutex);
     c_debug_mem_print(0);
@@ -262,7 +275,8 @@ void c_debug_mem_print(unsigned int min_allocs)
     if (min_allocs < c_alloc_lines[i].allocated)
     {
       printf("%s line: %u\n", c_alloc_lines[i].file, c_alloc_lines[i].line);
-      printf(" - Bytes allocated: %u\n - Allocations: %u\n - Frees: %u\n\n", c_alloc_lines[i].size, c_alloc_lines[i].allocated, c_alloc_lines[i].freed);
+      printf(" - Bytes allocated: %u\n - Allocations: %u\n - Frees: %u\n\n",
+             c_alloc_lines[i].size, c_alloc_lines[i].allocated, c_alloc_lines[i].freed);
     }
   }
   printf("----------------------------------------------\n");
@@ -276,7 +290,7 @@ unsigned int c_debug_mem_consumption()
 
   if (c_alloc_mutex != NULL)
     c_alloc_mutex_lock(c_alloc_mutex);
-  
+
   for (i = 0; i < c_alloc_line_count; i++)
     sum += c_alloc_lines[i].size;
 
@@ -299,7 +313,7 @@ void c_debug_mem_reset()
     c_alloc_mutex_unlock(c_alloc_mutex);
 }
 
-void c_debug_mem_check_defer(DeferredList* dl, void (*func)(void*), void* arg)
+void c_debug_mem_check_defer(DeferredList *dl, void (*func)(void *), void *arg)
 {
   if (func == free) defer(dl, c_debug_mem_free, arg);
 }
