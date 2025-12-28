@@ -41,15 +41,13 @@ typedef struct
 static pthread_mutex_t thread_count_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int active_thread_count = 0;
 
-unsigned short (*proxy_get_ip_addresses)(unsigned char *hostname,
-                                         unsigned char ***answer_index) = NULL;
+short (*proxy_get_ip_addresses)(unsigned char *hostname, unsigned char ***answer_index) = NULL;
 double (*proxy_traceroute)(const char *ip, char *out_buf,
                            size_t out_size) = NULL;
 extern double rtt_cutoff;
 
 void proxy_init(
-  unsigned short (*hostname_resolver)(unsigned char *hostname,
-                                      unsigned char ***answer_index),
+  short (*hostname_resolver)(unsigned char *hostname, unsigned char ***answer_index),
   double (*tracert)(const char *ip, char *out_buf, size_t out_size))
 {
   proxy_get_ip_addresses = hostname_resolver;
@@ -278,9 +276,9 @@ void *tunnel_data(void *arg)
       double elapsed_ms = (now.tv_sec - args->start_time.tv_sec) * 1000.0;
       elapsed_ms += (now.tv_nsec - args->start_time.tv_nsec) / 1000000.0;
 
-      printf("\x1b[32m[Latency]\x1b[0m First data packet arrived after : %.2f "
+      /*printf("\x1b[32m[Latency]\x1b[0m First data packet arrived after : %.2f "
              "ms\n",
-             elapsed_ms);
+             elapsed_ms);*/
 
       first_packet = 0;
     }

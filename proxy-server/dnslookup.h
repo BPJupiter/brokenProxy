@@ -17,7 +17,8 @@ typedef enum RootServerIndex
   J,
   K,
   L,
-  M
+  M,
+  RSI_COUNT
 } RootServerIndex;
 
 #define T_A 1     // Ipv4 address
@@ -29,7 +30,8 @@ typedef enum RootServerIndex
 #define T_AAAA 28 // IPv6 address
 
 void dns_init(double (*tracert)(const char *ip, char *out_buf, size_t out_size));
-short dns_resolve(char *host, int query_type, RootServerIndex root_server, unsigned char ***answer_index);
+//short dns_resolve(char *host, int query_type, RootServerIndex root_server, unsigned char ***answer_index);
+short dns_resolve(char *host, unsigned char ***answer_index);
 
 #ifdef DNS_DEBUG
 extern void print_response_info(void *);

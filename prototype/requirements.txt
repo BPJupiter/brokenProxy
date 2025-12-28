@@ -1,2 +1,0 @@
-PySocks
-dnspython

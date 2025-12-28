@@ -45,15 +45,6 @@ void signal_handler(int sig)
 }
 #endif
 
-unsigned short get_ip_addresses(char *hostname, unsigned char ***answer_index)
-{
-#ifdef ROOT_SERVER
-  return dns_resolve(hostname, T_A, ROOT_SERVER, answer_index);
-#else
-  return dns_resolve(hostname, T_A, E, answer_index);
-#endif
-}
-
 int main(int argc, char *argv[])
 {
   // TODO: Set "ping mode" where requests are limited to a given ms of latency,
@@ -76,13 +67,13 @@ int main(int argc, char *argv[])
 
 #if defined(NO_TRACERT)
   dns_init(no_traceroute);
-  proxy_init(get_ip_addresses, no_traceroute);
+  proxy_init(dns_resolve, no_traceroute);
 #elif defined(PING)
   dns_init(ping);
-  proxy_init(get_ip_addresses, ping);
+  proxy_init(dns_resolve, ping);
 #else
   dns_init(traceroute);
-  proxy_init(get_ip_addresses, traceroute);
+  proxy_init(dns_resolve, traceroute);
 #endif
 
   proxy_start(proxy_port);
