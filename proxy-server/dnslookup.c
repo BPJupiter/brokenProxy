@@ -437,7 +437,7 @@ short dns_recursive_worker(char *host, int query_type, char *ns_ip, unsigned cha
       break;
       case T_CNAME:
         char cname_target[256];
-        strcpy(cname_target, (char *)answers[9].rdata);
+        strcpy(cname_target, (char *)answers[0].rdata);
         printf("Found CNAME alias: %s. Requerying...\n", answers[0].rdata);
 
         return dns_recursive_worker(cname_target, query_type, current_root_ip, answer_index, depth++);
