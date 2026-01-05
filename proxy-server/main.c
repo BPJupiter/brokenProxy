@@ -38,9 +38,9 @@ void *c_mem_mutex_create()
 
 void signal_handler(int sig)
 {
-  printf("Caught signal %d\n", sig);
+  printf("\nCaught signal %d\n", sig);
   // c_debug_memory();
-  c_debug_mem_print(0);
+  c_debug_mem_print(1);
   exit(sig);
 }
 #endif

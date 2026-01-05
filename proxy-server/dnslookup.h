@@ -21,6 +21,8 @@ typedef enum RootServerIndex
   RSI_COUNT
 } RootServerIndex;
 
+#ifndef _ARPA_NAMESER_H_
+
 #define T_A 1     // Ipv4 address
 #define T_NS 2    // Nameserver
 #define T_CNAME 5 // Canonical name
@@ -28,6 +30,8 @@ typedef enum RootServerIndex
 #define T_PTR 12  // Domain name pointer
 #define T_MX 15   // Mail server
 #define T_AAAA 28 // IPv6 address
+
+#endif
 
 void dns_init(double (*tracert)(const char *ip, char *out_buf, size_t out_size));
 //short dns_resolve(char *host, int query_type, RootServerIndex root_server, unsigned char ***answer_index);

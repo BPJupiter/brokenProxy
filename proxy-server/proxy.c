@@ -315,7 +315,7 @@ void *handle_client(void *arg)
   pthread_mutex_unlock(&thread_count_mutex);
 
   printf("\x1b[33m[Info]\x1b[0m ThreadCount: %d\n", current_count);
-  printf("Thread %ld: %s KB\n", (long)arg, get_memory_usage_str_kb());
+  printf("Thread %ld: %s\n", (long)arg, get_memory_usage_str_kb());
 
   // Receive initial request
   int n = recv(client_fd, buffer, BUFFER_SIZE - 1, 0);
@@ -593,8 +593,7 @@ int proxy_start(int proxy_port)
 
     update_proxy_settings();
 
-    client_info->client_fd = accept(
-      server_fd, (struct sockaddr *)&client_info->client_addr, &client_len);
+    client_info->client_fd = accept(server_fd, (struct sockaddr *)&client_info->client_addr, &client_len);
 
     if (client_info->client_fd < 0)
     {
@@ -630,11 +629,11 @@ int proxy_printf(const char *format, ...)
 {
   va_list args;
   int ret;
-  char *msg = "\x1b[35m[Proxy]\x1b[0m ";
-  fprintf(stdout, "%s", msg);
+  char msg[1024] = "\x1b[35m[Proxy]\x1b[0m ";
+  strcat(msg, format);
 
   va_start(args, format);
-  ret = vprintf(format, args);
+  ret = vprintf(msg, args);
   va_end(args);
   fflush(stdout);
 

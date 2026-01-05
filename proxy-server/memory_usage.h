@@ -41,12 +41,14 @@ const char *get_memory_usage_json();
 
 #pragma comment(lib, "psapi.lib")
 
-static size_t get_memory_kb() {
-    PROCESS_MEMORY_COUNTERS pmc;
-    if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
-        return pmc.WorkingSetSize / 1024;
-    }
-    return 0;
+static size_t get_memory_kb()
+{
+  PROCESS_MEMORY_COUNTERS pmc;
+  if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc)))
+  {
+    return pmc.WorkingSetSize / 1024;
+  }
+  return 0;
 }
 
 #elif defined(__linux__)
@@ -54,28 +56,32 @@ static size_t get_memory_kb() {
 #include <stdio.h>
 #include <string.h>
 
-static size_t get_memory_kb() {
-    FILE *file = fopen("/proc/self/status", "r");
-    if (!file) return 0;
+static size_t get_memory_kb()
+{
+  FILE *file = fopen("/proc/self/status", "r");
+  if (!file) return 0;
 
-    char line[256];
-    size_t memory_kb = 0;
+  char line[256];
+  size_t memory_kb = 0;
 
-    while (fgets(line, sizeof(line), file)) {
-        if (strncmp(line, "VmRSS:", 6) == 0) {
-            sscanf(line + 6, "%zu", &memory_kb);
-            break;
-        }
+  while (fgets(line, sizeof(line), file))
+  {
+    if (strncmp(line, "VmRSS:", 6) == 0)
+    {
+      sscanf(line + 6, "%zu", &memory_kb);
+      break;
     }
+  }
 
-    fclose(file);
-    return memory_kb;
+  fclose(file);
+  return memory_kb;
 }
 
 #else
 
-static size_t get_memory_kb() {
-    return 0;
+static size_t get_memory_kb()
+{
+  return 0;
 }
 
 #endif
@@ -94,24 +100,27 @@ static size_t get_memory_kb() {
 
 THREAD_LOCAL static char mem_buf[64];
 
-const char *get_memory_usage_str_kb() {
-    size_t kb = get_memory_kb();
-    snprintf(mem_buf, sizeof(mem_buf), "%zu KB", kb);
-    return mem_buf;
+const char *get_memory_usage_str_kb()
+{
+  size_t kb = get_memory_kb();
+  snprintf(mem_buf, sizeof(mem_buf), "%zu KB", kb);
+  return mem_buf;
 }
 
-const char *get_memory_usage_str_mb() {
-    size_t kb = get_memory_kb();
-    double mb = kb / 1024.0;
-    snprintf(mem_buf, sizeof(mem_buf), "%.2f MB", mb);
-    return mem_buf;
+const char *get_memory_usage_str_mb()
+{
+  size_t kb = get_memory_kb();
+  double mb = kb / 1024.0;
+  snprintf(mem_buf, sizeof(mem_buf), "%.2f MB", mb);
+  return mem_buf;
 }
 
-const char *get_memory_usage_json() {
-    size_t kb = get_memory_kb();
-    double mb = kb / 1024.0;
-    snprintf(mem_buf, sizeof(mem_buf), "{\"memory_kb\":%zu,\"memory_mb\":%.2f}", kb, mb);
-    return mem_buf;
+const char *get_memory_usage_json()
+{
+  size_t kb = get_memory_kb();
+  double mb = kb / 1024.0;
+  snprintf(mem_buf, sizeof(mem_buf), "{\"memory_kb\":%zu,\"memory_mb\":%.2f}", kb, mb);
+  return mem_buf;
 }
 
 #endif // MEMORY_USAGE_H

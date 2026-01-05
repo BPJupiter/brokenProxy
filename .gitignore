@@ -7,7 +7,7 @@ __pycache__/
 *.so
 
 # Uncrustify
-uncrustify.cfg
+#uncrustify.cfg
 
 # Distribution / packaging
 .Python

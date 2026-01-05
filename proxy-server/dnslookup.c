@@ -1,6 +1,8 @@
 #include <arpa/inet.h>
+#include <arpa/nameser.h>
 #include <errno.h>
 #include <netinet/in.h>
+#include <resolv.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -90,6 +92,8 @@ static short dns_recursive_worker(char *host, int query_type, char *current_ns_i
 static void change_to_dns_name_format(unsigned char *, char *);
 static unsigned char *read_name(unsigned char *, unsigned char *, int *);
 static void dns_free_mem(struct DNS_HEADER *dns, struct RES_RECORD *answers, struct RES_RECORD *auth, struct RES_RECORD *addit);
+static int external_dns_is_blocked();
+static void set_to_local_dns(char *buf);
 
 void print_response_contents(void *dns_ptr, void *answers_ptr, void *auth_ptr, void *addit_ptr, void *a_ptr);
 
@@ -115,6 +119,7 @@ double (*dns_traceroute)(const char *ip, char *out_buf, size_t out_size) = NULL;
 extern double rtt_cutoff;
 #endif
 char current_root_ip[16];
+int root_server_found = 0;
 
 #ifdef DNS_PROGRAM
 #include "traceroute.h"
@@ -171,23 +176,33 @@ short dns_resolve(char *host, unsigned char ***answer_index)
   }
 
   short n_ans = 0;
-  int i;
-  for (i = 0; i < RSI_COUNT; i++)
+  int i = 0;
+  if (!root_server_found)
   {
-    printf("Changing root server\n");
     if (dns_traceroute != NULL)
     {
-      char traceroute_out[1024];
-      double latency = dns_traceroute(RootServers[i], traceroute_out, 1024);
-      if (latency < rtt_cutoff)
+      for (i = 0; i < RSI_COUNT; i++)
       {
+        char traceroute_out[1024];
+        double latency = dns_traceroute(RootServers[i], traceroute_out, 1024);
+        if (latency >= rtt_cutoff)
+        {
+          printf("%s exceeded %.2f ms! Changing root server\n", RootServers[i], rtt_cutoff);
+          continue;
+        }
         break;
+        // TODO: Query database to avoid excessive traceroute
+        // TODO: Determine cable and whether or not to foward packet
       }
-      // TODO: Query database to avoid excessive traceroute
-      // TODO: Determine cable and whether or not to foward packet
     }
+    strcpy(current_root_ip, RootServers[i]);
+    if (external_dns_is_blocked())
+    {
+      char local_dns[16];
+      set_to_local_dns(local_dns);
+    }
+    root_server_found = 1;
   }
-  strcpy(current_root_ip, RootServers[i]);
   n_ans = dns_recursive_worker(host, T_A, current_root_ip, answer_index, 0);
   if (n_ans <= 0)
   {
@@ -439,7 +454,7 @@ short dns_recursive_worker(char *host, int query_type, char *ns_ip, unsigned cha
         char cname_target[256];
         strcpy(cname_target, (char *)answers[0].rdata);
         printf("Found CNAME alias: %s. Requerying...\n", answers[0].rdata);
-
+        dns_free_mem(dns, answers, auth, addit);
         return dns_recursive_worker(cname_target, query_type, current_root_ip, answer_index, depth++);
       break;
       case T_AAAA:
@@ -699,12 +714,12 @@ int dns_printf(const char *format, ...)
 {
   va_list args;
   int ret;
-  char *msg = "\x1b[34m[DNS]\x1b[0m ";
-  fprintf(stdout, "%s", msg);
+  char msg[1024] = "\x1b[34m[DNS]\x1b[0m ";
+  strcat(msg, format);
 
   va_start(args, format);
 
-  ret = vprintf(format, args);
+  ret = vprintf(msg, args);
 
   va_end(args);
 
@@ -855,4 +870,28 @@ void print_response_contents(void *dns_ptr, void *answers_ptr, void *auth_ptr, v
 
     fprintf(stdout, "\n");
   }
+}
+
+static int external_dns_is_blocked()
+{
+  int n_ans, i;
+  unsigned char **answers;
+  n_ans = dns_recursive_worker("www.google.com", T_A, current_root_ip, &answers, 0);
+  if (n_ans <= 0)
+    return 1;
+  for (i = 0; i < n_ans; i++)
+    free(answers[i]);
+  free(answers);
+  return 0;
+}
+
+static void set_to_local_dns(char *buf)
+{
+  struct __res_state dns;
+  res_ninit(&dns);
+
+  struct in_addr addr = dns.nsaddr_list[0].sin_addr;
+  // should check string length here...
+  strcpy(current_root_ip, inet_ntoa(addr));
+  return;
 }
