@@ -4,7 +4,7 @@
 # C_MEMORY_DEBUG
 
 object_files=""
-flags="-D DNS_DEBUG -D DNS_PROGRAM "
+flags="-D DNS_DEBUG -D DNS_PROGRAM -std=gnu89 -pedantic -Wall -Wextra "
 gcc Callisto/c_mem_debug.c -c $@ $flags && object_files+="c_mem_debug.o "
 gcc Callisto/c_defer.c -c $@ $flags && object_files+="c_defer.o "
 
