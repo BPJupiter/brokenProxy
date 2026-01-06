@@ -1,0 +1,6 @@
+-std=gnu89
+-Wall
+-Wextra
+-Isrc
+-Ilib
+-DDEBUG

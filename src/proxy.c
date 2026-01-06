@@ -22,6 +22,7 @@
 #define PROXY_HOST "127.0.0.1"
 #define BUFFER_SIZE 4096
 #define MAX_CLIENTS 8
+#define SETTINGS_DIR "settings/settings.json"
 
 static int proxy_printf(const char *format, ...);
 #define printf proxy_printf
@@ -209,10 +210,10 @@ void update_json_settings(char *host)
     double rtt;
 
     parse_settings(host, &rtt);
-    fp = fopen("./settings-page/settings.json", "r");
+    fp = fopen(SETTINGS_DIR, "r");
     if (fp == NULL)
     {
-        printf("Error opening settings.json file!\n");
+        perror("Error opening settings.json file!");
         return;
     }
 
@@ -247,7 +248,7 @@ void update_json_settings(char *host)
     }
     cJSON_SetNumberValue(maxLatency, rtt);
     new_json = cJSON_Print(json);
-    fp = fopen("./settings-page/settings.json", "w");
+    fp = fopen(SETTINGS_DIR, "w");
     if (fp)
     {
         fputs(new_json, fp);
@@ -507,10 +508,10 @@ void update_proxy_settings(void)
     cJSON *json;
     cJSON *settings;
     cJSON *maxLatency;
-    fp = fopen("./settings-page/settings.json", "r");
+    fp = fopen(SETTINGS_DIR, "r");
     if (fp == NULL)
     {
-        printf("Error opening settings.json file!\n");
+        perror("Error opening settings.json file!");
         return;
     }
 

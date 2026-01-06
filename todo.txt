@@ -9,5 +9,5 @@
 
 /* NOTE: Completed
  * Make it fully c89 (gnu89) compliant
- *
+ * Proper build system
  * */
