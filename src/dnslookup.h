@@ -33,7 +33,6 @@ typedef enum RootServerIndex
 
 #endif
 
-void dns_init(double (*tracert)(const char *ip, char *out_buf, size_t out_size));
 short dns_resolve(char *host, unsigned char ***answer_index);
 
 #ifdef DNS_DEBUG

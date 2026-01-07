@@ -13,6 +13,9 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+#include "shared_context.h"
+#include "dnslookup.h"
+#include "traceroute.h"
 #include "cjson/cJSON.h"
 #include "memory_usage.h"
 #ifdef C_MEMORY_DEBUG
@@ -39,24 +42,18 @@ typedef struct
     int dest_fd;
 } tunnel_args_t;
 
+struct settings
+{
+    char pingEnabled;
+    char trEnabled;
+    double rtt;
+};
+
 static pthread_mutex_t thread_count_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int active_thread_count = 0;
 
 static pthread_mutex_t settings_mod_mutex = PTHREAD_MUTEX_INITIALIZER;
-static int settings_modified = 0;
-
-static short (*resolve_ip_callback)(unsigned char *hostname, unsigned char ***answer_index) = NULL;
-static double (*proxy_traceroute)(const char *ip, char *out_buf,
-                                  size_t out_size) = NULL;
-extern double rtt_cutoff;
-
-void proxy_init(
-    short (*dns_callback)(unsigned char *hostname, unsigned char ***answer_index),
-    double (*tracert)(const char *ip, char *out_buf, size_t out_size))
-{
-    resolve_ip_callback = dns_callback;
-    proxy_traceroute = tracert;
-}
+static int settings_modified = 1;
 
 void free_answers(unsigned char **answers, int n_ans)
 {
@@ -197,11 +194,20 @@ void get_favicon(char *buffer, int client_fd)
     fclose(fp);
 }
 
-void get_values_from_url(char *host, double *rtt)
+void get_values_from_url(char *host, struct settings *vals)
 {
-    char *rtt_p = strstr(host, "rtt=");
-    int rtt_i = atoi(rtt_p + 4);
-    *rtt = (double)rtt_i;
+    char *p;
+    int rtt;
+    char pingEnabled, trEnabled;
+    p = strstr(host, "rtt=");
+    rtt = atoi(p + 4);
+    p = strstr(host, "pingEnabled=");
+    pingEnabled = atoi(p + 12);
+    p = strstr(host, "trEnabled=");
+    trEnabled = atoi(p + 10);
+    vals->rtt = (double)rtt;
+    vals->pingEnabled = pingEnabled;
+    vals->trEnabled = trEnabled;
 }
 
 void set_json_settings(int client_fd, char *host)
@@ -209,7 +215,13 @@ void set_json_settings(int client_fd, char *host)
     FILE *fp;
     cJSON *json;
     cJSON *settings;
+    cJSON *pingObj;
+    cJSON *tracertObj;
+
     cJSON *maxLatency;
+    cJSON *pingEnabled;
+
+    cJSON *trEnabled;
 
     char *new_json;
     char buffer[4096];
@@ -230,9 +242,9 @@ void set_json_settings(int client_fd, char *host)
         "\r\n";
 
     size_t bytes_read;
-    double rtt;
+    struct settings settings_vals = {0};
 
-    get_values_from_url(host, &rtt);
+    get_values_from_url(host, &settings_vals);
 
     fp = fopen(SETTINGS_DIR, "r");
     if (fp == NULL)
@@ -260,8 +272,18 @@ void set_json_settings(int client_fd, char *host)
     }
 
     settings = cJSON_GetObjectItemCaseSensitive(json, "settings");
-    maxLatency = cJSON_GetObjectItemCaseSensitive(settings, "maxLatency");
-    if (!cJSON_IsObject(settings) || !cJSON_IsNumber(maxLatency))
+    pingObj = cJSON_GetObjectItemCaseSensitive(settings, "ping");
+    tracertObj = cJSON_GetObjectItemCaseSensitive(settings, "traceroute");
+    maxLatency = cJSON_GetObjectItemCaseSensitive(pingObj, "maxLatency");
+    pingEnabled = cJSON_GetObjectItemCaseSensitive(pingObj, "pingEnabled");
+    trEnabled = cJSON_GetObjectItemCaseSensitive(tracertObj, "trEnabled");
+
+    if (!cJSON_IsObject(settings)
+        || !cJSON_IsObject(pingObj)
+        || !cJSON_IsNumber(maxLatency)
+        || !cJSON_IsBool(pingEnabled)
+        || !cJSON_IsObject(tracertObj)
+        || !cJSON_IsBool(trEnabled))
     {
         printf("Error: JSON structure invalid!\n");
         cJSON_Delete(json);
@@ -269,7 +291,10 @@ void set_json_settings(int client_fd, char *host)
         return;
     }
 
-    cJSON_SetNumberValue(maxLatency, rtt);
+    cJSON_SetNumberValue(maxLatency, settings_vals.rtt);
+    cJSON_SetBoolValue(pingEnabled, settings_vals.pingEnabled);
+    cJSON_SetBoolValue(trEnabled, settings_vals.trEnabled);
+
     new_json = cJSON_Print(json);
     fp = fopen(SETTINGS_DIR, "w");
     if (fp)
@@ -347,6 +372,8 @@ void *handle_client(void *arg)
     int current_thread_count;
     int bytes_recvd;
     int port = 80;
+    double rtt_cutoff = sharedContext_get_rtt_cutoff();
+    double latency;
 
     pthread_mutex_lock(&thread_count_mutex);
     active_thread_count++;
@@ -390,7 +417,7 @@ void *handle_client(void *arg)
     }
 
     /* Resolve hostname using custom DNS resolver */
-    n_ans = resolve_ip_callback((unsigned char *)host, &answers);
+    n_ans = sharedContext_exec_resolve_cb(host, &answers);
 
     if (n_ans == (int)((unsigned short)-1))
     {
@@ -407,18 +434,12 @@ void *handle_client(void *arg)
     destination_ip = (char *)answers[0];
     printf("%s resolved to %s\n", host, destination_ip);
 
-    /* Perform traceroute */
-    if (proxy_traceroute != NULL)
+    latency = sharedContext_exec_ping_cb(destination_ip);
+    if (latency > rtt_cutoff)
     {
-        char tr_output[1024];
-        double latency =
-            proxy_traceroute(destination_ip, tr_output, sizeof(tr_output));
-        if (latency > rtt_cutoff)
-        {
-            printf("Request RTT Exceeded %.2lf ms! Packet dropped!\n", rtt_cutoff);
-            free_answers(answers, n_ans);
-            goto cleanup;
-        }
+        printf("Request RTT Exceeded %.2lf ms! Packet dropped!\n", rtt_cutoff);
+        free_answers(answers, n_ans);
+        goto cleanup;
     }
 
     /* Load proxy settings page if requested */
@@ -541,7 +562,15 @@ void update_proxy_settings(void)
     char buffer[1024];
     cJSON *json;
     cJSON *settings;
+
+    cJSON *pingObj;
+    cJSON *tracertObj;
+
+    cJSON *pingEnabled;
     cJSON *maxLatency;
+
+    cJSON *trEnabled;
+
     fp = fopen(SETTINGS_DIR, "r");
     if (fp == NULL)
     {
@@ -571,14 +600,45 @@ void update_proxy_settings(void)
         cJSON_Delete(json);
         return;
     }
-    maxLatency = cJSON_GetObjectItemCaseSensitive(settings, "maxLatency");
+
+    pingObj = cJSON_GetObjectItemCaseSensitive(settings, "ping");
+    tracertObj = cJSON_GetObjectItemCaseSensitive(settings, "traceroute");
+    if (!cJSON_IsObject(pingObj) || !cJSON_IsObject(tracertObj))
+    {
+        printf("Error: bad object!\n");
+        cJSON_Delete(json);
+        return;
+    }
+
+    pingEnabled = cJSON_GetObjectItemCaseSensitive(pingObj, "pingEnabled");
+    trEnabled = cJSON_GetObjectItemCaseSensitive(tracertObj, "trEnabled");
+    if (!cJSON_IsBool(pingEnabled) || !cJSON_IsBool(trEnabled))
+    {
+        printf("Error: bad boolean!\n");
+        cJSON_Delete(json);
+        return;
+    }
+
+    maxLatency = cJSON_GetObjectItemCaseSensitive(pingObj, "maxLatency");
     if (!cJSON_IsNumber(maxLatency))
     {
         printf("Error: maxLatency is not a number!\n");
         cJSON_Delete(json);
         return;
     }
-    rtt_cutoff = maxLatency->valuedouble;
+
+    sharedContext_set_rtt_cutoff(maxLatency->valuedouble);
+
+    if (cJSON_IsTrue(pingEnabled))
+        sharedContext_set_ping_cb(ping);
+    else
+        sharedContext_set_ping_cb(NULL);
+
+    if (cJSON_IsTrue(trEnabled))
+        sharedContext_set_tracert_cb(traceroute);
+    else
+        sharedContext_set_tracert_cb(NULL);
+
     cJSON_Delete(json);
     return;
 }
@@ -588,6 +648,7 @@ int proxy_start(int proxy_port)
     int server_fd;
     struct sockaddr_in addr;
     int opt;
+
     /* Ignore SIGPIPE - prevents crash when writing to closed socket */
     signal(SIGPIPE, SIG_IGN);
 
@@ -618,6 +679,8 @@ int proxy_start(int proxy_port)
         perror("listen");
         exit(1);
     }
+
+    sharedContext_set_resolve_cb(dns_resolve);
 
     printf("Proxy server listening on %s:%d\n", PROXY_HOST, proxy_port);
 

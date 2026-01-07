@@ -1,12 +1,18 @@
 const confirmBtn = document.getElementById("confirmSettings");
 const latencyInput = document.getElementById("maxLatency");
+const pingToggle = document.getElementById("pingEnabled");
+const tracertToggle = document.getElementById("trEnabled");
 
 window.onload = function () {
     fetch("http://127.0.0.1:13406/settings.json")
         .then(response => response.json())
         .then(data => {
-            if (data.settings && data.settings.maxLatency !== undefined) {
-                latencyInput.value = data.settings.maxLatency;
+            if (data.settings.ping && data.settings.ping.maxLatency !== undefined && data.settings.ping.pingEnabled !== undefined) {
+                pingToggle.checked = data.settings.ping.pingEnabled;
+                latencyInput.value = data.settings.ping.maxLatency;
+            }
+            if (data.settings.traceroute && data.settings.traceroute.trEnabled !== undefined) {
+                tracertToggle.checked = data.settings.traceroute.trEnabled;
             }
         })
         .catch(err => console.error("Error loading settings:", err));
@@ -14,6 +20,8 @@ window.onload = function () {
 
 confirmBtn.onclick = function () {
     let maxLatency = latencyInput.value;
+    let pingEnabled = pingToggle.checked ? 1 : 0;
+    let trEnabled = tracertToggle.checked ? 1 : 0;
 
     if (maxLatency == 0 || maxLatency === '') {
         maxLatency = 80;
@@ -24,7 +32,7 @@ confirmBtn.onclick = function () {
     confirmBtn.innerText = "Saving...";
     confirmBtn.disabled = true;
 
-    fetch("http://127.0.0.1:13406/settings?rtt=" + maxLatency)
+    fetch("http://127.0.0.1:13406/settings?rtt=" + maxLatency + "&pingEnabled=" + pingEnabled + "&trEnabled=" + trEnabled)
         .then(response => {
             if (response.ok) {
                 confirmBtn.innerText = "Saved!";

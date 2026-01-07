@@ -11,6 +11,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+#include "shared_context.h"
 #include "dnslookup.h"
 #ifdef C_MEMORY_DEBUG
 #include "Callisto/callisto.h"
@@ -135,10 +136,6 @@ char RootServers[][16] = {
 };
 int dns_server_count = 16;
 
-double (*dns_traceroute)(const char *ip, char *out_buf, size_t out_size) = NULL;
-#ifndef DNS_PROGRAM
-extern double rtt_cutoff;
-#endif
 char current_root_ip[16];
 int root_server_found = 0;
 
@@ -171,11 +168,6 @@ int main(int argc, char *argv[])
 }
 #endif
 
-void dns_init(double (*tracert)(const char *ip, char *out_buf, size_t out_size))
-{
-    dns_traceroute = tracert;
-}
-
 short localhost(uchar ***answer_index)
 {
     *answer_index = (uchar **)malloc(1 * sizeof(uchar *));
@@ -200,21 +192,18 @@ short dns_resolve(char *host, uchar ***answer_index)
 
     if (!root_server_found)
     {
-        if (dns_traceroute != NULL)
+        for (i = 0; i < RSI_COUNT; i++)
         {
-            for (i = 0; i < RSI_COUNT; i++)
+            double latency = sharedContext_exec_ping_cb(RootServers[i]);
+            double rtt_cutoff = sharedContext_get_rtt_cutoff();
+            if (latency >= rtt_cutoff)
             {
-                char traceroute_out[1024];
-                double latency = dns_traceroute(RootServers[i], traceroute_out, 1024);
-                if (latency >= rtt_cutoff)
-                {
-                    printf("%s exceeded %.2f ms! Changing root server\n", RootServers[i], rtt_cutoff);
-                    continue;
-                }
-                break;
-                /* TODO: Query database to avoid excessive traceroute */
-                /* TODO: Determine cable and whether or not to foward packet */
+                printf("%s exceeded %.2f ms! Changing root server\n", RootServers[i], rtt_cutoff);
+                continue;
             }
+            break;
+            /* TODO: Query database to avoid excessive traceroute */
+            /* TODO: Determine cable and whether or not to foward packet */
         }
         strcpy(current_root_ip, RootServers[i]);
         if (external_dns_is_blocked())
@@ -603,10 +592,10 @@ static short process_auth_records(struct DNS_HEADER *dns,
                 break;
             }
             /* Is that nameserver reachable? */
-            if (dns_traceroute != NULL && found_glue)
+            if (found_glue)
             {
-                char traceroute_out[1024];
-                double latency = dns_traceroute(next_ns_ip, traceroute_out, 1024);
+                double latency = sharedContext_exec_ping_cb(next_ns_ip);
+                double rtt_cutoff = sharedContext_get_rtt_cutoff();
                 if (latency > rtt_cutoff)
                 {
                     printf("%s exceeded %.2lf ms! Skipping.\n", next_ns_ip, rtt_cutoff);
@@ -650,22 +639,21 @@ static short process_auth_records(struct DNS_HEADER *dns,
 
             if (ns_count > 0)
             {
+                double latency, rtt_cutoff;
                 for (k = 0; k < ns_count; k++)
                 {
                     strcpy(next_ns_ip, (char *)ns_answers[k]);
 
-                    if (dns_traceroute != NULL)
+                    latency = sharedContext_exec_ping_cb(next_ns_ip);
+                    rtt_cutoff = sharedContext_get_rtt_cutoff();
+                    if (latency > rtt_cutoff)
                     {
-                        char traceroute_out[1024];
-                        double latency = dns_traceroute(next_ns_ip, traceroute_out, 1024);
-                        if (latency > rtt_cutoff)
-                        {
-                            printf("%s exceeded %.2lf ms! Skipping.\n", next_ns_ip, rtt_cutoff);
-                            continue;
-                        }
-                        /* TODO: Query database to avoid excessive traceroute */
-                        /* TODO: Determine cable and whether or not to foward packet */
+                        printf("%s exceeded %.2lf ms! Skipping.\n", next_ns_ip, rtt_cutoff);
+                        continue;
                     }
+                    /* TODO: Query database to avoid excessive traceroute */
+                    /* TODO: Determine cable and whether or not to foward packet */
+
                     result = dns_recursive_worker(host, query_type, next_ns_ip, answer_index, depth++);
                     if (result > 0)
                     {

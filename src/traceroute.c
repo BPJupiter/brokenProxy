@@ -57,16 +57,17 @@ double traceroute(const char *address, char *output, size_t output_len)
     return latency;
 }
 
-double ping(const char *address, char *output, size_t output_len)
+double ping(const char *ip)
 {
     FILE *fp;
     char line[512];
     double latency = -1.0;
     size_t l = 0;
     char *rtt_info;
+    char output[1024];
 
     char command[128] = "/bin/ping -c 1 -w 1 ";
-    strcat(command, address);
+    strcat(command, ip);
 
     fp = popen(command, "r");
     if (fp == NULL)
@@ -79,7 +80,7 @@ double ping(const char *address, char *output, size_t output_len)
     while (fgets(line, sizeof(line), fp) != NULL)
     {
         l += strlen(line) + 1;
-        if (l + 1 > output_len)
+        if (l + 1 > sizeof(output))
         {
             printf("%s %s Output buffer too small at: %s: %d", PING_TAG, ERR_TAG, __FILE__, __LINE__);
             output[0] = '\0';
@@ -98,7 +99,7 @@ double ping(const char *address, char *output, size_t output_len)
         }
     }
 
-    printf("%s Ping on %s : %.2f ms\n", PING_TAG, address, latency);
+    printf("%s Ping on %s : %.2f ms\n", PING_TAG, ip, latency);
 
     pclose(fp);
 

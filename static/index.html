@@ -19,6 +19,23 @@
                 <div class="settings-group">
                     <label for="maxLatency">Max latency (ms):</label>
                     <input type="number" id="maxLatency" name="maxLatency" min="1" max="9999.0", placeholder="e.g. 100">
+
+                    <div class="sliders">
+                        <div class="slider-control">
+                            <span class="label-text">Enable Ping</span>
+                            <label class="switch">
+                                <input type="checkbox" id="pingEnabled">
+                                <span class="slider" id="pingSlider"></span>
+                            </label>
+                        </div>
+                        <div class="slider-control">
+                            <span class="label-text">Enabled Traceroute</span>
+                            <label class="switch">
+                                <input type="checkbox" id="trEnabled">
+                                <span class="slider" id="trSlider"></span>
+                            </label>
+                        </div>
+                    </div>
                 </div>
 
                 <button type="button" id="confirmSettings">Confirm</button>

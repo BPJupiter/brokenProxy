@@ -1,5 +1,11 @@
 {
 	"settings":	{
-		"maxLatency":	80
+		"ping":	{
+			"pingEnabled":	false,
+			"maxLatency":	80
+		},
+		"traceroute":	{
+			"trEnabled":	false
+		}
 	}
 }
