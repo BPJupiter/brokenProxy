@@ -1,22 +1,32 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="utf-8" />
-    <title>Broken Proxy Settings</title>
+    <head>
+        <meta charset="utf-8" />
+        <title>Broken Proxy Settings</title>
 
-    <link rel="stylesheet" type="text/css" href="./style.css">
-    <script type="text/javascript" src="./script.js" defer></script>
-  </head>
-  <body>
-    <header>
-      <h1>
-        Broken Proxy Settings
-      </h1>
-      <aside>Frances Telfar : University of Auckland</aside>
-    </header>
-    <hr>
-    <label for="maxLatency">Maximum allowed latency (ms):</label>
-    <input type="number" id="maxLatency" name="maxLatency" min="0" max="9999.0">
-    <button type="button" id="confirmSettings">Confirm</button>
-  </body>
+        <link rel="stylesheet" type="text/css" href="./style.css">
+        <script type="text/javascript" src="./script.js" defer></script>
+    </head>
+
+    <body>
+        <header>
+            <h1>Broken Proxy Settings</h1>
+            <aside>Frances Telfar : University of Auckland</aside>
+        </header>
+        <hr>
+        <div class="container">
+            <div class="sidebar">
+                <div class="settings-group">
+                    <label for="maxLatency">Max latency (ms):</label>
+                    <input type="number" id="maxLatency" name="maxLatency" min="0" max="9999.0", placeholder="e.g. 100">
+                </div>
+
+                <button type="button" id="confirmSettings">Confirm</button>
+            </div>
+
+            <main class="main element">
+                <p><em>Main map placeholder...</em></en></p>
+            </main>
+        </div>
+    </body>
 </html>

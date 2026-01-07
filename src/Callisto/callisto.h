@@ -24,6 +24,7 @@ extern void c_debug_mem_reset(void); /* f_debug_mem_reset allows you to clear al
 extern int c_debug_memory(void); /*f_debug_memory checks if any of the bounds of any allocation has been over written and reports where to standard out. The function returns TRUE if any error was found*/
 
 extern void c_debug_mem_check_defer(DeferredList *dl, void (*func)(void *), void *arg);
+extern void c_no_debug_free(void *buf); /* Introduced as some libraries require use of stdlib free on certain lib objects. malloc and realloc calls within these libs are not tracked by the debugging program and as such calls to free normally crash. */
 
 #define malloc(n) c_debug_mem_malloc(n, __FILE__, __LINE__)
 #define realloc(n, m) c_debug_mem_realloc(n, m, __FILE__, __LINE__)
@@ -32,4 +33,13 @@ extern void c_debug_mem_check_defer(DeferredList *dl, void (*func)(void *), void
 #define defer(dl, f, n) c_debug_mem_check_defer(dl, f, n)
 
 #endif
+
+#ifdef C_FILEIO_DEBUG
+
+/*
+ * if C_FIOLEIO_DEBUG is enabled, the file debugging system will....
+ */
+
+#endif
+
 #endif

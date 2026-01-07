@@ -19,6 +19,9 @@
 static int dns_printf(const char *format, ...);
 #define printf dns_printf
 
+typedef unsigned char uchar;
+typedef unsigned int uint;
+
 typedef union
 {
     struct sockaddr_in ipv4;
@@ -29,17 +32,17 @@ struct DNS_HEADER
 {
     unsigned short id;
 
-    unsigned int rd : 1;
-    unsigned int tc : 1;
-    unsigned int aa : 1;
-    unsigned int opcode : 4;
-    unsigned int qr : 1;
+    uint rd : 1;
+    uint tc : 1;
+    uint aa : 1;
+    uint opcode : 4;
+    uint qr : 1;
 
-    unsigned int rcode : 4;
-    unsigned int cd : 1;
-    unsigned int ad : 1;
-    unsigned int z : 1;
-    unsigned int ra : 1;
+    uint rcode : 4;
+    uint cd : 1;
+    uint ad : 1;
+    uint z : 1;
+    uint ra : 1;
 
     unsigned short q_count;
     unsigned short ans_count;
@@ -49,13 +52,13 @@ struct DNS_HEADER
 
 struct SOA_DATA
 {
-    unsigned char *mname;
-    unsigned char *rname;
-    unsigned int serial;
-    unsigned int refresh;
-    unsigned int retry;
-    unsigned int expire;
-    unsigned int minimum;
+    uchar *mname;
+    uchar *rname;
+    uint serial;
+    uint refresh;
+    uint retry;
+    uint expire;
+    uint minimum;
 };
 
 /* Constant sized fields of query structure */
@@ -71,7 +74,7 @@ struct R_DATA
 {
     unsigned short type;
     unsigned short _class;
-    unsigned int ttl;
+    uint ttl;
     unsigned short data_len;
 };
 #pragma pack(pop)
@@ -79,9 +82,9 @@ struct R_DATA
 /* Pointers to resource record contents */
 struct RES_RECORD
 {
-    unsigned char *name;
+    uchar *name;
     struct R_DATA *resource;
-    unsigned char *rdata;
+    uchar *rdata;
 };
 
 /* Structure of a query */
@@ -91,14 +94,16 @@ struct QUESTION
     struct QUERY *ques;
 };
 
-static short         dns_recursive_worker(char *host, int query_type, char *current_ns_ip, unsigned char ***answer_index,
-                                          int depth);
-static void          change_to_dns_name_format(unsigned char *, char *);
-static unsigned char *read_name(unsigned char *, unsigned char *, int *);
-static void          dns_free_mem(struct DNS_HEADER *dns, struct RES_RECORD *answers, struct RES_RECORD *auth,
-                                  struct RES_RECORD *addit);
-static int           external_dns_is_blocked(void);
-static void          set_to_local_dns(void);
+static short dns_recursive_worker(char *host, int query_type, char *current_ns_ip, uchar ***answer_index, int depth);
+static void read_answers(struct DNS_HEADER *dns, struct RES_RECORD *answers, uchar *reader, uchar *buf, int *stop);
+static void read_authorities(struct DNS_HEADER *dns, struct RES_RECORD *auth, uchar *reader, uchar *buf, int *stop);
+static void read_additional(struct DNS_HEADER *dns, struct RES_RECORD *addit, uchar *reader, uchar *buf, int *stop);
+static void  change_to_dns_name_format(uchar *, char *);
+static uchar *read_name(uchar *, uchar *, int *);
+static void  dns_free_mem(struct DNS_HEADER *dns, struct RES_RECORD *answers, struct RES_RECORD *auth,
+                          struct RES_RECORD *addit);
+static int   external_dns_is_blocked(void);
+static void  set_to_local_dns(void);
 
 void print_response_contents(void *dns_ptr, void *answers_ptr, void *auth_ptr, void *addit_ptr, void *a_ptr);
 
@@ -132,14 +137,14 @@ double rtt_cutoff = 80.0f;
 int main(int argc, char *argv[])
 {
     dns_init(ping);
-    unsigned char hostname[100];
+    uchar hostname[100];
 
     /* Get the hostname from the terminal */
     printf("Enter Hostname to Lookup : ");
     scanf("%s", hostname);
 
     /* Now get the ip of this hostname, A record */
-    unsigned char **answers;
+    uchar **answers;
     int n_ans = dns_resolve(hostname, &answers);
     for (int i = 0; i < n_ans; i++)
     {
@@ -160,15 +165,15 @@ void dns_init(double (*tracert)(const char *ip, char *out_buf, size_t out_size))
     dns_traceroute = tracert;
 }
 
-short localhost(unsigned char ***answer_index)
+short localhost(uchar ***answer_index)
 {
-    *answer_index = (unsigned char **)malloc(1 * sizeof(unsigned char *));
-    (*answer_index)[0] = (unsigned char *)malloc(256 * sizeof(unsigned char));
+    *answer_index = (uchar **)malloc(1 * sizeof(uchar *));
+    (*answer_index)[0] = (uchar *)malloc(256 * sizeof(uchar));
     strcpy((char *)(*answer_index)[0], "127.0.0.1");
     return 1;
 }
 
-short dns_resolve(char *host, unsigned char ***answer_index)
+short dns_resolve(char *host, uchar ***answer_index)
 {
     short n_ans = 0;
     int i = 0;
@@ -218,9 +223,9 @@ short dns_resolve(char *host, unsigned char ***answer_index)
 }
 
 /* Perform a DNS query by sending a packet */
-short dns_recursive_worker(char *host, int query_type, char *ns_ip, unsigned char ***answer_index, int depth)
+static short dns_recursive_worker(char *host, int query_type, char *ns_ip, uchar ***answer_index, int depth)
 {
-    unsigned char buf[65536], *qname, *reader;
+    uchar buf[65536], *qname, *reader;
     struct RES_RECORD answers[20], auth[20], addit[20]; /* Replies from DNS server */
     struct DNS_HEADER *dns = NULL;
     struct QUERY *qinfo = NULL;
@@ -279,7 +284,7 @@ short dns_recursive_worker(char *host, int query_type, char *ns_ip, unsigned cha
     dns->auth_count = 0;
     dns->add_count = 0;
 
-    qname = (unsigned char *)&buf[sizeof(struct DNS_HEADER)];
+    qname = (uchar *)&buf[sizeof(struct DNS_HEADER)];
 
     change_to_dns_name_format(qname, host);
     qinfo = (struct QUERY *)&buf[sizeof(struct DNS_HEADER) + (strlen((const char *)qname) + 1)]; /* fill */
@@ -319,121 +324,22 @@ short dns_recursive_worker(char *host, int query_type, char *ns_ip, unsigned cha
 
     dns = (struct DNS_HEADER *)buf;
 
-    /* move ahead of dns header and query field */
-    reader = &buf[sizeof(struct DNS_HEADER) + (strlen((const char *)qname) + 1) + sizeof(struct QUERY)];
+    if (ntohs(dns->ans_count) > 20)  dns->ans_count = htons(20);
+    if (ntohs(dns->auth_count) > 20) dns->auth_count = htons(20);
+    if (ntohs(dns->add_count) > 20)  dns->add_count = htons(20);
 
 #ifdef DNS_DEBUG
     print_response_info((void *)dns);
 #endif
 
-    if (ntohs(dns->ans_count) > 20)  dns->ans_count = htons(20);
-    if (ntohs(dns->auth_count) > 20) dns->auth_count = htons(20);
-    if (ntohs(dns->add_count) > 20)  dns->add_count = htons(20);
-
+    /* move ahead of dns header and query field */
+    reader = &buf[sizeof(struct DNS_HEADER) + (strlen((const char *)qname) + 1) + sizeof(struct QUERY)];
     stop = 0;
 
-    /* Start reading answers */
-    for (i = 0; i < ntohs(dns->ans_count); i++)
-    {
-        answers[i].name = read_name(reader, buf, &stop);
-        reader = reader + stop;
+    read_answers(dns, answers, reader, buf, &stop);
+    read_authorities(dns, auth, reader, buf, &stop);
+    read_additional(dns, addit, reader, buf, &stop);
 
-        answers[i].resource = (struct R_DATA *)reader;
-        reader = reader + sizeof(struct R_DATA);
-
-        switch (ntohs(answers[i].resource->type))
-        {
-            case T_A:
-                answers[i].rdata = (unsigned char *)malloc(ntohs(answers[i].resource->data_len) + 1);
-                for (j = 0; j < ntohs(answers[i].resource->data_len); j++)
-                    answers[i].rdata[j] = reader[j];
-                answers[i].rdata[ntohs(answers[i].resource->data_len)] = '\0';
-                reader = reader + ntohs(answers[i].resource->data_len);
-            break;
-            case T_AAAA:
-                answers[i].rdata = (unsigned char *)malloc(ntohs(answers[i].resource->data_len) + 1);
-                for (j = 0; j < ntohs(answers[i].resource->data_len); j++)
-                    answers[i].rdata[j] = reader[j];
-                answers[i].rdata[ntohs(answers[i].resource->data_len)] = '\0';
-                reader = reader + ntohs(answers[i].resource->data_len);
-            break;
-            default:
-                answers[i].rdata = read_name(reader, buf, &stop);
-                reader = reader + stop;
-            break;
-        }
-    }
-
-    /* read authorities */
-    for (i = 0; i < ntohs(dns->auth_count); i++)
-    {
-        auth[i].name = read_name(reader, buf, &stop);
-        reader += stop;
-
-        auth[i].resource = (struct R_DATA *)reader;
-        reader += sizeof(struct R_DATA);
-
-        switch (ntohs(auth[i].resource->type))
-        {
-        unsigned char *rname;
-            case T_NS:
-                auth[i].rdata = read_name(reader, buf, &stop);
-                reader += stop;
-            break;
-            case T_SOA:
-                /* Read MNAME */
-                auth[i].rdata = read_name(reader, buf, &stop);
-                reader += stop;
-                /* Read RNAME */
-                rname = read_name(reader, buf, &stop);
-                free(rname);
-                reader += stop;
-                /* Adv 20 bytes */
-                reader += (5 * sizeof(unsigned int));
-                /* NOTE: May need to access SOA fields later? */
-            break;
-            default:
-                auth[i].rdata = read_name(reader, buf, &stop);
-                reader = reader + stop;
-            break;
-        }
-    }
-
-    /* read Additional */
-    for (i = 0; i < ntohs(dns->add_count); i++)
-    {
-        addit[i].name = read_name(reader, buf, &stop);
-        reader += stop;
-
-        addit[i].resource = (struct R_DATA *)reader;
-        reader += sizeof(struct R_DATA);
-
-        switch (ntohs(addit[i].resource->type))
-        {
-            case T_A:
-                addit[i].rdata = (unsigned char *)malloc(ntohs(addit[i].resource->data_len) + 1);
-                for (j = 0; j < ntohs(addit[i].resource->data_len); j++)
-                    addit[i].rdata[j] = reader[j];
-
-                addit[i].rdata[ntohs(addit[i].resource->data_len)] = '\0';
-                reader += ntohs(addit[i].resource->data_len);
-            break;
-            case T_AAAA:
-                addit[i].rdata = (unsigned char *)malloc(ntohs(addit[i].resource->data_len) + 1);
-                for (j = 0; j < ntohs(addit[i].resource->data_len); j++)
-                    addit[i].rdata[j] = reader[j];
-
-                addit[i].rdata[ntohs(addit[i].resource->data_len)] = '\0';
-                reader += ntohs(addit[i].resource->data_len);
-            break;
-            default:
-                addit[i].rdata = read_name(reader, buf, &stop);
-                reader = reader + stop;
-            break;
-        }
-    }
-
-/* print answers */
 #ifdef DNS_DEBUG
     print_response_contents((void *)dns, (void *)answers, (void *)auth, (void *)addit, (void *)&a);
 #endif
@@ -445,14 +351,14 @@ short dns_recursive_worker(char *host, int query_type, char *ns_ip, unsigned cha
         char cname_target[256];
             case T_A:
                 printf("Found A record.\n");
-                *answer_index = (unsigned char **)malloc(ntohs(dns->ans_count) * sizeof(unsigned char *));
+                *answer_index = (uchar **)malloc(ntohs(dns->ans_count) * sizeof(uchar *));
                 for (i = 0; i < ntohs(dns->ans_count); i++)
                 {
                     long *p;
                     p = (long *)answers[i].rdata;
                     a.ipv4.sin_addr.s_addr = (*p);
 
-                    (*answer_index)[i] = (unsigned char *)malloc(256 * sizeof(unsigned char));
+                    (*answer_index)[i] = (uchar *)malloc(256 * sizeof(uchar));
                     strcpy((char *)(*answer_index)[i], inet_ntoa(a.ipv4.sin_addr));
                 }
 
@@ -467,16 +373,16 @@ short dns_recursive_worker(char *host, int query_type, char *ns_ip, unsigned cha
             break;
             case T_AAAA:
                 printf("Found AAAA record.\n");
-                *answer_index = (unsigned char **)malloc(ntohs(dns->ans_count) * sizeof(unsigned char *));
+                *answer_index = (uchar **)malloc(ntohs(dns->ans_count) * sizeof(uchar *));
                 for (i = 0; i < ntohs(dns->ans_count); i++)
                 {
-                    unsigned char *p;
+                    uchar *p;
                     const char *r;
 
-                    p = (unsigned char *)answers[i].rdata;
+                    p = (uchar *)answers[i].rdata;
                     memcpy(&a.ipv6.sin6_addr, p, sizeof(struct in6_addr));
 
-                    (*answer_index)[i] = (unsigned char *)malloc(256 * sizeof(unsigned char));
+                    (*answer_index)[i] = (uchar *)malloc(256 * sizeof(uchar));
                     r = inet_ntop(AF_INET6, &a.ipv6.sin6_addr, (char *)(*answer_index)[i], INET6_ADDRSTRLEN);
                     if (r == NULL) strcpy((char *)(*answer_index[i]), "IPv6 Conversion Error");
                 }
@@ -539,8 +445,8 @@ short dns_recursive_worker(char *host, int query_type, char *ns_ip, unsigned cha
                     break;
                     case T_AAAA:
                         /*
-                           unsigned char *p;
-                           p = (unsigned char *)addit[j].rdata;
+                           uchar *p;
+                           p = (uchar *)addit[j].rdata;
                            memcpy(&a.ipv6.sin6_addr, p, sizeof(struct in6_addr));
                            const char *r = inet_ntop(AF_INET6, &a.ipv6.sin6_addr, next_ns_ip, INET6_ADDRSTRLEN);
                            printf("Found IPv6 glue record: %s\n", next_ns_ip);
@@ -582,7 +488,7 @@ short dns_recursive_worker(char *host, int query_type, char *ns_ip, unsigned cha
             }
             else
             {
-                unsigned char **ns_answers;
+                uchar **ns_answers;
 
                 int ns_count;
                 short result;
@@ -640,14 +546,124 @@ short dns_recursive_worker(char *host, int query_type, char *ns_ip, unsigned cha
     return 0;
 }
 
-unsigned char *read_name(unsigned char *reader, unsigned char *buffer, int *count)
+static void read_answers(struct DNS_HEADER *dns, struct RES_RECORD *answers, uchar *reader, uchar *buf, int *stop)
 {
-    unsigned char *name;
-    unsigned int p = 0, jumped = 0, offset;
+    int i, j;
+    for (i = 0; i < ntohs(dns->ans_count); i++)
+    {
+        answers[i].name = read_name(reader, buf, stop);
+        reader = reader + *stop;
+
+        answers[i].resource = (struct R_DATA *)reader;
+        reader = reader + sizeof(struct R_DATA);
+
+        switch (ntohs(answers[i].resource->type))
+        {
+            case T_A:
+                answers[i].rdata = (uchar *)malloc(ntohs(answers[i].resource->data_len) + 1);
+                for (j = 0; j < ntohs(answers[i].resource->data_len); j++)
+                    answers[i].rdata[j] = reader[j];
+                answers[i].rdata[ntohs(answers[i].resource->data_len)] = '\0';
+                reader = reader + ntohs(answers[i].resource->data_len);
+            break;
+            case T_AAAA:
+                answers[i].rdata = (uchar *)malloc(ntohs(answers[i].resource->data_len) + 1);
+                for (j = 0; j < ntohs(answers[i].resource->data_len); j++)
+                    answers[i].rdata[j] = reader[j];
+                answers[i].rdata[ntohs(answers[i].resource->data_len)] = '\0';
+                reader = reader + ntohs(answers[i].resource->data_len);
+            break;
+            default:
+                answers[i].rdata = read_name(reader, buf, stop);
+                reader = reader + *stop;
+            break;
+        }
+    }
+}
+
+static void read_authorities(struct DNS_HEADER *dns, struct RES_RECORD *auth, uchar *reader, uchar *buf, int *stop)
+{
+    int i;
+    for (i = 0; i < ntohs(dns->auth_count); i++)
+    {
+        auth[i].name = read_name(reader, buf, stop);
+        reader += *stop;
+
+        auth[i].resource = (struct R_DATA *)reader;
+        reader += sizeof(struct R_DATA);
+
+        switch (ntohs(auth[i].resource->type))
+        {
+        uchar *rname;
+            case T_NS:
+                auth[i].rdata = read_name(reader, buf, stop);
+                reader += *stop;
+            break;
+            case T_SOA:
+                /* Read MNAME */
+                auth[i].rdata = read_name(reader, buf, stop);
+                reader += *stop;
+                /* Read RNAME */
+                rname = read_name(reader, buf, stop);
+                free(rname);
+                reader += *stop;
+                /* Adv 20 bytes */
+                reader += (5 * sizeof(uint));
+                /* NOTE: May need to access SOA fields later? */
+            break;
+            default:
+                auth[i].rdata = read_name(reader, buf, stop);
+                reader = reader + *stop;
+            break;
+        }
+    }
+}
+
+static void read_additional(struct DNS_HEADER *dns, struct RES_RECORD *addit, uchar *reader, uchar *buf, int *stop)
+{
+    int i, j;
+    for (i = 0; i < ntohs(dns->add_count); i++)
+    {
+        addit[i].name = read_name(reader, buf, stop);
+        reader += *stop;
+
+        addit[i].resource = (struct R_DATA *)reader;
+        reader += sizeof(struct R_DATA);
+
+        switch (ntohs(addit[i].resource->type))
+        {
+            case T_A:
+                addit[i].rdata = (uchar *)malloc(ntohs(addit[i].resource->data_len) + 1);
+                for (j = 0; j < ntohs(addit[i].resource->data_len); j++)
+                    addit[i].rdata[j] = reader[j];
+
+                addit[i].rdata[ntohs(addit[i].resource->data_len)] = '\0';
+                reader += ntohs(addit[i].resource->data_len);
+            break;
+            case T_AAAA:
+                addit[i].rdata = (uchar *)malloc(ntohs(addit[i].resource->data_len) + 1);
+                for (j = 0; j < ntohs(addit[i].resource->data_len); j++)
+                    addit[i].rdata[j] = reader[j];
+
+                addit[i].rdata[ntohs(addit[i].resource->data_len)] = '\0';
+                reader += ntohs(addit[i].resource->data_len);
+            break;
+            default:
+                addit[i].rdata = read_name(reader, buf, stop);
+                reader = reader + *stop;
+            break;
+        }
+    }
+}
+
+static uchar *read_name(uchar *reader, uchar *buffer, int *count)
+{
+    uchar *name;
+    uint p = 0, jumped = 0, offset;
     int i, j;
 
     *count = 1;
-    name = (unsigned char *)malloc(256);
+    name = (uchar *)malloc(256);
 
     name[0] = '\0';
 
@@ -701,7 +717,7 @@ unsigned char *read_name(unsigned char *reader, unsigned char *buffer, int *coun
     return name;
 }
 
-void change_to_dns_name_format(unsigned char *dns, char *hostname)
+static void change_to_dns_name_format(uchar *dns, char *hostname)
 {
     /* convert www.google.com to 3www6google3com0 */
     unsigned long lock = 0;
@@ -725,7 +741,7 @@ void change_to_dns_name_format(unsigned char *dns, char *hostname)
     *dns++ = '\0';
 }
 
-int dns_printf(const char *format, ...)
+static int dns_printf(const char *format, ...)
 {
     va_list args;
     int ret;
@@ -741,7 +757,7 @@ int dns_printf(const char *format, ...)
     return ret;
 }
 
-void dns_free_mem(struct DNS_HEADER *dns, struct RES_RECORD *answers, struct RES_RECORD *auth, struct RES_RECORD *addit)
+static void dns_free_mem(struct DNS_HEADER *dns, struct RES_RECORD *answers, struct RES_RECORD *auth, struct RES_RECORD *addit)
 {
     int ans_count = ntohs(dns->ans_count);
     int auth_count = ntohs(dns->auth_count);
@@ -793,7 +809,32 @@ void dns_free_mem(struct DNS_HEADER *dns, struct RES_RECORD *answers, struct RES
     }
 }
 
-/* debug printing */
+static int external_dns_is_blocked(void)
+{
+    int n_ans, i;
+    uchar **answers;
+    n_ans = dns_recursive_worker("www.google.com", T_A, current_root_ip, &answers, 0);
+    if (n_ans <= 0)
+        return 1;
+    for (i = 0; i < n_ans; i++)
+        free(answers[i]);
+    free(answers);
+    return 0;
+}
+
+static void set_to_local_dns(void)
+{
+    struct __res_state dns;
+    struct in_addr addr;
+    res_ninit(&dns);
+
+    addr = dns.nsaddr_list[0].sin_addr;
+    /* should check string length here...  */
+    strcpy(current_root_ip, inet_ntoa(addr));
+    return;
+}
+
+/* -------------- debug printing ------------------ */
 void print_response_info(void *dns_ptr)
 {
     struct DNS_HEADER *dns = (struct DNS_HEADER *)dns_ptr;
@@ -822,7 +863,7 @@ void print_response_contents(void *dns_ptr, void *answers_ptr, void *auth_ptr, v
         switch (ntohs(answers[i].resource->type))
         {
         long *p;
-        unsigned char *p6;
+        uchar *p6;
         char ipv6_str[INET6_ADDRSTRLEN];
             case T_A:
                 p = (long *)answers[i].rdata;
@@ -834,7 +875,7 @@ void print_response_contents(void *dns_ptr, void *answers_ptr, void *auth_ptr, v
                 fprintf(stdout, "has alias name : %s", answers[i].rdata);
             break;
             case T_AAAA:
-                p6 = (unsigned char *)answers[i].rdata;
+                p6 = (uchar *)answers[i].rdata;
                 memcpy(&a.ipv6.sin6_addr, p6, sizeof(struct in6_addr));
                 fprintf(stdout, "has IPv6 address: %s", inet_ntop(AF_INET6, &a.ipv6.sin6_addr, ipv6_str, INET6_ADDRSTRLEN));
             break;
@@ -867,7 +908,7 @@ void print_response_contents(void *dns_ptr, void *answers_ptr, void *auth_ptr, v
         switch (ntohs(addit[i].resource->type))
         {
         long *p;
-        unsigned char *p6;
+        uchar *p6;
         char ipv6_str[INET6_ADDRSTRLEN];
             case T_A:
                 p = (long *)addit[i].rdata;
@@ -875,7 +916,7 @@ void print_response_contents(void *dns_ptr, void *answers_ptr, void *auth_ptr, v
                 fprintf(stdout, "has IPv4 address : %s", inet_ntoa(a.ipv4.sin_addr));
             break;
             case T_AAAA:
-                p6 = (unsigned char *)addit[i].rdata;
+                p6 = (uchar *)addit[i].rdata;
                 memcpy(&a.ipv6.sin6_addr, p6, sizeof(struct in6_addr));
                 fprintf(stdout, "has IPv6 address : %s", inet_ntop(AF_INET6, &a.ipv6.sin6_addr, ipv6_str, INET6_ADDRSTRLEN));
             break;
@@ -886,29 +927,4 @@ void print_response_contents(void *dns_ptr, void *answers_ptr, void *auth_ptr, v
 
         fprintf(stdout, "\n");
     }
-}
-
-static int external_dns_is_blocked(void)
-{
-    int n_ans, i;
-    unsigned char **answers;
-    n_ans = dns_recursive_worker("www.google.com", T_A, current_root_ip, &answers, 0);
-    if (n_ans <= 0)
-        return 1;
-    for (i = 0; i < n_ans; i++)
-        free(answers[i]);
-    free(answers);
-    return 0;
-}
-
-static void set_to_local_dns(void)
-{
-    struct __res_state dns;
-    struct in_addr addr;
-    res_ninit(&dns);
-
-    addr = dns.nsaddr_list[0].sin_addr;
-    /* should check string length here...  */
-    strcpy(current_root_ip, inet_ntoa(addr));
-    return;
 }

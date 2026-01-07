@@ -317,3 +317,8 @@ void c_debug_mem_check_defer(DeferredList *dl, void (*func)(void *), void *arg)
 {
     if (func == free) defer(dl, c_debug_mem_free, arg);
 }
+
+void c_no_debug_free(void *buf)
+{
+    free(buf);
+}

@@ -1,22 +1,102 @@
 body {
-  margin: 40px auto;
-  max-width: 650px;
-  line-height: 1.6;
-  font-size: 18px;
-  color: #444;
-  background-color: #EEEEEE;
-  padding: 0 10px;
+    margin: 0;
+    padding: 0;
+    font-family: sans-serif;
+    line-height: 1.6;
+    font-size: 18px;
+    color: #444;
+    background-color: #EEEEEE;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
 }
+
+header {
+    padding: 20px;
+    background-color: #e0e0e0;
+}
+
 h1, h2, h3 {
-  line-height: 1.2;
+    margin-top: 0;
+    line-height: 1.2;
+}
+
+hr {
+    margin: 0;
+    border: 0;
+    border-top: 1px solid #ccc;
+}
+
+.container {
+    display: flex;
+    flex: 1;
+    height: 100%;
+}
+
+.sidebar {
+    width: 250px;
+    background-color: #dedede;
+    padding: 20px;
+    border-right: 1px solid #ccc;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 2px 0 5px rgba(0,0,0,0.05);
+}
+
+.settings-group {
+    margin-bottom: 20px;
+}
+
+.settings-group label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 8px;
+    font-size: 0.9em;
+}
+
+.settings-group input {
+    width: 100%;
+    padding: 8px;
+    box-sizing: border-box;
+    border: 1px solid #aaa;
+    border-radius: 4px;
+}
+
+.main-content {
+    flex-grow: 1;
+    padding: 40px;
+    background-color: #EEEEEE;
+    overflow-y: auto;
+}
+
+button#confirmSettings {
+    margin-top: auto;
+    width: 100%;
+    padding: 12px;
+    background-color: #28a745;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+button#confirmSettings:hover {
+    background-color: #218838;
+}
+
+button#confirmSettings:active {
+    transform: translateY(1px);
 }
 
 input::-webkit-outer-spin-button,
 input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
+    -webkit-appearance: none;
+    margin: 0;
 }
 
 input[type=number] {
-  -moz-appearance: textfield;
+    -moz-appearance: textfield;
 }

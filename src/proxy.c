@@ -20,7 +20,7 @@
 #endif
 
 #define PROXY_HOST "127.0.0.1"
-#define BUFFER_SIZE 4096
+#define BUFFER_SIZE 8196
 #define MAX_CLIENTS 8
 #define SETTINGS_DIR "settings/settings.json"
 
@@ -41,6 +41,9 @@ typedef struct
 
 static pthread_mutex_t thread_count_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int active_thread_count = 0;
+
+static pthread_mutex_t settings_mod_mutex = PTHREAD_MUTEX_INITIALIZER;
+static int settings_modified = 0;
 
 static short (*resolve_ip_callback)(unsigned char *hostname, unsigned char ***answer_index) = NULL;
 static double (*proxy_traceroute)(const char *ip, char *out_buf,
@@ -117,12 +120,16 @@ void get_text_file(char *filename, char *buffer, int client_fd)
     char *text_content;
 
     long content_length;
-    strcpy(path, "./settings-page/");
+
+    if (strcmp(filename, "settings.json") == 0)
+        strcpy(path, "settings/");
+    else strcpy(path, "static/");
+
     strcat(path, filename);
     fp = fopen(path, "rb");
     if (!fp)
     {
-        printf("404 File not found");
+        printf("404 File not found: %s\n", filename);
         return;
     }
     fseek(fp, 0L, SEEK_END);
@@ -162,10 +169,10 @@ void get_favicon(char *buffer, int client_fd)
     char headers[256];
     size_t bytes_read;
 
-    fp = fopen("./settings-page/favicon.ico", "rb");
+    fp = fopen("static/favicon.ico", "rb");
     if (!fp)
     {
-        printf("404 File not found\n");
+        printf("404 File not found: favicon.ico\n");
         return;
     }
 
@@ -190,14 +197,14 @@ void get_favicon(char *buffer, int client_fd)
     fclose(fp);
 }
 
-void parse_settings(char *host, double *rtt)
+void get_values_from_url(char *host, double *rtt)
 {
     char *rtt_p = strstr(host, "rtt=");
     int rtt_i = atoi(rtt_p + 4);
     *rtt = (double)rtt_i;
 }
 
-void update_json_settings(char *host)
+void set_json_settings(int client_fd, char *host)
 {
     FILE *fp;
     cJSON *json;
@@ -205,19 +212,38 @@ void update_json_settings(char *host)
     cJSON *maxLatency;
 
     char *new_json;
-    char buffer[1024];
+    char buffer[4096];
 
+    const char *HTTP_200 =
+        "HTTP/1.1 200 OK\r\n"
+        "Access-Control-Allow-Origin: *\r\n"
+        "Content-Type: text/plain\r\n"
+        "Content-Length: 2\r\n"
+        "Connection: close\r\n"
+        "\r\n"
+        "OK";
+
+    const char *HTTP_500 =
+        "HTTP/1.1 500 Internal Server Error\r\n"
+        "Access-Control-Allow-Origin: *\r\n"
+        "Connection: close\r\n"
+        "\r\n";
+
+    size_t bytes_read;
     double rtt;
 
-    parse_settings(host, &rtt);
+    get_values_from_url(host, &rtt);
+
     fp = fopen(SETTINGS_DIR, "r");
     if (fp == NULL)
     {
         perror("Error opening settings.json file!");
+        send(client_fd, HTTP_500, strlen(HTTP_500), 0);
         return;
     }
 
-    fread(buffer, 1, sizeof(buffer), fp);
+    bytes_read = fread(buffer, 1, sizeof(buffer), fp);
+    buffer[bytes_read] = '\0';
     fclose(fp);
 
     json = cJSON_Parse(buffer);
@@ -229,23 +255,20 @@ void update_json_settings(char *host)
             printf("Error: %s\n", error_ptr);
         }
         cJSON_Delete(json);
+        send(client_fd, HTTP_500, strlen(HTTP_500), 0);
         return;
     }
 
     settings = cJSON_GetObjectItemCaseSensitive(json, "settings");
-    if (!cJSON_IsObject(settings))
-    {
-        printf("Error: settings is not an object!\n");
-        cJSON_Delete(json);
-        return;
-    }
     maxLatency = cJSON_GetObjectItemCaseSensitive(settings, "maxLatency");
-    if (!cJSON_IsNumber(maxLatency))
+    if (!cJSON_IsObject(settings) || !cJSON_IsNumber(maxLatency))
     {
-        printf("Error: maxLatency is not a number!\n");
+        printf("Error: JSON structure invalid!\n");
         cJSON_Delete(json);
+        send(client_fd, HTTP_500, strlen(HTTP_500), 0);
         return;
     }
+
     cJSON_SetNumberValue(maxLatency, rtt);
     new_json = cJSON_Print(json);
     fp = fopen(SETTINGS_DIR, "w");
@@ -253,10 +276,17 @@ void update_json_settings(char *host)
     {
         fputs(new_json, fp);
         fclose(fp);
+        send(client_fd, HTTP_200, strlen(HTTP_200), 0);
     }
+    else
+    {send(client_fd, HTTP_500, strlen(HTTP_500), 0);}
+
+    #ifdef C_MEMORY_DEBUG
+    c_no_debug_free(new_json);
+    #else
     free(new_json);
+    #endif
     cJSON_Delete(json);
-    return;
 }
 
 /* Tunnel data from source to destination */
@@ -415,9 +445,13 @@ void *handle_client(void *arg)
         {
             get_favicon(buffer, client_fd);
         }
+        /* called when client page updates settings */
         else if (strstr(host, "/settings") != NULL)
         {
-            update_json_settings(host);
+            pthread_mutex_lock(&settings_mod_mutex);
+            set_json_settings(client_fd, host);
+            settings_modified = 1;
+            pthread_mutex_unlock(&settings_mod_mutex);
         }
         free_answers(answers, n_ans);
         goto cleanup;
@@ -598,7 +632,13 @@ int proxy_start(int proxy_port)
         client_info = malloc(sizeof(client_info_t));
         client_len = sizeof(client_info->client_addr);
 
-        update_proxy_settings();
+        pthread_mutex_lock(&settings_mod_mutex);
+        if (settings_modified)
+        {
+            update_proxy_settings();
+            settings_modified = 0;
+        }
+        pthread_mutex_unlock(&settings_mod_mutex);
 
         client_info->client_fd = accept(server_fd, (struct sockaddr *)&client_info->client_addr, &client_len);
 
