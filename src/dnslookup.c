@@ -95,9 +95,20 @@ struct QUESTION
 };
 
 static short dns_recursive_worker(char *host, int query_type, char *current_ns_ip, uchar ***answer_index, int depth);
+static size_t init_dns_query(uchar *buf, char *host, int query_type);
 static void read_answers(struct DNS_HEADER *dns, struct RES_RECORD *answers, uchar *reader, uchar *buf, int *stop);
 static void read_authorities(struct DNS_HEADER *dns, struct RES_RECORD *auth, uchar *reader, uchar *buf, int *stop);
 static void read_additional(struct DNS_HEADER *dns, struct RES_RECORD *addit, uchar *reader, uchar *buf, int *stop);
+static short handle_found_answers(struct DNS_HEADER *dns,
+                                  struct RES_RECORD *answers,
+                                  struct RES_RECORD *auth,
+                                  struct RES_RECORD *addit,
+                                  uchar ***answer_index, int query_type, int depth);
+static short process_auth_records(struct DNS_HEADER *dns,
+                                  struct RES_RECORD *answers,
+                                  struct RES_RECORD *auth,
+                                  struct RES_RECORD *addit,
+                                  char *host, int query_type, uchar ***answer_index, int depth);
 static void  change_to_dns_name_format(uchar *, char *);
 static uchar *read_name(uchar *, uchar *, int *);
 static void  dns_free_mem(struct DNS_HEADER *dns, struct RES_RECORD *answers, struct RES_RECORD *auth,
@@ -228,7 +239,6 @@ static short dns_recursive_worker(char *host, int query_type, char *ns_ip, uchar
     uchar buf[65536], *qname, *reader;
     struct RES_RECORD answers[20], auth[20], addit[20]; /* Replies from DNS server */
     struct DNS_HEADER *dns = NULL;
-    struct QUERY *qinfo = NULL;
     int s;
 
     sockaddr_inet a;
@@ -237,7 +247,7 @@ static short dns_recursive_worker(char *host, int query_type, char *ns_ip, uchar
     size_t send_size;
     int bytes_recvd;
 
-    int i, j, stop;
+    int i, stop;
 
     if (depth > 10)
     {
@@ -265,36 +275,12 @@ static short dns_recursive_worker(char *host, int query_type, char *ns_ip, uchar
     if (setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, (const char *)&timeout, sizeof(timeout)) < 0)
         perror("Failed setting socket options! : ");
 
-    /* Set the DNS structure to standard queries */
-    dns = (struct DNS_HEADER *)&buf;
-
-    dns->id = (unsigned short)htons(getpid());
-    dns->qr = 0;
-    dns->opcode = 0;
-    dns->aa = 0;
-    dns->tc = 0;
-    dns->rd = 1;
-    dns->ra = 0;
-    dns->z = 0;
-    dns->ad = 0;
-    dns->cd = 0;
-    dns->rcode = 0;
-    dns->q_count = htons(1); /* we have 1 question */
-    dns->ans_count = 0;
-    dns->auth_count = 0;
-    dns->add_count = 0;
-
-    qname = (uchar *)&buf[sizeof(struct DNS_HEADER)];
-
-    change_to_dns_name_format(qname, host);
-    qinfo = (struct QUERY *)&buf[sizeof(struct DNS_HEADER) + (strlen((const char *)qname) + 1)]; /* fill */
-
-    qinfo->qtype = htons(query_type);
-    qinfo->qclass = htons(1); /* it is indeed internet */
+    send_size = init_dns_query(buf, host, query_type);
+    dns = (struct DNS_HEADER *)buf;
+    qname = &buf[sizeof(struct DNS_HEADER)];
 
     printf("Querying NS: %s\n", inet_ntoa(dest.sin_addr));
 
-    send_size = sizeof(struct DNS_HEADER) + (strlen((const char *)qname ) + 1) + sizeof(struct QUERY);
     if (sendto(s, (char *)buf, send_size, 0, (struct sockaddr *)&dest, sizeof(dest)) < 0)
     {
         perror("sendto failed");
@@ -322,8 +308,6 @@ static short dns_recursive_worker(char *host, int query_type, char *ns_ip, uchar
         return 0;
     }
 
-    dns = (struct DNS_HEADER *)buf;
-
     if (ntohs(dns->ans_count) > 20)  dns->ans_count = htons(20);
     if (ntohs(dns->auth_count) > 20) dns->auth_count = htons(20);
     if (ntohs(dns->add_count) > 20)  dns->add_count = htons(20);
@@ -345,205 +329,49 @@ static short dns_recursive_worker(char *host, int query_type, char *ns_ip, uchar
 #endif
 
     if (ntohs(dns->ans_count) > 0)
-    {
-        switch (ntohs(answers[0].resource->type)) /* TODO: make sure final resource type is the same as the req type. */
-        {
-        char cname_target[256];
-            case T_A:
-                printf("Found A record.\n");
-                *answer_index = (uchar **)malloc(ntohs(dns->ans_count) * sizeof(uchar *));
-                for (i = 0; i < ntohs(dns->ans_count); i++)
-                {
-                    long *p;
-                    p = (long *)answers[i].rdata;
-                    a.ipv4.sin_addr.s_addr = (*p);
+        return handle_found_answers(dns, answers, auth, addit, answer_index, query_type, depth);
 
-                    (*answer_index)[i] = (uchar *)malloc(256 * sizeof(uchar));
-                    strcpy((char *)(*answer_index)[i], inet_ntoa(a.ipv4.sin_addr));
-                }
+    if (ntohs(dns->auth_count) > 0)
+        return process_auth_records(dns, answers, auth, addit, host, query_type, answer_index, depth);
 
-                dns_free_mem(dns, answers, auth, addit);
-                return ntohs(dns->ans_count);
-            break;
-            case T_CNAME:
-                strcpy(cname_target, (char *)answers[0].rdata);
-                printf("Found CNAME alias: %s. Requerying...\n", answers[0].rdata);
-                dns_free_mem(dns, answers, auth, addit);
-                return dns_recursive_worker(cname_target, query_type, current_root_ip, answer_index, depth++);
-            break;
-            case T_AAAA:
-                printf("Found AAAA record.\n");
-                *answer_index = (uchar **)malloc(ntohs(dns->ans_count) * sizeof(uchar *));
-                for (i = 0; i < ntohs(dns->ans_count); i++)
-                {
-                    uchar *p;
-                    const char *r;
-
-                    p = (uchar *)answers[i].rdata;
-                    memcpy(&a.ipv6.sin6_addr, p, sizeof(struct in6_addr));
-
-                    (*answer_index)[i] = (uchar *)malloc(256 * sizeof(uchar));
-                    r = inet_ntop(AF_INET6, &a.ipv6.sin6_addr, (char *)(*answer_index)[i], INET6_ADDRSTRLEN);
-                    if (r == NULL) strcpy((char *)(*answer_index[i]), "IPv6 Conversion Error");
-                }
-
-                dns_free_mem(dns, answers, auth, addit);
-                return ntohs(dns->ans_count);
-            break;
-            default:
-                printf("Unknown RR Type code : %d\n", ntohs(answers[0].resource->type));
-
-                dns_free_mem(dns, answers, auth, addit);
-                return ntohs(dns->ans_count);
-            break;
-        }
-    }
-
-    if (ntohs(dns->auth_count == 0))
-    {
-        printf("No answer or authority records found. Cannot resolve iteratively.\n");
-        print_response_contents((void *)dns, (void *)answers, (void *)auth, (void *)addit, (void *)&a);
-
-        dns_free_mem(dns, answers, auth, addit);
-        return 0;
-    }
-
-    /* Find next nameserver */
-    {
-        char next_ns_name[256] = "\0";
-        char next_ns_ip[256] = {0};
-        int found_glue = 0;
-        int bad_latency = 0;
-        for (i = 0; i < ntohs(dns->auth_count); i++)
-        {
-            bad_latency = 0;
-            /* currently finds first matching nammeserver that is ipv4 and has a glue record */
-            if (ntohs(auth[i].resource->type) == T_SOA)
-            {
-                printf("SOA Record: %s does not exist.\n", host);
-                dns_free_mem(dns, answers, auth, addit);
-                return 0;
-            }
-            if (ntohs(auth[i].resource->type) != T_NS) continue;
-
-            strcpy(next_ns_name, (char *)auth[i].rdata);
-
-            for (j = 0; j < ntohs(dns->add_count); j++)
-            {
-                if (strcmp((char *)addit[j].name, next_ns_name) != 0)
-                    continue;
-
-                switch (ntohs(addit[j].resource->type))
-                {
-                long *p;
-                    case T_A:
-                        p = (long *)addit[j].rdata;
-                        a.ipv4.sin_addr.s_addr = (*p);
-                        strcpy(next_ns_ip, inet_ntoa(a.ipv4.sin_addr));
-                        printf("Found IPv4 glue record: %s\n", next_ns_ip);
-                        found_glue = 1;
-                    break;
-                    case T_AAAA:
-                        /*
-                           uchar *p;
-                           p = (uchar *)addit[j].rdata;
-                           memcpy(&a.ipv6.sin6_addr, p, sizeof(struct in6_addr));
-                           const char *r = inet_ntop(AF_INET6, &a.ipv6.sin6_addr, next_ns_ip, INET6_ADDRSTRLEN);
-                           printf("Found IPv6 glue record: %s\n", next_ns_ip);
-                           found_glue = 1;
-                         */
-                    break;
-                }
-                /* Is that nameserver reachable? */
-                if (dns_traceroute != NULL && found_glue)
-                {
-                    char traceroute_out[1024];
-                    double latency = dns_traceroute(next_ns_ip, traceroute_out, 1024);
-                    if (latency > rtt_cutoff)
-                    {
-                        printf("%s exceeded %.2lf ms! Skipping.\n", next_ns_ip, rtt_cutoff);
-                        found_glue = 0;
-                        bad_latency = 1;
-                        break;
-                    }
-                    /* TODO: Query database to avoid excessive traceroute */
-                    /* TODO: Determine cable and whether or not to foward packet */
-                }
-                if (found_glue) break;
-            }
-            if (bad_latency)
-            {
-                continue;
-            }
-            if (found_glue)
-            {
-                /* Recursion */
-                short ans_count = dns_recursive_worker(host, query_type, next_ns_ip, answer_index, depth++);
-
-                if (ans_count > 0)
-                {
-                    dns_free_mem(dns, answers, auth, addit);
-                    return ans_count;
-                }
-            }
-            else
-            {
-                uchar **ns_answers;
-
-                int ns_count;
-                short result;
-
-                int k;
-                if (strcmp(host, next_ns_name) == 0)
-                {
-                    printf("\x1b[31m[Abort]\x1b[0m Circular dependency: Need %s to resolve %s\n", next_ns_name, host);
-                    continue;
-                }
-                /*TODO: iter through a next_ns array rather than the last found NS */
-                printf("No glue record for %s. Recrusively resolving NS IP...\n", next_ns_name);
-
-                /*int ns_count = dns_recursive_worker((char *)next_ns_name, T_A, current_root_ip, &ns_answers); */
-                ns_count = dns_resolve(next_ns_name, &ns_answers);
-
-                if (ns_count > 0)
-                {
-                    for (k = 0; k < ns_count; k++)
-                    {
-                        strcpy(next_ns_ip, (char *)ns_answers[k]);
-
-                        if (dns_traceroute != NULL)
-                        {
-                            char traceroute_out[1024];
-                            double latency = dns_traceroute(next_ns_ip, traceroute_out, 1024);
-                            if (latency > rtt_cutoff)
-                            {
-                                printf("%s exceeded %.2lf ms! Skipping.\n", next_ns_ip, rtt_cutoff);
-                                continue;
-                            }
-                            /* TODO: Query database to avoid excessive traceroute */
-                            /* TODO: Determine cable and whether or not to foward packet */
-                        }
-                        result = dns_recursive_worker(host, query_type, next_ns_ip, answer_index, depth++);
-                        if (result > 0)
-                        {
-                            for (i = 0; i < ns_count; i++)
-                                free(ns_answers[i]);
-                            free(ns_answers);
-
-                            dns_free_mem(dns, answers, auth, addit);
-                            return result;
-                        }
-                    }
-                    for (i = 0; i < ns_count; i++)
-                        free(ns_answers[i]);
-                    free(ns_answers);
-                }
-            }
-        }
-    }
+    printf("No answer or authority records found. Cannot resolve iteratively.\n");
+    print_response_contents((void *)dns, (void *)answers, (void *)auth, (void *)addit, (void *)&a);
 
     dns_free_mem(dns, answers, auth, addit);
     return 0;
+}
+
+static size_t init_dns_query(uchar *buf, char *host, int query_type)
+{
+    struct DNS_HEADER *dns = (struct DNS_HEADER *)buf;
+    uchar *qname;
+    struct QUERY *qinfo;
+
+    dns->id = (unsigned short)htons(getpid());
+    dns->qr = 0;
+    dns->opcode = 0;
+    dns->aa = 0;
+    dns->tc = 0;
+    dns->rd = 1;
+    dns->ra = 0;
+    dns->z = 0;
+    dns->ad = 0;
+    dns->cd = 0;
+    dns->rcode = 0;
+    dns->q_count = htons(1); /* we have 1 question */
+    dns->ans_count = 0;
+    dns->auth_count = 0;
+    dns->add_count = 0;
+
+    qname = (uchar *)&buf[sizeof(struct DNS_HEADER)];
+    change_to_dns_name_format(qname, host);
+
+    qinfo = (struct QUERY *)&buf[sizeof(struct DNS_HEADER) + (strlen((const char *)qname) + 1)]; /* fill */
+
+    qinfo->qtype = htons(query_type);
+    qinfo->qclass = htons(1); /* it is indeed internet */
+
+    return sizeof(struct DNS_HEADER) + (strlen((const char *)qname) + 1) + sizeof(struct QUERY);
 }
 
 static void read_answers(struct DNS_HEADER *dns, struct RES_RECORD *answers, uchar *reader, uchar *buf, int *stop)
@@ -654,6 +482,209 @@ static void read_additional(struct DNS_HEADER *dns, struct RES_RECORD *addit, uc
             break;
         }
     }
+}
+
+static short handle_found_answers(struct DNS_HEADER *dns,
+                                  struct RES_RECORD *answers,
+                                  struct RES_RECORD *auth,
+                                  struct RES_RECORD *addit,
+                                  uchar ***answer_index, int query_type, int depth)
+{
+    sockaddr_inet a;
+    char cname_target[256];
+    int ans_count;
+    int i;
+
+    ans_count = ntohs(dns->ans_count);
+
+    switch (ntohs(answers[0].resource->type)) /* TODO: make sure final resource type is the same as the req type. */
+    {
+        case T_A:
+            printf("Found A record.\n");
+            *answer_index = (uchar **)malloc(ans_count * sizeof(uchar *));
+            for (i = 0; i < ans_count; i++)
+            {
+                long *p;
+                p = (long *)answers[i].rdata;
+                a.ipv4.sin_addr.s_addr = (*p);
+
+                (*answer_index)[i] = (uchar *)malloc(256 * sizeof(uchar));
+                strcpy((char *)(*answer_index)[i], inet_ntoa(a.ipv4.sin_addr));
+            }
+
+            dns_free_mem(dns, answers, auth, addit);
+            return ans_count;
+        break;
+        case T_CNAME:
+            strcpy(cname_target, (char *)answers[0].rdata);
+            printf("Found CNAME alias: %s. Requerying...\n", answers[0].rdata);
+            dns_free_mem(dns, answers, auth, addit);
+            return dns_recursive_worker(cname_target, query_type, current_root_ip, answer_index, depth++);
+        break;
+        case T_AAAA:
+            printf("Found AAAA record.\n");
+            *answer_index = (uchar **)malloc(ans_count * sizeof(uchar *));
+            for (i = 0; i < ans_count; i++)
+            {
+                uchar *p;
+                const char *r;
+
+                p = (uchar *)answers[i].rdata;
+                memcpy(&a.ipv6.sin6_addr, p, sizeof(struct in6_addr));
+
+                (*answer_index)[i] = (uchar *)malloc(256 * sizeof(uchar));
+                r = inet_ntop(AF_INET6, &a.ipv6.sin6_addr, (char *)(*answer_index)[i], INET6_ADDRSTRLEN);
+                if (r == NULL) strcpy((char *)(*answer_index[i]), "IPv6 Conversion Error");
+            }
+
+            dns_free_mem(dns, answers, auth, addit);
+            return ans_count;
+        break;
+        default:
+            printf("Unknown RR Type code : %d\n", ntohs(answers[0].resource->type));
+
+            dns_free_mem(dns, answers, auth, addit);
+            return ans_count;
+        break;
+    }
+}
+
+static short process_auth_records(struct DNS_HEADER *dns,
+                                  struct RES_RECORD *answers,
+                                  struct RES_RECORD *auth,
+                                  struct RES_RECORD *addit,
+                                  char *host, int query_type, uchar ***answer_index, int depth)
+{
+    sockaddr_inet a;
+    char next_ns_ip[16];
+    char next_ns_name[256] = "\0";
+    int found_glue = 0, bad_latency = 0;
+    int i, j, k;
+
+    for (i = 0; i < ntohs(dns->auth_count); i++)
+    {
+        bad_latency = 0;
+        /* currently finds first matching nammeserver that is ipv4 and has a glue record */
+        if (ntohs(auth[i].resource->type) == T_SOA)
+        {
+            printf("SOA Record: %s does not exist.\n", host);
+            dns_free_mem(dns, answers, auth, addit);
+            return 0;
+        }
+        if (ntohs(auth[i].resource->type) != T_NS) continue;
+
+        strcpy(next_ns_name, (char *)auth[i].rdata);
+
+        found_glue = 0;
+        for (j = 0; j < ntohs(dns->add_count); j++)
+        {
+            if (strcmp((char *)addit[j].name, next_ns_name) != 0)
+                continue;
+
+            switch (ntohs(addit[j].resource->type))
+            {
+            long *p;
+                case T_A:
+                    p = (long *)addit[j].rdata;
+                    a.ipv4.sin_addr.s_addr = (*p);
+                    strcpy(next_ns_ip, inet_ntoa(a.ipv4.sin_addr));
+                    printf("Found IPv4 glue record: %s\n", next_ns_ip);
+                    found_glue = 1;
+                break;
+                case T_AAAA:
+                    /*
+                       uchar *p;
+                       p = (uchar *)addit[j].rdata;
+                       memcpy(&a.ipv6.sin6_addr, p, sizeof(struct in6_addr));
+                       const char *r = inet_ntop(AF_INET6, &a.ipv6.sin6_addr, next_ns_ip, INET6_ADDRSTRLEN);
+                       printf("Found IPv6 glue record: %s\n", next_ns_ip);
+                       found_glue = 1;
+                     */
+                break;
+            }
+            /* Is that nameserver reachable? */
+            if (dns_traceroute != NULL && found_glue)
+            {
+                char traceroute_out[1024];
+                double latency = dns_traceroute(next_ns_ip, traceroute_out, 1024);
+                if (latency > rtt_cutoff)
+                {
+                    printf("%s exceeded %.2lf ms! Skipping.\n", next_ns_ip, rtt_cutoff);
+                    found_glue = 0;
+                    bad_latency = 1;
+                    break;
+                }
+                /* TODO: Query database to avoid excessive traceroute */
+                /* TODO: Determine cable and whether or not to foward packet */
+            }
+            if (found_glue) break;
+        }
+        if (bad_latency) continue;
+        if (found_glue)
+        {
+            /* Recursion */
+            short ans_count = dns_recursive_worker(host, query_type, next_ns_ip, answer_index, depth++);
+
+            if (ans_count > 0)
+            {
+                dns_free_mem(dns, answers, auth, addit);
+                return ans_count;
+            }
+        }
+        else
+        {
+            uchar **ns_answers;
+
+            int ns_count;
+            short result;
+
+            if (strcmp(host, next_ns_name) == 0)
+            {
+                printf("\x1b[31m[Abort]\x1b[0m Circular dependency: Need %s to resolve %s\n", next_ns_name, host);
+                continue;
+            }
+            printf("No glue record for %s. Recrusively resolving NS IP...\n", next_ns_name);
+
+            /*int ns_count = dns_recursive_worker((char *)next_ns_name, T_A, current_root_ip, &ns_answers); */
+            ns_count = dns_resolve(next_ns_name, &ns_answers);
+
+            if (ns_count > 0)
+            {
+                for (k = 0; k < ns_count; k++)
+                {
+                    strcpy(next_ns_ip, (char *)ns_answers[k]);
+
+                    if (dns_traceroute != NULL)
+                    {
+                        char traceroute_out[1024];
+                        double latency = dns_traceroute(next_ns_ip, traceroute_out, 1024);
+                        if (latency > rtt_cutoff)
+                        {
+                            printf("%s exceeded %.2lf ms! Skipping.\n", next_ns_ip, rtt_cutoff);
+                            continue;
+                        }
+                        /* TODO: Query database to avoid excessive traceroute */
+                        /* TODO: Determine cable and whether or not to foward packet */
+                    }
+                    result = dns_recursive_worker(host, query_type, next_ns_ip, answer_index, depth++);
+                    if (result > 0)
+                    {
+                        for (i = 0; i < ns_count; i++)
+                            free(ns_answers[i]);
+                        free(ns_answers);
+
+                        dns_free_mem(dns, answers, auth, addit);
+                        return result;
+                    }
+                }
+                for (i = 0; i < ns_count; i++)
+                    free(ns_answers[i]);
+                free(ns_answers);
+            }
+        }
+    }
+    dns_free_mem(dns, answers, auth, addit);
+    return 0;
 }
 
 static uchar *read_name(uchar *reader, uchar *buffer, int *count)
