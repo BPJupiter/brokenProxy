@@ -11,7 +11,7 @@
 #include "proxy.h"
 #include "traceroute.h"
 
-#define PROXY_PORT 8080
+#define PROXY_PORT 13406
 #define UNUSED(x) (void)(x)
 
 double rtt_cutoff = 9999.0f;

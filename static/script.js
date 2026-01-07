@@ -2,7 +2,7 @@ const confirmBtn = document.getElementById("confirmSettings");
 const latencyInput = document.getElementById("maxLatency");
 
 window.onload = function () {
-    fetch("http://127.0.0.1:8080/settings.json")
+    fetch("http://127.0.0.1:13406/settings.json")
         .then(response => response.json())
         .then(data => {
             if (data.settings && data.settings.maxLatency !== undefined) {
@@ -15,7 +15,8 @@ window.onload = function () {
 confirmBtn.onclick = function () {
     let maxLatency = latencyInput.value;
 
-    if (maxLatency === '') {
+    if (maxLatency == 0 || maxLatency === '') {
+        maxLatency = 80;
         return;
     }
 
@@ -23,7 +24,7 @@ confirmBtn.onclick = function () {
     confirmBtn.innerText = "Saving...";
     confirmBtn.disabled = true;
 
-    fetch("http://127.0.0.1:8080/settings?rtt=" + maxLatency)
+    fetch("http://127.0.0.1:13406/settings?rtt=" + maxLatency)
         .then(response => {
             if (response.ok) {
                 confirmBtn.innerText = "Saved!";
