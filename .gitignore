@@ -4,7 +4,36 @@ __pycache__/
 *$py.class
 
 # C extensions
+# Object files
+*.o
+*.obj
+
+# static libraries
+*.a
+*.lib
+
+# Shared libraries
 *.so
+*.so.*
+*.dylib
+*.dll
+
+# Executables
+*.exe
+*.out
+*.app
+
+# Debugging
+*.dSYM/
+*.pdb
+*.exp
+*.map
+*.d
+
+# not ignored as it just gets clangd to behave
+# compile_commands.json
+
+brokenproxy
 
 # Uncrustify
 #uncrustify.cfg
