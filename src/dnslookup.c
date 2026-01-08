@@ -1,5 +1,4 @@
 #include <arpa/inet.h>
-#include <arpa/nameser.h>
 #include <errno.h>
 #include <netinet/in.h>
 #include <resolv.h>
@@ -11,8 +10,8 @@
 #include <sys/time.h>
 #include <unistd.h>
 
-#include "shared_context.h"
 #include "dnslookup.h"
+#include "shared_context.h"
 #ifdef C_MEMORY_DEBUG
 #include "Callisto/callisto.h"
 #endif
@@ -95,11 +94,11 @@ struct QUESTION
     struct QUERY *ques;
 };
 
-static short dns_recursive_worker(char *host, int query_type, char *current_ns_ip, uchar ***answer_index, int depth);
-static size_t init_dns_query(uchar *buf, char *host, int query_type);
-static void read_answers(struct DNS_HEADER *dns, struct RES_RECORD *answers, uchar *reader, uchar *buf, int *stop);
-static void read_authorities(struct DNS_HEADER *dns, struct RES_RECORD *auth, uchar *reader, uchar *buf, int *stop);
-static void read_additional(struct DNS_HEADER *dns, struct RES_RECORD *addit, uchar *reader, uchar *buf, int *stop);
+static short dns_recursive_worker(const char *host, int query_type, char *current_ns_ip, uchar ***answer_index, int depth);
+static size_t init_dns_query(uchar *buf, const char *host, int query_type);
+static void read_answers(struct DNS_HEADER *dns, struct RES_RECORD *answers, uchar **reader, uchar *buf, int *stop);
+static void read_authorities(struct DNS_HEADER *dns, struct RES_RECORD *auth, uchar **reader, uchar *buf, int *stop);
+static void read_additional(struct DNS_HEADER *dns, struct RES_RECORD *addit, uchar **reader, uchar *buf, int *stop);
 static short handle_found_answers(struct DNS_HEADER *dns,
                                   struct RES_RECORD *answers,
                                   struct RES_RECORD *auth,
@@ -109,8 +108,8 @@ static short process_auth_records(struct DNS_HEADER *dns,
                                   struct RES_RECORD *answers,
                                   struct RES_RECORD *auth,
                                   struct RES_RECORD *addit,
-                                  char *host, int query_type, uchar ***answer_index, int depth);
-static void  change_to_dns_name_format(uchar *, char *);
+                                  const char *host, int query_type, uchar ***answer_index, int depth);
+static void  change_to_dns_name_format(uchar *, const char *);
 static uchar *read_name(uchar *, uchar *, int *);
 static void  dns_free_mem(struct DNS_HEADER *dns, struct RES_RECORD *answers, struct RES_RECORD *auth,
                           struct RES_RECORD *addit);
@@ -140,21 +139,30 @@ char current_root_ip[16];
 int root_server_found = 0;
 
 #ifdef DNS_PROGRAM
-#include "traceroute.h"
-double rtt_cutoff = 80.0f;
-int main(int argc, char *argv[])
+int main()
 {
-    dns_init(ping);
-    uchar hostname[100];
+    char hostname[100];
+    uchar **answers;
+    argType a;
+    retType r;
+    int n_ans;
+    double max_rtt;
+    int i;
+    max_rtt = 80.0;
+    sharedContext_init();
+    sharedContext_setVariable(SCV_MAX_RTT, &max_rtt);
+    sharedContext_toggleCb(SCC_RESOLVE, 1);
 
     /* Get the hostname from the terminal */
     printf("Enter Hostname to Lookup : ");
     scanf("%s", hostname);
 
     /* Now get the ip of this hostname, A record */
-    uchar **answers;
-    int n_ans = dns_resolve(hostname, &answers);
-    for (int i = 0; i < n_ans; i++)
+    a.resolve.hostname = hostname;
+    a.resolve.answer_index = &answers;
+    sharedContext_execCb(SCC_RESOLVE, &r, &a);
+    n_ans = r.resolve;
+    for (i = 0; i < n_ans; i++)
     {
         free(answers[i]);
     }
@@ -164,6 +172,7 @@ int main(int argc, char *argv[])
 #ifdef C_MEMORY_DEBUG
     c_debug_mem_print(0);
 #endif
+    sharedContext_destroy();
     return 0;
 }
 #endif
@@ -176,7 +185,7 @@ short localhost(uchar ***answer_index)
     return 1;
 }
 
-short dns_resolve(char *host, uchar ***answer_index)
+short dns_resolve(const char *host, uchar ***answer_index)
 {
     short n_ans = 0;
     int i = 0;
@@ -190,12 +199,17 @@ short dns_resolve(char *host, uchar ***answer_index)
         return localhost(answer_index);
     }
 
-    if (!root_server_found)
+    if (!root_server_found && strcmp(host, "127.0.0.1") != 0)
     {
         for (i = 0; i < RSI_COUNT; i++)
         {
-            double latency = sharedContext_exec_ping_cb(RootServers[i]);
-            double rtt_cutoff = sharedContext_get_rtt_cutoff();
+            double rtt_cutoff, latency;
+            argType a;
+            retType r;
+            a.ping.ip = RootServers[i];
+            sharedContext_getVariable(SCV_MAX_RTT, &rtt_cutoff);
+            sharedContext_execCb(SCC_PING, &r, &a);
+            latency = r.ping;
             if (latency >= rtt_cutoff)
             {
                 printf("%s exceeded %.2f ms! Changing root server\n", RootServers[i], rtt_cutoff);
@@ -223,7 +237,7 @@ short dns_resolve(char *host, uchar ***answer_index)
 }
 
 /* Perform a DNS query by sending a packet */
-static short dns_recursive_worker(char *host, int query_type, char *ns_ip, uchar ***answer_index, int depth)
+static short dns_recursive_worker(const char *host, int query_type, char *ns_ip, uchar ***answer_index, int depth)
 {
     uchar buf[65536], *qname, *reader;
     struct RES_RECORD answers[20], auth[20], addit[20]; /* Replies from DNS server */
@@ -309,9 +323,9 @@ static short dns_recursive_worker(char *host, int query_type, char *ns_ip, uchar
     reader = &buf[sizeof(struct DNS_HEADER) + (strlen((const char *)qname) + 1) + sizeof(struct QUERY)];
     stop = 0;
 
-    read_answers(dns, answers, reader, buf, &stop);
-    read_authorities(dns, auth, reader, buf, &stop);
-    read_additional(dns, addit, reader, buf, &stop);
+    read_answers(dns, answers, &reader, buf, &stop);
+    read_authorities(dns, auth, &reader, buf, &stop);
+    read_additional(dns, addit, &reader, buf, &stop);
 
 #ifdef DNS_DEBUG
     print_response_contents((void *)dns, (void *)answers, (void *)auth, (void *)addit, (void *)&a);
@@ -330,7 +344,7 @@ static short dns_recursive_worker(char *host, int query_type, char *ns_ip, uchar
     return 0;
 }
 
-static size_t init_dns_query(uchar *buf, char *host, int query_type)
+static size_t init_dns_query(uchar *buf, const char *host, int query_type)
 {
     struct DNS_HEADER *dns = (struct DNS_HEADER *)buf;
     uchar *qname;
@@ -363,111 +377,111 @@ static size_t init_dns_query(uchar *buf, char *host, int query_type)
     return sizeof(struct DNS_HEADER) + (strlen((const char *)qname) + 1) + sizeof(struct QUERY);
 }
 
-static void read_answers(struct DNS_HEADER *dns, struct RES_RECORD *answers, uchar *reader, uchar *buf, int *stop)
+static void read_answers(struct DNS_HEADER *dns, struct RES_RECORD *answers, uchar **reader, uchar *buf, int *stop)
 {
     int i, j;
     for (i = 0; i < ntohs(dns->ans_count); i++)
     {
-        answers[i].name = read_name(reader, buf, stop);
-        reader = reader + *stop;
+        answers[i].name = read_name(*reader, buf, stop);
+        *reader = *reader + *stop;
 
-        answers[i].resource = (struct R_DATA *)reader;
-        reader = reader + sizeof(struct R_DATA);
+        answers[i].resource = (struct R_DATA *)*reader;
+        *reader = *reader + sizeof(struct R_DATA);
 
         switch (ntohs(answers[i].resource->type))
         {
             case T_A:
                 answers[i].rdata = (uchar *)malloc(ntohs(answers[i].resource->data_len) + 1);
                 for (j = 0; j < ntohs(answers[i].resource->data_len); j++)
-                    answers[i].rdata[j] = reader[j];
+                    answers[i].rdata[j] = (*reader)[j];
                 answers[i].rdata[ntohs(answers[i].resource->data_len)] = '\0';
-                reader = reader + ntohs(answers[i].resource->data_len);
+                *reader = *reader + ntohs(answers[i].resource->data_len);
             break;
             case T_AAAA:
                 answers[i].rdata = (uchar *)malloc(ntohs(answers[i].resource->data_len) + 1);
                 for (j = 0; j < ntohs(answers[i].resource->data_len); j++)
-                    answers[i].rdata[j] = reader[j];
+                    answers[i].rdata[j] = (*reader)[j];
                 answers[i].rdata[ntohs(answers[i].resource->data_len)] = '\0';
-                reader = reader + ntohs(answers[i].resource->data_len);
+                *reader = *reader + ntohs(answers[i].resource->data_len);
             break;
             default:
-                answers[i].rdata = read_name(reader, buf, stop);
-                reader = reader + *stop;
+                answers[i].rdata = read_name(*reader, buf, stop);
+                *reader = *reader + *stop;
             break;
         }
     }
 }
 
-static void read_authorities(struct DNS_HEADER *dns, struct RES_RECORD *auth, uchar *reader, uchar *buf, int *stop)
+static void read_authorities(struct DNS_HEADER *dns, struct RES_RECORD *auth, uchar **reader, uchar *buf, int *stop)
 {
     int i;
     for (i = 0; i < ntohs(dns->auth_count); i++)
     {
-        auth[i].name = read_name(reader, buf, stop);
-        reader += *stop;
+        auth[i].name = read_name(*reader, buf, stop);
+        *reader += *stop;
 
-        auth[i].resource = (struct R_DATA *)reader;
-        reader += sizeof(struct R_DATA);
+        auth[i].resource = (struct R_DATA *)*reader;
+        *reader += sizeof(struct R_DATA);
 
         switch (ntohs(auth[i].resource->type))
         {
         uchar *rname;
             case T_NS:
-                auth[i].rdata = read_name(reader, buf, stop);
-                reader += *stop;
+                auth[i].rdata = read_name(*reader, buf, stop);
+                *reader += *stop;
             break;
             case T_SOA:
                 /* Read MNAME */
-                auth[i].rdata = read_name(reader, buf, stop);
-                reader += *stop;
+                auth[i].rdata = read_name(*reader, buf, stop);
+                *reader += *stop;
                 /* Read RNAME */
-                rname = read_name(reader, buf, stop);
+                rname = read_name(*reader, buf, stop);
                 free(rname);
-                reader += *stop;
+                *reader += *stop;
                 /* Adv 20 bytes */
-                reader += (5 * sizeof(uint));
+                *reader += (5 * sizeof(uint));
                 /* NOTE: May need to access SOA fields later? */
             break;
             default:
-                auth[i].rdata = read_name(reader, buf, stop);
-                reader = reader + *stop;
+                auth[i].rdata = read_name(*reader, buf, stop);
+                *reader = *reader + *stop;
             break;
         }
     }
 }
 
-static void read_additional(struct DNS_HEADER *dns, struct RES_RECORD *addit, uchar *reader, uchar *buf, int *stop)
+static void read_additional(struct DNS_HEADER *dns, struct RES_RECORD *addit, uchar **reader, uchar *buf, int *stop)
 {
     int i, j;
     for (i = 0; i < ntohs(dns->add_count); i++)
     {
-        addit[i].name = read_name(reader, buf, stop);
-        reader += *stop;
+        addit[i].name = read_name(*reader, buf, stop);
+        *reader += *stop;
 
-        addit[i].resource = (struct R_DATA *)reader;
-        reader += sizeof(struct R_DATA);
+        addit[i].resource = (struct R_DATA *)*reader;
+        *reader += sizeof(struct R_DATA);
 
         switch (ntohs(addit[i].resource->type))
         {
             case T_A:
                 addit[i].rdata = (uchar *)malloc(ntohs(addit[i].resource->data_len) + 1);
                 for (j = 0; j < ntohs(addit[i].resource->data_len); j++)
-                    addit[i].rdata[j] = reader[j];
+                    addit[i].rdata[j] = (*reader)[j];
 
                 addit[i].rdata[ntohs(addit[i].resource->data_len)] = '\0';
-                reader += ntohs(addit[i].resource->data_len);
+                *reader += ntohs(addit[i].resource->data_len);
             break;
             case T_AAAA:
                 addit[i].rdata = (uchar *)malloc(ntohs(addit[i].resource->data_len) + 1);
                 for (j = 0; j < ntohs(addit[i].resource->data_len); j++)
-                    addit[i].rdata[j] = reader[j];
+                    addit[i].rdata[j] = (*reader)[j];
 
                 addit[i].rdata[ntohs(addit[i].resource->data_len)] = '\0';
-                reader += ntohs(addit[i].resource->data_len);
+                *reader += ntohs(addit[i].resource->data_len);
             break;
             default:
-                addit[i].rdata = read_name(reader, buf, stop);
-                reader = reader + *stop;
+                addit[i].rdata = read_name(*reader, buf, stop);
+                *reader = *reader + *stop;
             break;
         }
     }
@@ -542,7 +556,7 @@ static short process_auth_records(struct DNS_HEADER *dns,
                                   struct RES_RECORD *answers,
                                   struct RES_RECORD *auth,
                                   struct RES_RECORD *addit,
-                                  char *host, int query_type, uchar ***answer_index, int depth)
+                                  const char *host, int query_type, uchar ***answer_index, int depth)
 {
     sockaddr_inet a;
     char next_ns_ip[16];
@@ -592,10 +606,15 @@ static short process_auth_records(struct DNS_HEADER *dns,
                 break;
             }
             /* Is that nameserver reachable? */
-            if (found_glue)
+            if (found_glue && strcmp(next_ns_ip, "127.0.0.1") != 0)
             {
-                double latency = sharedContext_exec_ping_cb(next_ns_ip);
-                double rtt_cutoff = sharedContext_get_rtt_cutoff();
+                double rtt_cutoff, latency;
+                argType a;
+                retType r;
+                a.ping.ip = next_ns_ip;
+                sharedContext_getVariable(SCV_MAX_RTT, &rtt_cutoff);
+                sharedContext_execCb(SCC_PING, &r, &a);
+                latency = r.ping;
                 if (latency > rtt_cutoff)
                 {
                     printf("%s exceeded %.2lf ms! Skipping.\n", next_ns_ip, rtt_cutoff);
@@ -640,19 +659,26 @@ static short process_auth_records(struct DNS_HEADER *dns,
             if (ns_count > 0)
             {
                 double latency, rtt_cutoff;
+                argType a;
+                retType r;
                 for (k = 0; k < ns_count; k++)
                 {
                     strcpy(next_ns_ip, (char *)ns_answers[k]);
 
-                    latency = sharedContext_exec_ping_cb(next_ns_ip);
-                    rtt_cutoff = sharedContext_get_rtt_cutoff();
-                    if (latency > rtt_cutoff)
+                    if (strcmp(next_ns_ip, "127.0.0.1") != 0)
                     {
-                        printf("%s exceeded %.2lf ms! Skipping.\n", next_ns_ip, rtt_cutoff);
-                        continue;
+                        a.ping.ip = next_ns_ip;
+                        sharedContext_getVariable(SCV_MAX_RTT, &rtt_cutoff);
+                        sharedContext_execCb(SCC_PING, &r, &a);
+                        latency = r.ping;
+                        if (latency > rtt_cutoff)
+                        {
+                            printf("%s exceeded %.2lf ms! Skipping.\n", next_ns_ip, rtt_cutoff);
+                            continue;
+                        }
+                        /* TODO: Query database to avoid excessive traceroute */
+                        /* TODO: Determine cable and whether or not to foward packet */
                     }
-                    /* TODO: Query database to avoid excessive traceroute */
-                    /* TODO: Determine cable and whether or not to foward packet */
 
                     result = dns_recursive_worker(host, query_type, next_ns_ip, answer_index, depth++);
                     if (result > 0)
@@ -736,7 +762,7 @@ static uchar *read_name(uchar *reader, uchar *buffer, int *count)
     return name;
 }
 
-static void change_to_dns_name_format(uchar *dns, char *hostname)
+static void change_to_dns_name_format(uchar *dns, const char *hostname)
 {
     /* convert www.google.com to 3www6google3com0 */
     unsigned long lock = 0;

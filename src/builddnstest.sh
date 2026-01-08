@@ -8,6 +8,8 @@ flags="-D DNS_DEBUG -D DNS_PROGRAM -std=gnu89 -pedantic -Wall -Wextra "
 gcc Callisto/c_mem_debug.c -c $@ $flags && object_files+="c_mem_debug.o "
 gcc Callisto/c_defer.c -c $@ $flags && object_files+="c_defer.o "
 
+gcc shared_context.c -c $@ $flags && object_files+="shared_context.o "
+
 gcc traceroute.c -c $@ $flags && object_files+="traceroute.o "
 gcc dnslookup.c -c $@ $flags && object_files+="dnslookup.o "
 

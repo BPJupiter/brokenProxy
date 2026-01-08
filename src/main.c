@@ -43,9 +43,13 @@ void signal_handler(int sig)
 int main(int argc, char *argv[])
 {
     int proxy_port = PROXY_PORT;
+    double rtt_cutoff;
 
     if (argc > 1)
-        sharedContext_set_rtt_cutoff(atof(argv[1]));
+    {
+        rtt_cutoff = atof(argv[1]);
+        sharedContext_setVariable(SCV_MAX_RTT, &rtt_cutoff);
+    }
 
 #if defined(C_MEMORY_DEBUG)
     c_debug_memory_init(c_mem_mutex_lock, c_mem_mutex_unlock, c_mem_mutex_create());

@@ -14,8 +14,6 @@
 #include <unistd.h>
 
 #include "shared_context.h"
-#include "dnslookup.h"
-#include "traceroute.h"
 #include "cjson/cJSON.h"
 #include "memory_usage.h"
 #ifdef C_MEMORY_DEBUG
@@ -353,6 +351,8 @@ void *tunnel_data(void *arg)
 void *handle_client(void *arg)
 {
     client_info_t *client_info = (client_info_t *)arg;
+    argType a;
+    retType r;
     int client_fd = client_info->client_fd;
     int remote_fd = -1;
 
@@ -372,8 +372,9 @@ void *handle_client(void *arg)
     int current_thread_count;
     int bytes_recvd;
     int port = 80;
-    double rtt_cutoff = sharedContext_get_rtt_cutoff();
-    double latency;
+    double rtt_cutoff, latency;
+
+    sharedContext_getVariable(SCV_MAX_RTT, &rtt_cutoff);
 
     pthread_mutex_lock(&thread_count_mutex);
     active_thread_count++;
@@ -417,7 +418,10 @@ void *handle_client(void *arg)
     }
 
     /* Resolve hostname using custom DNS resolver */
-    n_ans = sharedContext_exec_resolve_cb(host, &answers);
+    a.resolve.hostname = host;
+    a.resolve.answer_index = &answers;
+    sharedContext_execCb(SCC_RESOLVE, &r, &a);
+    n_ans = r.resolve;
 
     if (n_ans == (int)((unsigned short)-1))
     {
@@ -434,12 +438,17 @@ void *handle_client(void *arg)
     destination_ip = (char *)answers[0];
     printf("%s resolved to %s\n", host, destination_ip);
 
-    latency = sharedContext_exec_ping_cb(destination_ip);
-    if (latency > rtt_cutoff)
+    if (strcmp(destination_ip, "127.0.0.1") != 0)
     {
-        printf("Request RTT Exceeded %.2lf ms! Packet dropped!\n", rtt_cutoff);
-        free_answers(answers, n_ans);
-        goto cleanup;
+        a.ping.ip = destination_ip;
+        sharedContext_execCb(SCC_PING, &r, &a);
+        latency = r.ping;
+        if (latency > rtt_cutoff)
+        {
+            printf("Request RTT Exceeded %.2lf ms! Packet dropped!\n", rtt_cutoff);
+            free_answers(answers, n_ans);
+            goto cleanup;
+        }
     }
 
     /* Load proxy settings page if requested */
@@ -627,17 +636,9 @@ void update_proxy_settings(void)
         return;
     }
 
-    sharedContext_set_rtt_cutoff(maxLatency->valuedouble);
-
-    if (cJSON_IsTrue(pingEnabled))
-        sharedContext_set_ping_cb(ping);
-    else
-        sharedContext_set_ping_cb(NULL);
-
-    if (cJSON_IsTrue(trEnabled))
-        sharedContext_set_tracert_cb(traceroute);
-    else
-        sharedContext_set_tracert_cb(NULL);
+    sharedContext_setVariable(SCV_MAX_RTT, &maxLatency->valuedouble);
+    sharedContext_toggleCb(SCC_PING, cJSON_IsTrue(pingEnabled));
+    sharedContext_toggleCb(SCC_TRACERT, cJSON_IsTrue(trEnabled));
 
     cJSON_Delete(json);
     return;
@@ -680,7 +681,7 @@ int proxy_start(int proxy_port)
         exit(1);
     }
 
-    sharedContext_set_resolve_cb(dns_resolve);
+    sharedContext_toggleCb(SCC_RESOLVE, 1);
 
     printf("Proxy server listening on %s:%d\n", PROXY_HOST, proxy_port);
 
