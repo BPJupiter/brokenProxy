@@ -45,7 +45,7 @@ void sharedContext_destroy(void)
 int sharedContext_getVariable(SCVariable var, void *value)
 {
     int success = 0;
-    SharedContext tContext;
+    SharedContext tContext = {0};
     switch (var)
     {
         case SCV_MAX_RTT:
@@ -65,7 +65,7 @@ int sharedContext_getVariable(SCVariable var, void *value)
 int sharedContext_setVariable(SCVariable var, const void *value)
 {
     int success = 0;
-    SharedContext tContext;
+    SharedContext tContext = {0};
     switch (var)
     {
         case SCV_MAX_RTT:
@@ -84,7 +84,7 @@ int sharedContext_setVariable(SCVariable var, const void *value)
 int sharedContext_toggleCb(SCCallback cb, char enabled)
 {
     int success = 0;
-    SharedContext tContext;
+    SharedContext tContext = {0};
     switch (cb)
     {
         case SCC_RESOLVE:
@@ -114,10 +114,10 @@ int sharedContext_toggleCb(SCCallback cb, char enabled)
 
 int sharedContext_execCb(SCCallback cb, retType *result, argType *args)
 {
-    argType a;
-    retType r;
+    argType a = {0};
+    retType r = {0};
 
-    SharedContext tContext;
+    SharedContext tContext = {0};
     int success = 0;
 
     switch (cb)

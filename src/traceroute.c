@@ -8,7 +8,7 @@
 double traceroute(const char *address, char *output, size_t output_len)
 {
     FILE *fp;
-    char line[512];
+    char line[512] = {0};
     char *gap1;
     double latency = -1.0;
     size_t l = 0;
@@ -60,11 +60,11 @@ double traceroute(const char *address, char *output, size_t output_len)
 double ping(const char *ip)
 {
     FILE *fp;
-    char line[512];
+    char line[512] = {0};
     double latency = -1.0;
     size_t l = 0;
     char *rtt_info;
-    char output[1024];
+    char output[1024] = {0};
 
     char command[128] = "/bin/ping -c 1 -w 1 ";
     strcat(command, ip);

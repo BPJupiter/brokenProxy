@@ -204,8 +204,8 @@ short dns_resolve(const char *host, uchar ***answer_index)
         for (i = 0; i < RSI_COUNT; i++)
         {
             double rtt_cutoff, latency;
-            argType a;
-            retType r;
+            argType a = {0};
+            retType r = {0};
             a.ping.ip = RootServers[i];
             sharedContext_getVariable(SCV_MAX_RTT, &rtt_cutoff);
             sharedContext_execCb(SCC_PING, &r, &a);
@@ -239,14 +239,17 @@ short dns_resolve(const char *host, uchar ***answer_index)
 /* Perform a DNS query by sending a packet */
 static short dns_recursive_worker(const char *host, int query_type, char *ns_ip, uchar ***answer_index, int depth)
 {
-    uchar buf[65536], *qname, *reader;
-    struct RES_RECORD answers[20], auth[20], addit[20]; /* Replies from DNS server */
+    uchar buf[65536] = {0};
+    uchar *qname, *reader;
+    struct RES_RECORD answers[20] = {0};
+    struct RES_RECORD auth[20] = {0};
+    struct RES_RECORD addit[20] = {0};
     struct DNS_HEADER *dns = NULL;
     int s;
 
-    sockaddr_inet a;
-    struct sockaddr_in dest;
-    struct timeval timeout;
+    sockaddr_inet a = {0};
+    struct sockaddr_in dest = {0};
+    struct timeval timeout = {0};
     size_t send_size;
     int bytes_recvd;
 
@@ -257,10 +260,6 @@ static short dns_recursive_worker(const char *host, int query_type, char *ns_ip,
         printf("\x1b[31m[Loop Detected]\x1b[0m Maximum recursion depth exceeded for %s\n", host);
         return 0;
     }
-
-    memset(answers, 0, sizeof(answers));
-    memset(auth, 0, sizeof(auth));
-    memset(addit, 0, sizeof(addit));
 
     printf("Starting iterative resolution for: %s\n", host);
 
@@ -348,7 +347,7 @@ static size_t init_dns_query(uchar *buf, const char *host, int query_type)
 {
     struct DNS_HEADER *dns = (struct DNS_HEADER *)buf;
     uchar *qname;
-    struct QUERY *qinfo;
+    struct QUERY *qinfo = {0};
 
     dns->id = (unsigned short)htons(getpid());
     dns->qr = 0;
@@ -493,8 +492,8 @@ static short handle_found_answers(struct DNS_HEADER *dns,
                                   struct RES_RECORD *addit,
                                   uchar ***answer_index, int query_type, int depth)
 {
-    sockaddr_inet a;
-    char cname_target[256];
+    sockaddr_inet a = {0};
+    char cname_target[256] = {0};
     int ans_count;
     int i;
 
@@ -558,8 +557,8 @@ static short process_auth_records(struct DNS_HEADER *dns,
                                   struct RES_RECORD *addit,
                                   const char *host, int query_type, uchar ***answer_index, int depth)
 {
-    sockaddr_inet a;
-    char next_ns_ip[16];
+    sockaddr_inet a = {0};
+    char next_ns_ip[16] = {0};
     char next_ns_name[256] = "\0";
     int found_glue = 0, bad_latency = 0;
     int i, j, k;
@@ -609,8 +608,8 @@ static short process_auth_records(struct DNS_HEADER *dns,
             if (found_glue && strcmp(next_ns_ip, "127.0.0.1") != 0)
             {
                 double rtt_cutoff, latency;
-                argType a;
-                retType r;
+                argType a = {0};
+                retType r = {0};
                 a.ping.ip = next_ns_ip;
                 sharedContext_getVariable(SCV_MAX_RTT, &rtt_cutoff);
                 sharedContext_execCb(SCC_PING, &r, &a);
@@ -659,8 +658,8 @@ static short process_auth_records(struct DNS_HEADER *dns,
             if (ns_count > 0)
             {
                 double latency, rtt_cutoff;
-                argType a;
-                retType r;
+                argType a = {0};
+                retType r = {0};
                 for (k = 0; k < ns_count; k++)
                 {
                     strcpy(next_ns_ip, (char *)ns_answers[k]);
@@ -766,7 +765,7 @@ static void change_to_dns_name_format(uchar *dns, const char *hostname)
 {
     /* convert www.google.com to 3www6google3com0 */
     unsigned long lock = 0;
-    char host[256];
+    char host[256] = {0};
     unsigned long i;
     strcpy(host, hostname);
     strcat((char *)host, ".");
@@ -869,8 +868,8 @@ static int external_dns_is_blocked(void)
 
 static void set_to_local_dns(void)
 {
-    struct __res_state dns;
-    struct in_addr addr;
+    struct __res_state dns = {0};
+    struct in_addr addr = {0};
     res_ninit(&dns);
 
     addr = dns.nsaddr_list[0].sin_addr;

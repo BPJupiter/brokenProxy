@@ -110,8 +110,8 @@ void get_text_file(char *filename, char *buffer, int client_fd)
 {
     FILE *fp;
 
-    char path[64];
-    char extension[32];
+    char path[64] = {0};
+    char extension[32] = {0};
     char *text_content;
 
     long content_length;
@@ -161,7 +161,7 @@ void get_favicon(char *buffer, int client_fd)
 {
     FILE *fp;
     long content_length;
-    char headers[256];
+    char headers[256] = {0};
     size_t bytes_read;
 
     fp = fopen("static/favicon.ico", "rb");
@@ -316,8 +316,8 @@ void set_json_settings(int client_fd, char *host)
 void *tunnel_data(void *arg)
 {
     tunnel_args_t *args = (tunnel_args_t *)arg;
-    char buffer[BUFFER_SIZE];
-    struct timeval timeout;
+    char buffer[BUFFER_SIZE] = {0};
+    struct timeval timeout = {0};
     int sent;
 
     timeout.tv_sec = 60;
@@ -351,14 +351,14 @@ void *tunnel_data(void *arg)
 void *handle_client(void *arg)
 {
     client_info_t *client_info = (client_info_t *)arg;
-    argType a;
-    retType r;
+    argType a = {0};
+    retType r = {0};
     int client_fd = client_info->client_fd;
     int remote_fd = -1;
 
-    char buffer[BUFFER_SIZE];
-    char host[512];
-    char first_line[1024];
+    char buffer[BUFFER_SIZE] = {0};
+    char host[512] = {0};
+    char first_line[1024] = {0};
     char method[16], url_buf[512], version[16];
     char *url = NULL;
     char *first_line_end;
@@ -531,8 +531,8 @@ void *handle_client(void *arg)
     {
         pthread_t client_to_remote_thread, remote_to_client_thread;
 
-        tunnel_args_t *c2r_args = malloc(sizeof(tunnel_args_t));
-        tunnel_args_t *r2c_args = malloc(sizeof(tunnel_args_t));
+        tunnel_args_t *c2r_args = malloc(sizeof(*c2r_args));
+        tunnel_args_t *r2c_args = malloc(sizeof(*r2c_args));
 
         c2r_args->source_fd = client_fd;
         c2r_args->dest_fd = remote_fd;
@@ -693,7 +693,7 @@ int proxy_start(int proxy_port)
         client_info_t *client_info;
         socklen_t client_len;
         printf("Memory (KB): %s\n", get_memory_usage_str_kb());
-        client_info = malloc(sizeof(client_info_t));
+        client_info = malloc(sizeof(*client_info));
         client_len = sizeof(client_info->client_addr);
 
         pthread_mutex_lock(&settings_mod_mutex);
