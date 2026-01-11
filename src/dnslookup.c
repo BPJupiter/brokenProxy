@@ -9,6 +9,7 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <unistd.h>
+#include <netdb.h>
 
 #include "dnslookup.h"
 #include "shared_context.h"
@@ -182,6 +183,38 @@ short localhost(uchar ***answer_index)
     *answer_index = (uchar **)malloc(1 * sizeof(uchar *));
     (*answer_index)[0] = (uchar *)malloc(256 * sizeof(uchar));
     strcpy((char *)(*answer_index)[0], "127.0.0.1");
+    return 1;
+}
+
+short quick_resolve(const char *host, unsigned char ***answer_index)
+{
+    struct addrinfo hints = {0};
+    struct addrinfo *res;
+    char ipstr[16];
+    int status;
+    if (strcmp(host, "/") == 0
+        || strcmp(host, "/favicon.ico") == 0
+        || strcmp(host, "/style.css") == 0
+        || strcmp(host, "/script.js") == 0
+        || strcmp(host, "/settings.json") == 0
+        || strstr(host, "/settings?rtt=") != NULL)
+    {
+        return localhost(answer_index);
+    }
+
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+
+    if ((status = getaddrinfo(host, NULL, &hints, &res)) != 0)
+    {
+        printf("Could not resolve!: %s\n", gai_strerror(status));
+        return 0;
+    }
+
+    *answer_index = malloc(1 * sizeof(*answer_index));
+    (*answer_index)[0] = (unsigned char *)malloc(256 * sizeof(unsigned char));
+    inet_ntop(res->ai_family, &((struct sockaddr_in *)res->ai_addr)->sin_addr, ipstr, sizeof ipstr);
+    strcpy((char *)(*answer_index)[0], ipstr);
     return 1;
 }
 

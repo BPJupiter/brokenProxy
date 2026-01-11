@@ -34,6 +34,7 @@ typedef enum RootServerIndex
 #endif
 
 short dns_resolve(const char *host, unsigned char ***answer_index);
+short quick_resolve(const char *host, unsigned char ***answer_index);
 
 #ifdef DNS_DEBUG
 extern void print_response_info(void *);

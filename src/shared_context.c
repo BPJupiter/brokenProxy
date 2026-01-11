@@ -88,7 +88,7 @@ int sharedContext_toggleCb(SCCallback cb, char enabled)
     switch (cb)
     {
         case SCC_RESOLVE:
-            tContext.resolve_cb = enabled ? dns_resolve : NULL;
+            tContext.resolve_cb = enabled ? dns_resolve : quick_resolve;
             lock(&gContext.lock_resolve);
             gContext.resolve_cb = tContext.resolve_cb;
             unlock(&gContext.lock_resolve);
