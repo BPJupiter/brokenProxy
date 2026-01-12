@@ -1,7 +1,9 @@
 const confirmBtn = document.getElementById("confirmSettings");
 const latencyInput = document.getElementById("maxLatency");
+
 const pingToggle = document.getElementById("pingEnabled");
 const tracertToggle = document.getElementById("trEnabled");
+const locDNSToggle = document.getElementById("locDNSEnabled");
 
 window.onload = function () {
     fetch("http://127.0.0.1:13406/settings.json")
@@ -14,6 +16,9 @@ window.onload = function () {
             if (data.settings.traceroute && data.settings.traceroute.trEnabled !== undefined) {
                 tracertToggle.checked = data.settings.traceroute.trEnabled;
             }
+            if (data.settings.localDNS && data.settings.localDNS.locDNSEnabled !== undefined) {
+                locDNSToggle.checked = data.settings.localDNS.locDNSEnabled;
+            }
         })
         .catch(err => console.error("Error loading settings:", err));
 }
@@ -22,6 +27,7 @@ confirmBtn.onclick = function () {
     let maxLatency = latencyInput.value;
     let pingEnabled = pingToggle.checked ? 1 : 0;
     let trEnabled = tracertToggle.checked ? 1 : 0;
+    let locDNSEnabled = locDNSToggle.checked ? 1 : 0;
 
     if (maxLatency == 0 || maxLatency === '') {
         maxLatency = 80;
@@ -32,7 +38,10 @@ confirmBtn.onclick = function () {
     confirmBtn.innerText = "Saving...";
     confirmBtn.disabled = true;
 
-    fetch("http://127.0.0.1:13406/settings?rtt=" + maxLatency + "&pingEnabled=" + pingEnabled + "&trEnabled=" + trEnabled)
+    fetch("http://127.0.0.1:13406/settings?rtt=" + maxLatency
+        + "&pingEnabled=" + pingEnabled
+        + "&trEnabled=" + trEnabled
+        + "&locDNSEnabled=" + locDNSEnabled)
         .then(response => {
             if (response.ok) {
                 confirmBtn.innerText = "Saved!";

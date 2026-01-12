@@ -44,6 +44,7 @@ struct settings
 {
     char pingEnabled;
     char trEnabled;
+    char locDNSEnabled;
     double rtt;
 };
 
@@ -196,16 +197,19 @@ void get_values_from_url(char *host, struct settings *vals)
 {
     char *p;
     int rtt;
-    char pingEnabled, trEnabled;
+    char pingEnabled, trEnabled, locDNSEnabled;
     p = strstr(host, "rtt=");
     rtt = atoi(p + 4);
     p = strstr(host, "pingEnabled=");
     pingEnabled = atoi(p + 12);
     p = strstr(host, "trEnabled=");
     trEnabled = atoi(p + 10);
+    p = strstr(host, "locDNSEnabled=");
+    locDNSEnabled = atoi(p + 14);
     vals->rtt = (double)rtt;
     vals->pingEnabled = pingEnabled;
     vals->trEnabled = trEnabled;
+    vals->locDNSEnabled = locDNSEnabled;
 }
 
 void set_json_settings(int client_fd, char *host)
@@ -215,11 +219,14 @@ void set_json_settings(int client_fd, char *host)
     cJSON *settings;
     cJSON *pingObj;
     cJSON *tracertObj;
+    cJSON *localDNSObj;
 
     cJSON *maxLatency;
     cJSON *pingEnabled;
 
     cJSON *trEnabled;
+
+    cJSON *locDNSEnabled;
 
     char *new_json;
     char buffer[4096];
@@ -272,16 +279,21 @@ void set_json_settings(int client_fd, char *host)
     settings = cJSON_GetObjectItemCaseSensitive(json, "settings");
     pingObj = cJSON_GetObjectItemCaseSensitive(settings, "ping");
     tracertObj = cJSON_GetObjectItemCaseSensitive(settings, "traceroute");
+    localDNSObj = cJSON_GetObjectItemCaseSensitive(settings, "localDNS");
     maxLatency = cJSON_GetObjectItemCaseSensitive(pingObj, "maxLatency");
     pingEnabled = cJSON_GetObjectItemCaseSensitive(pingObj, "pingEnabled");
     trEnabled = cJSON_GetObjectItemCaseSensitive(tracertObj, "trEnabled");
+    locDNSEnabled = cJSON_GetObjectItemCaseSensitive(localDNSObj, "locDNSEnabled");
 
     if (!cJSON_IsObject(settings)
-        || !cJSON_IsObject(pingObj)
-        || !cJSON_IsNumber(maxLatency)
-        || !cJSON_IsBool(pingEnabled)
-        || !cJSON_IsObject(tracertObj)
-        || !cJSON_IsBool(trEnabled))
+        || (!cJSON_IsObject(pingObj)
+            || !cJSON_IsNumber(maxLatency)
+            || !cJSON_IsBool(pingEnabled))
+        || (!cJSON_IsObject(tracertObj)
+            || !cJSON_IsBool(trEnabled))
+        || (!cJSON_IsObject(localDNSObj)
+            || !cJSON_IsBool(locDNSEnabled))
+        )
     {
         printf("Error: JSON structure invalid!\n");
         cJSON_Delete(json);
@@ -292,6 +304,7 @@ void set_json_settings(int client_fd, char *host)
     cJSON_SetNumberValue(maxLatency, settings_vals.rtt);
     cJSON_SetBoolValue(pingEnabled, settings_vals.pingEnabled);
     cJSON_SetBoolValue(trEnabled, settings_vals.trEnabled);
+    cJSON_SetBoolValue(locDNSEnabled, settings_vals.locDNSEnabled);
 
     new_json = cJSON_Print(json);
     fp = fopen(SETTINGS_DIR, "w");
@@ -574,11 +587,14 @@ void update_proxy_settings(void)
 
     cJSON *pingObj;
     cJSON *tracertObj;
+    cJSON *localDNSObj;
 
     cJSON *pingEnabled;
     cJSON *maxLatency;
 
     cJSON *trEnabled;
+
+    cJSON *locDNSEnabled;
 
     fp = fopen(SETTINGS_DIR, "r");
     if (fp == NULL)
@@ -603,35 +619,25 @@ void update_proxy_settings(void)
     }
 
     settings = cJSON_GetObjectItemCaseSensitive(json, "settings");
-    if (!cJSON_IsObject(settings))
-    {
-        printf("Error: settings is not an object!\n");
-        cJSON_Delete(json);
-        return;
-    }
-
     pingObj = cJSON_GetObjectItemCaseSensitive(settings, "ping");
     tracertObj = cJSON_GetObjectItemCaseSensitive(settings, "traceroute");
-    if (!cJSON_IsObject(pingObj) || !cJSON_IsObject(tracertObj))
-    {
-        printf("Error: bad object!\n");
-        cJSON_Delete(json);
-        return;
-    }
-
+    localDNSObj = cJSON_GetObjectItemCaseSensitive(settings, "localDNS");
+    maxLatency = cJSON_GetObjectItemCaseSensitive(pingObj, "maxLatency");
     pingEnabled = cJSON_GetObjectItemCaseSensitive(pingObj, "pingEnabled");
     trEnabled = cJSON_GetObjectItemCaseSensitive(tracertObj, "trEnabled");
-    if (!cJSON_IsBool(pingEnabled) || !cJSON_IsBool(trEnabled))
-    {
-        printf("Error: bad boolean!\n");
-        cJSON_Delete(json);
-        return;
-    }
+    locDNSEnabled = cJSON_GetObjectItemCaseSensitive(localDNSObj, "locDNSEnabled");
 
-    maxLatency = cJSON_GetObjectItemCaseSensitive(pingObj, "maxLatency");
-    if (!cJSON_IsNumber(maxLatency))
+    if (!cJSON_IsObject(settings)
+        || (!cJSON_IsObject(pingObj)
+            || !cJSON_IsNumber(maxLatency)
+            || !cJSON_IsBool(pingEnabled))
+        || (!cJSON_IsObject(tracertObj)
+            || !cJSON_IsBool(trEnabled))
+        || (!cJSON_IsObject(localDNSObj)
+            || !cJSON_IsBool(locDNSEnabled))
+        )
     {
-        printf("Error: maxLatency is not a number!\n");
+        printf("Error: JSON structure invalid!\n");
         cJSON_Delete(json);
         return;
     }
@@ -639,6 +645,7 @@ void update_proxy_settings(void)
     sharedContext_setVariable(SCV_MAX_RTT, &maxLatency->valuedouble);
     sharedContext_toggleCb(SCC_PING, cJSON_IsTrue(pingEnabled));
     sharedContext_toggleCb(SCC_TRACERT, cJSON_IsTrue(trEnabled));
+    sharedContext_toggleCb(SCC_RESOLVE, !cJSON_IsTrue(locDNSEnabled));
 
     cJSON_Delete(json);
     return;

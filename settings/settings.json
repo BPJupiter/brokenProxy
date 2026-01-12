@@ -6,6 +6,9 @@
 		},
 		"traceroute":	{
 			"trEnabled":	false
+		},
+		"localDNS":	{
+			"locDNSEnabled":	false
 		}
 	}
 }

@@ -186,7 +186,7 @@ short localhost(uchar ***answer_index)
     return 1;
 }
 
-short quick_resolve(const char *host, unsigned char ***answer_index)
+short quick_resolve(const char *host, uchar ***answer_index)
 {
     struct addrinfo hints = {0};
     struct addrinfo *res;
@@ -253,10 +253,6 @@ short dns_resolve(const char *host, uchar ***answer_index)
             /* TODO: Determine cable and whether or not to foward packet */
         }
         strcpy(current_root_ip, RootServers[i]);
-        if (external_dns_is_blocked())
-        {
-            set_to_local_dns();
-        }
         root_server_found = 1;
     }
     n_ans = dns_recursive_worker(host, T_A, current_root_ip, answer_index, 0);
@@ -267,6 +263,21 @@ short dns_resolve(const char *host, uchar ***answer_index)
     }
     else
         return n_ans;
+}
+
+/* --------- UNIMPLEMENTED ---------- */
+short local_resolve(const char *host, uchar ***answer_index)
+{
+    if (strcmp(host, "/") == 0
+        || strcmp(host, "/favicon.ico") == 0
+        || strcmp(host, "/style.css") == 0
+        || strcmp(host, "/script.js") == 0
+        || strcmp(host, "/settings.json") == 0
+        || strstr(host, "/settings?rtt=") != NULL)
+    {
+        return localhost(answer_index);
+    }
+    return 0;
 }
 
 /* Perform a DNS query by sending a packet */

@@ -117,6 +117,7 @@ button#confirmSettings:active {
 .label-text {
     margin: 0;
     padding: 0;
+    padding-left: 6px;
     font-size: 16px;
     font-family: sans-serif;
     line-height: 1;

@@ -17,6 +17,14 @@ typedef enum
     SCC_COUNT /**< Number of shared context callbacks. */
 } SCCallback;
 
+typedef enum
+{
+    RS_QUICK,
+    RS_FULL,
+    RS_LOCAL, /* UNIMPLEMENTED */
+    RS_COUNT
+} ResolveState;
+
 typedef union
 {
     struct resolve_args
