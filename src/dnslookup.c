@@ -192,12 +192,15 @@ short quick_resolve(const char *host, uchar ***answer_index)
     struct addrinfo *res;
     char ipstr[16];
     int status;
-    if (strcmp(host, "/") == 0
-        || strcmp(host, "/favicon.ico") == 0
-        || strcmp(host, "/style.css") == 0
-        || strcmp(host, "/script.js") == 0
-        || strcmp(host, "/settings.json") == 0
-        || strstr(host, "/settings?rtt=") != NULL)
+    /*
+       if (strcmp(host, "/") == 0
+     || strcmp(host, "/favicon.ico") == 0
+     || strcmp(host, "/style.css") == 0
+     || strcmp(host, "/script.js") == 0
+     || strcmp(host, "/settings.json") == 0
+     || strstr(host, "/settings?rtt=") != NULL
+        )*/
+    if (host[0] == '/')
     {
         return localhost(answer_index);
     }
@@ -222,12 +225,15 @@ short dns_resolve(const char *host, uchar ***answer_index)
 {
     short n_ans = 0;
     int i = 0;
-    if (strcmp(host, "/") == 0
-        || strcmp(host, "/favicon.ico") == 0
-        || strcmp(host, "/style.css") == 0
-        || strcmp(host, "/script.js") == 0
-        || strcmp(host, "/settings.json") == 0
-        || strstr(host, "/settings?rtt=") != NULL)
+    /*
+       if (strcmp(host, "/") == 0
+     || strcmp(host, "/favicon.ico") == 0
+     || strcmp(host, "/style.css") == 0
+     || strcmp(host, "/script.js") == 0
+     || strcmp(host, "/settings.json") == 0
+     || strstr(host, "/settings?rtt=") != NULL
+        )*/
+    if (host[0] == '/')
     {
         return localhost(answer_index);
     }
@@ -268,12 +274,15 @@ short dns_resolve(const char *host, uchar ***answer_index)
 /* --------- UNIMPLEMENTED ---------- */
 short local_resolve(const char *host, uchar ***answer_index)
 {
-    if (strcmp(host, "/") == 0
-        || strcmp(host, "/favicon.ico") == 0
-        || strcmp(host, "/style.css") == 0
-        || strcmp(host, "/script.js") == 0
-        || strcmp(host, "/settings.json") == 0
-        || strstr(host, "/settings?rtt=") != NULL)
+    /*
+       if (strcmp(host, "/") == 0
+     || strcmp(host, "/favicon.ico") == 0
+     || strcmp(host, "/style.css") == 0
+     || strcmp(host, "/script.js") == 0
+     || strcmp(host, "/settings.json") == 0
+     || strstr(host, "/settings?rtt=") != NULL
+        )*/
+    if (host[0] == '/')
     {
         return localhost(answer_index);
     }

@@ -21,12 +21,15 @@
 #endif
 
 #define PROXY_HOST "127.0.0.1"
-#define BUFFER_SIZE 8196
+#define BUFFER_SIZE 16384
 #define MAX_CLIENTS 8
 #define SETTINGS_DIR "settings/settings.json"
 
 static int proxy_printf(const char *format, ...);
 #define printf proxy_printf
+
+typedef unsigned char uchar;
+typedef unsigned int uint;
 
 typedef struct
 {
@@ -48,13 +51,22 @@ struct settings
     double rtt;
 };
 
+static void free_answers(unsigned char **answers, int n_ans);
+static int host_port_from_url(const char *url, char *host, int *port);
+static void send_local_file(char *filename, char *buffer, int client_fd);
+static int get_content_length(const char *request);
+static void set_json_settings(int client_fd, char *initial_buffer);
+static void *tunnel_data(void *arg);
+static void *handle_client(void *arg);
+static void update_proxy_settings(void);
+
 static pthread_mutex_t thread_count_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int active_thread_count = 0;
 
 static pthread_mutex_t settings_mod_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int settings_modified = 1;
 
-void free_answers(unsigned char **answers, int n_ans)
+static void free_answers(unsigned char **answers, int n_ans)
 {
     int i;
     for (i = 0; i < n_ans; i++)
@@ -62,7 +74,7 @@ void free_answers(unsigned char **answers, int n_ans)
     free(answers);
 }
 
-int host_port_from_url(const char *url, char *host, int *port)
+static int host_port_from_url(const char *url, char *host, int *port)
 {
     const char *http_pos = strstr(url, "http://");
     const char *https_pos = strstr(url, "https://");
@@ -107,36 +119,41 @@ int host_port_from_url(const char *url, char *host, int *port)
     }
 }
 
-void get_text_file(char *filename, char *buffer, int client_fd)
+static void send_local_file(char *filename, char *buffer, int client_fd)
 {
     FILE *fp;
 
-    char path[64] = {0};
+    char path[256] = {0};
     char extension[32] = {0};
-    char *text_content;
 
     long content_length;
+    size_t bytes_read;
 
-    if (strcmp(filename, "settings.json") == 0)
+    if (strcmp(filename, "/settings.json") == 0)
         strcpy(path, "settings/");
     else strcpy(path, "static/");
 
-    strcat(path, filename);
+    strcat(path, filename + 1);
+    if (strcmp(filename, "/") == 0)
+        strcat(path, "index.html");
+
+    strcpy(extension, "text/plain"); /* Default */
+    if (strstr(path, ".html") != NULL)        strcpy(extension, "text/html");
+    else if (strstr(path, ".css") != NULL)    strcpy(extension, "text/css");
+    else if (strstr(path, ".json") != NULL)   strcpy(extension, "application/json");
+    else if (strstr(path, ".js.map") != NULL) strcpy(extension, "application/json");
+    else if (strstr(path, ".js") != NULL)     strcpy(extension, "text/javascript");
+    else if (strstr(path, ".ico") != NULL)    strcpy(extension, "image/x-icon");
+
     fp = fopen(path, "rb");
     if (!fp)
     {
-        printf("404 File not found: %s\n", filename);
+        printf("404 File not found: %s\n", path);
         return;
     }
     fseek(fp, 0L, SEEK_END);
     content_length = ftell(fp);
     rewind(fp);
-
-    strcpy(extension, "text/plain"); /* Default */
-    if (strstr(filename, ".html") != NULL)      strcpy(extension, "text/html");
-    else if (strstr(filename, ".css") != NULL)  strcpy(extension, "text/css");
-    else if (strstr(filename, ".json") != NULL) strcpy(extension, "application/json");
-    else if (strstr(filename, ".js") != NULL)   strcpy(extension, "text/javascript");
 
     sprintf(buffer,
             "HTTP/1.1 200 OK\r\n"
@@ -145,46 +162,8 @@ void get_text_file(char *filename, char *buffer, int client_fd)
             "Connection: close\r\n"
             "\r\n",
             extension, content_length);
+
     send(client_fd, buffer, strlen(buffer), 0);
-
-    text_content = (char *)malloc(content_length);
-    if (text_content)
-    {
-        fread(text_content, 1, content_length, fp);
-        send(client_fd, text_content, content_length, 0);
-        free(text_content);
-    }
-
-    fclose(fp);
-}
-
-void get_favicon(char *buffer, int client_fd)
-{
-    FILE *fp;
-    long content_length;
-    char headers[256] = {0};
-    size_t bytes_read;
-
-    fp = fopen("static/favicon.ico", "rb");
-    if (!fp)
-    {
-        printf("404 File not found: favicon.ico\n");
-        return;
-    }
-
-    fseek(fp, 0L, SEEK_END);
-    content_length = ftell(fp);
-    rewind(fp);
-
-    sprintf(headers,
-            "HTTP/1.1 200 OK\r\n"
-            "Content-Type: image/x-icon\r\n"
-            "Content-Length: %ld\r\n"
-            "Connection: close\r\n"
-            "\r\n",
-            content_length);
-
-    send(client_fd, headers, strlen(headers), 0);
     while ((bytes_read = fread(buffer, 1, sizeof(buffer), fp)) > 0)
     {
         send(client_fd, buffer, bytes_read, 0);
@@ -193,43 +172,31 @@ void get_favicon(char *buffer, int client_fd)
     fclose(fp);
 }
 
-void get_values_from_url(char *host, struct settings *vals)
+static int get_content_length(const char *request)
 {
-    char *p;
-    int rtt;
-    char pingEnabled, trEnabled, locDNSEnabled;
-    p = strstr(host, "rtt=");
-    rtt = atoi(p + 4);
-    p = strstr(host, "pingEnabled=");
-    pingEnabled = atoi(p + 12);
-    p = strstr(host, "trEnabled=");
-    trEnabled = atoi(p + 10);
-    p = strstr(host, "locDNSEnabled=");
-    locDNSEnabled = atoi(p + 14);
-    vals->rtt = (double)rtt;
-    vals->pingEnabled = pingEnabled;
-    vals->trEnabled = trEnabled;
-    vals->locDNSEnabled = locDNSEnabled;
+    const char *ptr = strstr(request, "Content-Length:");
+    if (ptr)
+    {
+        return atoi(ptr + 15);
+    }
+    return 0;
 }
 
-void set_json_settings(int client_fd, char *host)
+static void set_json_settings(int client_fd, char *initial_buffer)
 {
     FILE *fp;
-    cJSON *json;
+    char buffer[BUFFER_SIZE];
+    char *new_json;
+
+    cJSON *file_json;
+    cJSON *payload_json;
+
     cJSON *settings;
     cJSON *pingObj;
     cJSON *tracertObj;
     cJSON *localDNSObj;
 
-    cJSON *maxLatency;
-    cJSON *pingEnabled;
-
-    cJSON *trEnabled;
-
-    cJSON *locDNSEnabled;
-
-    char *new_json;
-    char buffer[4096];
+    cJSON *incomingCables;
 
     const char *HTTP_200 =
         "HTTP/1.1 200 OK\r\n"
@@ -247,14 +214,29 @@ void set_json_settings(int client_fd, char *host)
         "\r\n";
 
     size_t bytes_read;
-    struct settings settings_vals = {0};
 
-    get_values_from_url(host, &settings_vals);
+    char *body_start = strstr(initial_buffer, "\r\n\r\n");
+    if (!body_start)
+    {
+        send(client_fd, HTTP_500, strlen(HTTP_500), 0);
+        return;
+    }
+    body_start += 4;
+
+
+    payload_json = cJSON_Parse(body_start);
+    if (payload_json == NULL)
+    {
+        printf("Error: Failed to parse incoming POST JSON body.\n");
+        send(client_fd, HTTP_500, strlen(HTTP_500), 0);
+        return;
+    }
 
     fp = fopen(SETTINGS_DIR, "r");
     if (fp == NULL)
     {
         perror("Error opening settings.json file!");
+        cJSON_Delete(payload_json);
         send(client_fd, HTTP_500, strlen(HTTP_500), 0);
         return;
     }
@@ -263,50 +245,58 @@ void set_json_settings(int client_fd, char *host)
     buffer[bytes_read] = '\0';
     fclose(fp);
 
-    json = cJSON_Parse(buffer);
-    if (json == NULL)
+    file_json = cJSON_Parse(buffer);
+    if (file_json == NULL)
     {
         const char *error_ptr = cJSON_GetErrorPtr();
         if (error_ptr != NULL)
         {
             printf("Error: %s\n", error_ptr);
         }
-        cJSON_Delete(json);
+        cJSON_Delete(payload_json);
         send(client_fd, HTTP_500, strlen(HTTP_500), 0);
         return;
     }
 
-    settings = cJSON_GetObjectItemCaseSensitive(json, "settings");
+    settings = cJSON_GetObjectItemCaseSensitive(file_json, "settings");
     pingObj = cJSON_GetObjectItemCaseSensitive(settings, "ping");
     tracertObj = cJSON_GetObjectItemCaseSensitive(settings, "traceroute");
     localDNSObj = cJSON_GetObjectItemCaseSensitive(settings, "localDNS");
-    maxLatency = cJSON_GetObjectItemCaseSensitive(pingObj, "maxLatency");
-    pingEnabled = cJSON_GetObjectItemCaseSensitive(pingObj, "pingEnabled");
-    trEnabled = cJSON_GetObjectItemCaseSensitive(tracertObj, "trEnabled");
-    locDNSEnabled = cJSON_GetObjectItemCaseSensitive(localDNSObj, "locDNSEnabled");
 
     if (!cJSON_IsObject(settings)
-        || (!cJSON_IsObject(pingObj)
-            || !cJSON_IsNumber(maxLatency)
-            || !cJSON_IsBool(pingEnabled))
-        || (!cJSON_IsObject(tracertObj)
-            || !cJSON_IsBool(trEnabled))
-        || (!cJSON_IsObject(localDNSObj)
-            || !cJSON_IsBool(locDNSEnabled))
+        || !cJSON_IsObject(pingObj)
+        || !cJSON_IsObject(tracertObj)
+        || !cJSON_IsObject(localDNSObj)
         )
     {
         printf("Error: JSON structure invalid!\n");
-        cJSON_Delete(json);
+        cJSON_Delete(file_json);
+        cJSON_Delete(payload_json);
         send(client_fd, HTTP_500, strlen(HTTP_500), 0);
         return;
     }
 
-    cJSON_SetNumberValue(maxLatency, settings_vals.rtt);
-    cJSON_SetBoolValue(pingEnabled, settings_vals.pingEnabled);
-    cJSON_SetBoolValue(trEnabled, settings_vals.trEnabled);
-    cJSON_SetBoolValue(locDNSEnabled, settings_vals.locDNSEnabled);
+    cJSON_ReplaceItemInObject(pingObj, "maxLatency",
+                              cJSON_CreateNumber(cJSON_GetObjectItem(payload_json, "maxLatency")->valuedouble));
+    cJSON_ReplaceItemInObject(pingObj, "pingEnabled",
+                              cJSON_CreateBool(cJSON_GetObjectItem(payload_json, "pingEnabled")->valueint));
+    cJSON_ReplaceItemInObject(tracertObj, "trEnabled",
+                              cJSON_CreateBool(cJSON_GetObjectItem(payload_json, "trEnabled")->valueint));
+    cJSON_ReplaceItemInObject(localDNSObj, "locDNSEnabled",
+                              cJSON_CreateBool(cJSON_GetObjectItem(payload_json, "locDNSEnabled")->valueint));
 
-    new_json = cJSON_Print(json);
+    incomingCables = cJSON_GetObjectItem(payload_json, "disabledCables");
+
+    if (incomingCables != NULL && cJSON_IsArray(incomingCables))
+    {
+        if (cJSON_HasObjectItem(settings, "disabledCables"))
+        {
+            cJSON_DeleteItemFromObject(settings, "disabledCables");
+        }
+        cJSON_AddItemToObject(settings, "disabledCables", cJSON_Duplicate(incomingCables, 1));
+    }
+
+    new_json = cJSON_Print(file_json);
     fp = fopen(SETTINGS_DIR, "w");
     if (fp)
     {
@@ -317,16 +307,20 @@ void set_json_settings(int client_fd, char *host)
     else
     {send(client_fd, HTTP_500, strlen(HTTP_500), 0);}
 
+    if (new_json)
+    {
     #ifdef C_MEMORY_DEBUG
-    c_no_debug_free(new_json);
+        c_no_debug_free(new_json);
     #else
-    free(new_json);
+        free(new_json);
     #endif
-    cJSON_Delete(json);
+    }
+    cJSON_Delete(file_json);
+    cJSON_Delete(payload_json);
 }
 
 /* Tunnel data from source to destination */
-void *tunnel_data(void *arg)
+static void *tunnel_data(void *arg)
 {
     tunnel_args_t *args = (tunnel_args_t *)arg;
     char buffer[BUFFER_SIZE] = {0};
@@ -361,7 +355,7 @@ void *tunnel_data(void *arg)
 }
 
 /* Handle individual client connection */
-void *handle_client(void *arg)
+static void *handle_client(void *arg)
 {
     client_info_t *client_info = (client_info_t *)arg;
     argType a = {0};
@@ -468,34 +462,19 @@ void *handle_client(void *arg)
     /* This code sucks. But its short enough that i dont care. */
     if (strstr(first_line, "GET") != NULL)
     {
-        if (strcmp(host, "/") == 0)
-        {
-            get_text_file("index.html", buffer, client_fd);
-        }
-        else if (strcmp(host, "/style.css") == 0)
-        {
-            get_text_file("style.css", buffer, client_fd);
-        }
-        else if (strcmp(host, "/script.js") == 0)
-        {
-            get_text_file("script.js", buffer, client_fd);
-        }
-        else if (strcmp(host, "/settings.json") == 0)
-        {
-            get_text_file("settings.json", buffer, client_fd);
-        }
-        else if (strcmp(host, "/favicon.ico") == 0)
-        {
-            get_favicon(buffer, client_fd);
-        }
-        /* called when client page updates settings */
-        else if (strstr(host, "/settings") != NULL)
-        {
-            pthread_mutex_lock(&settings_mod_mutex);
-            set_json_settings(client_fd, host);
-            settings_modified = 1;
-            pthread_mutex_unlock(&settings_mod_mutex);
-        }
+        send_local_file(host, buffer, client_fd);
+
+        free_answers(answers, n_ans);
+        goto cleanup;
+    }
+
+    if (strstr(first_line, "POST") != NULL)
+    {
+        pthread_mutex_lock(&settings_mod_mutex);
+        set_json_settings(client_fd, buffer);
+        settings_modified = 1;
+        pthread_mutex_unlock(&settings_mod_mutex);
+
         free_answers(answers, n_ans);
         goto cleanup;
     }
@@ -578,7 +557,7 @@ cleanup:
     return NULL;
 }
 
-void update_proxy_settings(void)
+static void update_proxy_settings(void)
 {
     FILE *fp;
     char buffer[1024];
@@ -741,7 +720,7 @@ int proxy_start(int proxy_port)
     return 0;
 }
 
-int proxy_printf(const char *format, ...)
+static int proxy_printf(const char *format, ...)
 {
     va_list args;
     char msg[1024] = "\x1b[35m[Proxy]\x1b[0m ";

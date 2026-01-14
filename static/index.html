@@ -4,6 +4,9 @@
         <meta charset="utf-8" />
         <title>Broken Proxy Settings</title>
 
+        <link rel="stylesheet" type="text/css" href="./maplibre/maplibre-gl.css">
+        <script type="text/javascript" src="./maplibre/maplibre-gl.js" defer></script>
+
         <link rel="stylesheet" type="text/css" href="./style.css">
         <script type="text/javascript" src="./script.js" defer></script>
     </head>
@@ -45,11 +48,17 @@
                     </div>
                 </div>
 
-                <button type="button" id="confirmSettings">Confirm</button>
+                <div class="buttons">
+                    <button type="button" id="allCablesOn" onclick="turnAllCablesOn()">All Cables ON</button>
+                    <button type="button" id="allCablesOff" onclick="turnAllCablesOff()">All Cables OFF</button>
+                    <button type="button" id="confirmSettings">Confirm</button>
+                </div>
             </div>
 
-            <main class="main element">
-                <p><em>Main map placeholder...</em></en></p>
+            <main class="main-content">
+                <div id="viewDiv">
+                    <!-- <p><em>Main map placeholder...</em></en></p> -->
+                </div>
             </main>
         </div>
     </body>

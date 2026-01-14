@@ -20,10 +20,14 @@ Build with
 
 For testing with curl, use the following cmdline arguments:
 
-`$ curl -x "127.0.0.1:13406" <url>`
+```
+$ curl -x "127.0.0.1:13406" <url>
+```
 
 ## Chromium commandline args
 
 For testing on Chromium, use the following cmdline arguments:
 
-`$ chromium --proxy-server="127.0.0.1:13406" --user-data-dir="/tmp/chromium_proxy_session/"`
+```
+$ chromium --proxy-server="127.0.0.1:13406" --user-data-dir="/tmp/chromium_proxy_session/"
+```
