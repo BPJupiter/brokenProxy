@@ -2,7 +2,7 @@
 	"settings":	{
 		"ping":	{
 			"pingEnabled":	true,
-			"maxLatency":	200
+			"maxLatency":	150
 		},
 		"traceroute":	{
 			"trEnabled":	false
@@ -10,6 +10,6 @@
 		"localDNS":	{
 			"locDNSEnabled":	false
 		},
-		"disabledCables":	["southern-cross-cable-network-sccn"]
+		"disabledCables":	[]
 	}
 }

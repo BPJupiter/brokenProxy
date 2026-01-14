@@ -47,6 +47,8 @@ window.onload = function () {
         })
         .catch(err => console.error("Error loading settings:", err));
 
+    map.addControl(new maplibregl.NavigationControl(), 'top-left');
+
     map.on('load', () => {
         fetch('./telegeography/cable-geo.json')
             .then(response => response.json())
@@ -96,16 +98,6 @@ window.onload = function () {
             .catch(err => console.error("Error loading GeoJSON:", err));
 
         map.on('click', 'cables-lines', (e) => {
-            const coordinates = e.lngLat;
-            const properties = e.features[0].properties;
-
-            const description = `<strong>${properties.name}</strong><br>ID: ${properties.id}`;
-
-            new maplibregl.Popup()
-                .setLngLat(coordinates)
-                .setHTML(description)
-                .addTo(map);
-
             const featureId = e.features[0].id;
 
             if (disabledCables.has(featureId)) {
@@ -117,7 +109,18 @@ window.onload = function () {
             toggleCableState(featureId, disabledCables.has(featureId));
         });
 
-        map.on('mouseenter', 'cables-lines', (e) => {
+        let hoverPopup = null;
+
+        map.on('mousemove', 'cables-lines', (e) => {
+            const coordinates = e.lngLat;
+            const properties = e.features[0].properties;
+            const description = `<strong>${properties.name}</strong><br>ID: ${properties.id}`;
+
+            if (!hoverPopup) {
+                hoverPopup = new maplibregl.Popup({ closeButton: false, closeOnClick: false }).addTo(map);
+            }
+            hoverPopup.setLngLat(coordinates).setHTML(description);
+
             map.getCanvas().style.cursor = 'pointer';
 
             if (e.features.length > 0) {
@@ -138,6 +141,11 @@ window.onload = function () {
 
         map.on('mouseleave', 'cables-lines', () => {
             map.getCanvas().style.cursor = '';
+
+            if (hoverPopup) {
+                hoverPopup.remove();
+                hoverPopup = null;
+            }
 
             if (hoveredStateId !== null) {
                 map.setFeatureState(

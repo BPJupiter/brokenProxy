@@ -251,7 +251,7 @@ static void set_json_settings(int client_fd, char *initial_buffer)
         const char *error_ptr = cJSON_GetErrorPtr();
         if (error_ptr != NULL)
         {
-            printf("Error: %s\n", error_ptr);
+            printf("CJSON Error: %s\n", error_ptr);
         }
         cJSON_Delete(payload_json);
         send(client_fd, HTTP_500, strlen(HTTP_500), 0);
@@ -560,7 +560,7 @@ cleanup:
 static void update_proxy_settings(void)
 {
     FILE *fp;
-    char buffer[1024];
+    char buffer[16384];
     cJSON *json;
     cJSON *settings;
 
@@ -591,7 +591,7 @@ static void update_proxy_settings(void)
         const char *error_ptr = cJSON_GetErrorPtr();
         if (error_ptr != NULL)
         {
-            printf("Error: %s\n", error_ptr);
+            printf("CJSON Error: %s\n", error_ptr);
         }
         cJSON_Delete(json);
         return;
