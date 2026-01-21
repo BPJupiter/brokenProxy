@@ -1,22 +1,23 @@
 /*
-#include <arpa/inet.h>
-#include <errno.h>
-#include <netinet/in.h>
-#include <resolv.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/socket.h>
-#include <sys/time.h>
-#include <unistd.h>
-#include <netdb.h>
-*/
+ #include <arpa/inet.h>
+ #include <errno.h>
+ #include <netinet/in.h>
+ #include <resolv.h>
+ #include <stdarg.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
+ #include <sys/socket.h>
+ #include <sys/time.h>
+ #include <unistd.h>
+ #include <netdb.h>
+ */
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <errno.h>
+#include <arpa/inet.h>
 #include <string.h>
 
 #include "Clay/clay.h"
@@ -187,7 +188,7 @@ short localhost(char ***answer_index)
     char lh[] = "127.0.0.1";
     *answer_index = malloc(sizeof **answer_index);
     if (*answer_index == NULL)
-        return;
+        return 0;
     (*answer_index)[0] = malloc(256 * sizeof(***answer_index));
     c_text_copy(strlen(lh) + 1, (*answer_index)[0], lh);
     return 1;
@@ -219,7 +220,7 @@ short dns_resolve(const char *host, char ***answer_index)
 {
     short n_ans = 0;
     int i = 0;
-    
+
     if (host[0] == '/')
     {
         return localhost(answer_index);
@@ -528,13 +529,14 @@ static short handle_found_answers(struct DNS_HEADER *dns,
     {
         case T_A:
             printf("Found A record.\n");
-            *answer_index = malloc(ans_count * sizeof(**answer_index));
+            *answer_index = malloc((sizeof **answer_index) * ans_count);
             for (i = 0; i < ans_count; i++)
             {
                 long *p;
-                char *addr = inet_ntoa(a.Ipv4.sin_addr);
+                char *addr;
                 p = (long *)answers[i].rdata;
                 a.Ipv4.sin_addr.s_addr = (*p);
+                addr = inet_ntoa(a.Ipv4.sin_addr);
 
                 (*answer_index)[i] = malloc(256 * sizeof(***answer_index));
                 c_text_copy(strlen(addr) + 1, (*answer_index)[i], addr);
@@ -544,7 +546,7 @@ static short handle_found_answers(struct DNS_HEADER *dns,
             return ans_count;
         break;
         case T_CNAME:
-            c_text_copy(strlen(answers[0].rdata)+1, cname_target, answers[0].rdata);
+            c_text_copy(strlen((char *)answers[0].rdata) + 1, cname_target, (char *)answers[0].rdata);
             printf("Found CNAME alias: %s. Requerying...\n", answers[0].rdata);
             dns_free_mem(dns, answers, auth, addit);
             return dns_recursive_worker(cname_target, query_type, current_root_ip, answer_index, depth++);
@@ -601,7 +603,7 @@ static short process_auth_records(struct DNS_HEADER *dns,
         }
         if (ntohs(auth[i].resource->type) != T_NS) continue;
 
-        c_text_copy(strlen(auth[i].rdata)+1, next_ns_name, auth[i].rdata);
+        c_text_copy(strlen((char *)auth[i].rdata) + 1, next_ns_name, (char *)auth[i].rdata);
 
         found_glue = 0;
         for (j = 0; j < ntohs(dns->add_count); j++)
@@ -688,7 +690,7 @@ static short process_auth_records(struct DNS_HEADER *dns,
                 retType r = {0};
                 for (k = 0; k < ns_count; k++)
                 {
-                    c_text_copy(strlen(ns_answers[k])+1, next_ns_ip, ns_answers[k]);
+                    c_text_copy(strlen(ns_answers[k]) + 1, next_ns_ip, ns_answers[k]);
 
                     if (strcmp(next_ns_ip, "127.0.0.1") != 0)
                     {
@@ -883,7 +885,7 @@ static int external_dns_is_blocked(void)
 {
     int n_ans, i;
     char **answers;
-    n_ans = dns_recursive_worker("www.google.com", T_A, current_root_ip, answers, 0);
+    n_ans = dns_recursive_worker("www.google.com", T_A, current_root_ip, &answers, 0);
     if (n_ans <= 0)
         return 1;
     for (i = 0; i < n_ans; i++)
@@ -896,7 +898,7 @@ static void set_to_local_dns(void)
 {
     char local_dns[16];
     styx_local_dns_server_get(local_dns, sizeof(local_dns));
-    c_text_copy(strlen(local_dns)+1, current_root_ip, local_dns);
+    c_text_copy(strlen(local_dns) + 1, current_root_ip, local_dns);
     return;
 }
 

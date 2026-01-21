@@ -3,6 +3,9 @@
 *.o
 *.obj
 
+# build dir
+build/*
+
 # static libraries
 *.a
 *.lib

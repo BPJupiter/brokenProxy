@@ -53,6 +53,9 @@ if(MSVC)
 else()
 	target_compile_options(${PROJECT_NAME} PRIVATE -pedantic -Wall -Wextra)
 	target_link_libraries(${PROJECT_NAME} PRIVATE m)
+
+    target_compile_options(${PROJECT_NAME} PRIVATE $<$<CONFIG:Debug>:-g> $<$<CONFIG:Debug>:-static>)
+    target_link_options(${PROJECT_NAME} PRIVATE $<$<CONFIG:Debug>:-static>)
 endif()
 
 find_package(Threads REQUIRED)

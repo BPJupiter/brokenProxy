@@ -3,7 +3,7 @@
 
 #include <stddef.h>
 
-#define DNS_DEBUG
+/* #define DNS_DEBUG */
 
 typedef enum RootServerIndex
 {

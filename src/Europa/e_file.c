@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/stat.h>
-#include "Clay/clay.h"
+#include "europa.h"
 
 #ifdef _WIN32
 #include <string.h>
@@ -11,7 +11,8 @@ void europa_pwd(char *output, uint32 output_size)
 {
     uint length;
     char *last_slash;
-    if (GetModuleFileName(NULL, output, output_size) == 0) {
+    if (GetModuleFileName(NULL, output, output_size) == 0)
+    {
         printf("Error getting module filename\n");
         return;
     }
@@ -31,7 +32,8 @@ void europa_pwd(char *output, uint32 output_size)
 
 void europa_pwd(char *output, uint32 output_size)
 {
-    if (getcwd(output, output_size) == NULL) {
+    if (getcwd(output, output_size) == NULL)
+    {
         printf("Error getting module filename\n");
         return;
     }

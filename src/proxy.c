@@ -1,19 +1,19 @@
 /*
-#include <arpa/inet.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <netdb.h>
-#include <netinet/in.h>
-#include <pthread.h>
-#include <signal.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/socket.h>
-#include <sys/time.h>
-#include <unistd.h>
-*/
+ #include <arpa/inet.h>
+ #include <errno.h>
+ #include <fcntl.h>
+ #include <netdb.h>
+ #include <netinet/in.h>
+ #include <pthread.h>
+ #include <signal.h>
+ #include <stdarg.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
+ #include <sys/socket.h>
+ #include <sys/time.h>
+ #include <unistd.h>
+ */
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -67,8 +67,8 @@ static int host_port_from_url(const char *url, char *host, int *port);
 static void send_local_file(char *filename, char *buffer, int buffer_len, int client_fd);
 static int get_content_length(const char *request);
 static void set_json_settings(int client_fd, char *initial_buffer);
-static void *tunnel_data(void *arg);
-static void *handle_client(void *arg);
+static void tunnel_data(void *arg);
+static void handle_client(void *arg);
 static void update_proxy_settings(void);
 
 static void *thread_count_mutex = NULL;
@@ -144,24 +144,24 @@ static FILE *find_localfile_path(const char *filename, const char *perms)
     char settings_dir[128] = "\0";
     FILE *fp;
     uint i = 0;
-	while (strcmp(settings_paths[i], "END") != 0)
-	{
-		strcat(settings_dir, settings_paths[i]);
-		strcat(settings_dir, filename);
-		fp = fopen(settings_dir, perms);
-		if (fp != NULL)
-			break;
-		i++;
-		settings_dir[0] = '\0';
-	}
-	c_text_copy(strlen(settings_paths[i]) + 1, settings_dir, settings_paths[i]);
-	return fp;
-    /*
-    strcat(settings_dir, filename);
-    printf("\n opening %s \n", settings_dir);
-    fp = fopen(settings_dir, perms);
+    while (strcmp(settings_paths[i], "END") != 0)
+    {
+        strcat(settings_dir, settings_paths[i]);
+        strcat(settings_dir, filename);
+        fp = fopen(settings_dir, perms);
+        if (fp != NULL)
+            break;
+        i++;
+        settings_dir[0] = '\0';
+    }
     c_text_copy(strlen(settings_paths[i]) + 1, settings_dir, settings_paths[i]);
-    return fp;*/
+    return fp;
+    /*
+       strcat(settings_dir, filename);
+       printf("\n opening %s \n", settings_dir);
+       fp = fopen(settings_dir, perms);
+       c_text_copy(strlen(settings_paths[i]) + 1, settings_dir, settings_paths[i]);
+       return fp;*/
 }
 
 static void send_local_file(char *filename, char *buffer, int buffer_len, int client_fd)
@@ -229,18 +229,19 @@ static int get_content_length(const char *request)
 
 static FILE *find_settings_path(const char *perms)
 {
-	const char *settings_paths[] = {
-		"settings/settings.json",
-		"../settings/settings.json",
-		"../../settings/settings.json",
-		"../../../settings/settings.json",
-		"END",
-	};
+    const char *settings_paths[] = {
+        "settings/settings.json",
+        "../settings/settings.json",
+        "../../settings/settings.json",
+        "../../../settings/settings.json",
+        "END",
+    };
     static boolean FOUND = FALSE;
     static char settings_dir[128] = "\0";
     FILE *fp;
     uint i = 0;
-    if (!FOUND) {
+    if (!FOUND)
+    {
         while (strcmp(settings_paths[i], "END") != 0)
         {
             fp = fopen(settings_paths[i], perms);
@@ -248,7 +249,7 @@ static FILE *find_settings_path(const char *perms)
                 break;
             i++;
         }
-        c_text_copy(strlen(settings_paths[i])+1, settings_dir, settings_paths[i]);
+        c_text_copy(strlen(settings_paths[i]) + 1, settings_dir, settings_paths[i]);
         FOUND = TRUE;
         return fp;
     }
@@ -315,7 +316,7 @@ static void set_json_settings(int client_fd, char *initial_buffer)
         return;
     }
 
-    buffer = malloc((sizeof * buffer) * BUFFER_SIZE);
+    buffer = malloc((sizeof *buffer) * BUFFER_SIZE);
     bytes_read = fread(buffer, 1, BUFFER_SIZE, fp);
     buffer[bytes_read] = '\0';
     fclose(fp);
@@ -396,7 +397,7 @@ static void set_json_settings(int client_fd, char *initial_buffer)
 }
 
 /* Tunnel data from source to destination */
-static void *tunnel_data(void *arg)
+static void tunnel_data(void *arg)
 {
     tunnel_args_t *args = (tunnel_args_t *)arg;
     char buffer[BUFFER_SIZE] = {0};
@@ -421,23 +422,23 @@ static void *tunnel_data(void *arg)
             int s = send(args->dest_handle, buffer + sent, n - sent, 0);
             if (s <= 0)
             {
-                return NULL;
+                return;
             }
             sent += s;
         }
     }
 
-    return NULL;
+    return;
 }
 
 /* Handle individual client connection */
-static void *handle_client(void *arg)
+static void handle_client(void *arg)
 {
     client_info_t *client_info = (client_info_t *)arg;
     argType a = {0};
     retType r = {0};
     VSocket client_handle = client_info->client_handle;
-    VSocket remote_handle = NULL;
+    VSocket remote_handle = 0;
 
     char buffer[BUFFER_SIZE] = {0};
     char host[512] = {0};
@@ -629,7 +630,7 @@ cleanup:
     active_thread_count--;
     europa_mutex_unlock(thread_count_mutex);
 
-    return NULL;
+    return;
 }
 
 static void update_proxy_settings(void)

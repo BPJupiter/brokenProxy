@@ -118,35 +118,35 @@ extern void exit_crash(uint i);
 
 /* -------- Text -------- */
 
-uint32			c_utf8_to_uint32(char *c, uint *pos); /* converts a string c at position pos to a uint32. pos will be modified to jump forward the number of bytes the character takes up */
-uint			c_uint32_to_utf8(uint32 character, char *out); /* converts a 32 bit unicode character to utf8. out param needs space for at least 6 8bit characters. returns number of bytes used */
+uint32          c_utf8_to_uint32(char *c, uint *pos); /* converts a string c at position pos to a uint32. pos will be modified to jump forward the number of bytes the character takes up */
+uint            c_uint32_to_utf8(uint32 character, char *out); /* converts a 32 bit unicode character to utf8. out param needs space for at least 6 8bit characters. returns number of bytes used */
 
-extern uint		c_find_next_word(char *text);
-extern boolean	c_find_word_compare(char *text_a, char *text_b);
-extern uint		c_text_copy(uint length, char *dest, char *source);
-extern boolean	c_text_compare(char *text_a, char *text_b);
-extern void		c_text_replaceall(char *text, char find, char replace);
-extern char		*c_text_copy_allocate(char *source);
-extern uint		c_word_copy(uint length, char *dest, char *source);
-extern uint		c_text_copy_until(uint length, char *dest, char *source, char *until);
-extern boolean	c_text_filter(char *text, char *filter);
-extern boolean	c_text_filter_case_insensitive(char *text, char *filter);
-extern uint		c_text_sort(char *text_a, char *text_b);
-extern boolean	c_text_unique(char *text, uint buffer_length, char *compare);
-extern char		*c_text_load(char *file_name, size_t *size);
+extern uint     c_find_next_word(char *text);
+extern boolean  c_find_word_compare(char *text_a, char *text_b);
+extern uint     c_text_copy(uint length, char *dest, const char *source);
+extern boolean  c_text_compare(char *text_a, char *text_b);
+extern void     c_text_replaceall(char *text, char find, char replace);
+extern char *c_text_copy_allocate(char *source);
+extern uint     c_word_copy(uint length, char *dest, char *source);
+extern uint     c_text_copy_until(uint length, char *dest, char *source, char *until);
+extern boolean  c_text_filter(char *text, char *filter);
+extern boolean  c_text_filter_case_insensitive(char *text, char *filter);
+extern uint     c_text_sort(char *text_a, char *text_b);
+extern boolean  c_text_unique(char *text, uint buffer_length, char *compare);
+extern char *c_text_load(char *file_name, size_t *size);
 
-extern uint		c_text_parse_hex(char *text, uint64 *output);
-extern uint		c_text_parse_decimal(char *text, uint64 *output);
-extern uint		c_text_parse_real(char *text, int64 *integer_output, double *real_output, boolean *decimal);
-extern uint		c_text_parse_double(char *text, double *real_output);
+extern uint     c_text_parse_hex(char *text, uint64 *output);
+extern uint     c_text_parse_decimal(char *text, uint64 *output);
+extern uint     c_text_parse_real(char *text, int64 *integer_output, double *real_output, boolean *decimal);
+extern uint     c_text_parse_double(char *text, double *real_output);
 
-extern void		c_print_raw(uint8 *data, uint size);
-extern void		c_fprint_raw(FILE *file, uint8 *data, uint size);
+extern void     c_print_raw(uint8 *data, uint size);
+extern void     c_fprint_raw(FILE *file, uint8 *data, uint size);
 
-extern boolean	c_text_obfuscate(char *out_buffer, uint buffer_size, char *in_buffer);
-extern void		c_text_obfuscate_print(char *in_buffer);
+extern boolean  c_text_obfuscate(char *out_buffer, uint buffer_size, char *in_buffer);
+extern void     c_text_obfuscate_print(char *in_buffer);
 
-extern void		c_bits_to_text(uint64 bits, char *text); /* Generates a 13 byte string that is easy for a human to repeat. Terminated, needs 14 characters. */
-extern uint		c_text_to_bits(uint64 *bits, char *text); /* Converts 14 byte string into a 64 bit value. Returns the number of bytes read, returns 0 if failure */ 
+extern void     c_bits_to_text(uint64 bits, char *text); /* Generates a 13 byte string that is easy for a human to repeat. Terminated, needs 14 characters. */
+extern uint     c_text_to_bits(uint64 *bits, char *text); /* Converts 14 byte string into a 64 bit value. Returns the number of bytes read, returns 0 if failure */
 
 #endif /* CLAY_H */
