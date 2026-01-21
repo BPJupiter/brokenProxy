@@ -2,12 +2,24 @@
 extern "C" {
 #endif
 
-#include "Clay/clay.h"
-
 #ifndef EUROPA_H
 #define EUROPA_H
-#include <stdlib.h>
-#include <stdio.h>
+#include <stdint.h>
+#ifndef uint
+typedef unsigned int uint;
+#endif
+#ifndef boolean
+typedef unsigned char boolean;
+#endif
+#ifndef uint64
+typedef uint64_t uint64;
+#endif
+#ifndef int64
+typedef int64_t int64;
+#endif
+#ifndef uint32
+typedef unsigned int uint32;
+#endif
 
 #ifdef _WIN32
     #define WIN32_LEAN_AND_MEAN

@@ -37,6 +37,7 @@ extern void     styx_print_error(const char *msg);
 extern boolean  styx_socket_assert(VSocket sock, const char *msg);
 
 extern boolean  styx_network_address_lookup(StyxNetworkAddress *address, const char *dns_name, uint16 default_port);
+extern boolean  styx_network_address_compare(StyxNetworkAddress *a, StyxNetworkAddress *b);
 extern void     styx_local_dns_server_get(char *dest, uint32 dest_buf_len);
 
 extern uint32   styx_string_to_ipv4(char *path);

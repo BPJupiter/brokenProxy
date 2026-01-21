@@ -7,6 +7,16 @@
 #include <stdio.h>
 #endif
 
+boolean _talos_malloc_assert(void *p, const char *file, uint32 line)
+{
+    if (NULL == p)
+    {
+        fprintf(stderr, "Failed to allocate memory: %s: %d\n", file, line);
+        return TRUE;
+    }
+    return TRUE;
+}
+
 void talos_print_error(const char *msg)
 {
 #ifdef _WIN32

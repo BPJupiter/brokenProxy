@@ -30,9 +30,6 @@
 #include "shared_context.h"
 #include "cjson/cJSON.h"
 #include "memory_usage.h"
-#ifdef C_MEMORY_DEBUG
-#include "Callisto/callisto.h"
-#endif
 
 #define PROXY_HOST "127.0.0.1"
 #define BUFFER_SIZE 16384
@@ -173,6 +170,8 @@ static void send_local_file(char *filename, char *buffer, int buffer_len, int cl
 
     long content_length;
     size_t bytes_read;
+
+    UNUSED(buffer_len);
 
     if (strcmp(filename, "/settings.json") == 0)
         strcpy(path, "settings/");
@@ -317,11 +316,8 @@ static void set_json_settings(int client_fd, char *initial_buffer)
     }
 
     buffer = malloc((sizeof *buffer) * BUFFER_SIZE);
-    if (NULL == buffer)
-    {
-        printf("Could not allocate mem!\n");
-        return;
-    }
+    talos_malloc_assert(buffer);
+
     bytes_read = fread(buffer, 1, BUFFER_SIZE, fp);
     buffer[bytes_read] = '\0';
     fclose(fp);
@@ -607,11 +603,8 @@ static void handle_client(void *arg)
         tunnel_args_t *c2r_args = malloc(sizeof(*c2r_args));
         tunnel_args_t *r2c_args = malloc(sizeof(*r2c_args));
 
-        if (NULL == c2r_args || NULL == r2c_args)
-        {
-            printf("Could not allocate memory! %s : %d\n", __FILE__, __LINE__);
-            return;
-        }
+        talos_malloc_assert(c2r_args);
+        talos_malloc_assert(r2c_args);
 
         c2r_args->source_handle = client_handle;
         c2r_args->dest_handle = remote_handle;
@@ -770,11 +763,7 @@ int proxy_start(int proxy_port)
         client_info = malloc(sizeof(*client_info));
         client_len = sizeof(client_info->client_addr);
 
-        if (NULL == client_info)
-        {
-            printf("Could not allocate memory! %s: %d\n", __FILE__, __LINE__);
-            return 1;
-        }
+        talos_malloc_assert(client_info);
 
         europa_mutex_lock(settings_mod_mutex);
         if (settings_modified)

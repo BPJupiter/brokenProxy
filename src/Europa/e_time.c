@@ -59,6 +59,7 @@ void europa_current_date_local(int64 time, uint *seconds, uint *minutes, uint *h
     time_t rawtime;
     struct tm *timeinfo;
     rawtime = (time_t)time;
+    UNUSED(rawtime);
     timeinfo = localtime(&time);
     if (NULL != seconds)
         *seconds = timeinfo->tm_sec;

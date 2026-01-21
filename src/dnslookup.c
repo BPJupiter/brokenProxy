@@ -1,18 +1,3 @@
-/*
- #include <arpa/inet.h>
- #include <errno.h>
- #include <netinet/in.h>
- #include <resolv.h>
- #include <stdarg.h>
- #include <stdio.h>
- #include <stdlib.h>
- #include <string.h>
- #include <sys/socket.h>
- #include <sys/time.h>
- #include <unistd.h>
- #include <netdb.h>
- */
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -21,6 +6,8 @@
 
 #include "Clay/clay.h"
 #include "Styx/styx.h"
+#include "Talos/talos.h"
+
 #include "dnslookup.h"
 #include "shared_context.h"
 
@@ -185,10 +172,13 @@ int main()
 short localhost(char ***answer_index)
 {
     char lh[] = "127.0.0.1";
+
     *answer_index = malloc(sizeof **answer_index);
-    if (*answer_index == NULL)
-        return 0;
+    talos_malloc_assert(*answer_index);
+
     (*answer_index)[0] = malloc(256 * sizeof(***answer_index));
+    talos_malloc_assert((*answer_index)[0]);
+
     c_text_copy(strlen(lh) + 1, (*answer_index)[0], lh);
     return 1;
 }
@@ -209,13 +199,11 @@ short quick_resolve(const char *host, char ***answer_index)
     }
 
     *answer_index = malloc(sizeof(**answer_index));
-    if (NULL == *answer_index) {
-        return 0;
-    }
+    talos_malloc_assert(*answer_index);
+
     (*answer_index)[0] = malloc((sizeof ***answer_index) * 256);
-    if (NULL == (*answer_index)[0]) {
-        return 0;
-    }
+    talos_malloc_assert((*answer_index)[0]);
+
     styx_ipv4_to_string(ipstr, &address);
     c_text_copy(strlen(ipstr) + 1, (*answer_index)[0], ipstr);
     return 1;
@@ -422,8 +410,7 @@ static void read_answers(struct DNS_HEADER *dns, struct RES_RECORD *answers, uin
         {
             case T_A:
                 answers[i].rdata = (uint8 *)malloc(ntohs(answers[i].resource->data_len) + 1);
-                if (NULL == answers[i].rdata)
-                    return;
+                talos_malloc_assert(answers[i].rdata);
                 for (j = 0; j < ntohs(answers[i].resource->data_len); j++)
                     answers[i].rdata[j] = (*reader)[j];
                 answers[i].rdata[ntohs(answers[i].resource->data_len)] = '\0';
@@ -431,8 +418,7 @@ static void read_answers(struct DNS_HEADER *dns, struct RES_RECORD *answers, uin
             break;
             case T_AAAA:
                 answers[i].rdata = (uint8 *)malloc(ntohs(answers[i].resource->data_len) + 1);
-                if (NULL == answers[i].rdata)
-                    return;
+                talos_malloc_assert(answers[i].rdata);
                 for (j = 0; j < ntohs(answers[i].resource->data_len); j++)
                     answers[i].rdata[j] = (*reader)[j];
                 answers[i].rdata[ntohs(answers[i].resource->data_len)] = '\0';
@@ -499,8 +485,8 @@ static void read_additional(struct DNS_HEADER *dns, struct RES_RECORD *addit, ui
         {
             case T_A:
                 addit[i].rdata = (uint8 *)malloc(ntohs(addit[i].resource->data_len) + 1);
-                if (NULL == addit[i].rdata)
-                    return;
+                talos_malloc_assert(addit[i].rdata);
+
                 for (j = 0; j < ntohs(addit[i].resource->data_len); j++)
                     addit[i].rdata[j] = (*reader)[j];
 
@@ -509,8 +495,8 @@ static void read_additional(struct DNS_HEADER *dns, struct RES_RECORD *addit, ui
             break;
             case T_AAAA:
                 addit[i].rdata = (uint8 *)malloc(ntohs(addit[i].resource->data_len) + 1);
-                if (NULL == addit[i].rdata)
-                    return;
+                talos_malloc_assert(addit[i].rdata);
+
                 for (j = 0; j < ntohs(addit[i].resource->data_len); j++)
                     addit[i].rdata[j] = (*reader)[j];
 
@@ -543,8 +529,8 @@ static short handle_found_answers(struct DNS_HEADER *dns,
         case T_A:
             printf("Found A record.\n");
             *answer_index = malloc((sizeof **answer_index) * ans_count);
-            if (NULL == *answer_index)
-                return 0;
+            talos_malloc_assert(*answer_index);
+
             for (i = 0; i < ans_count; i++)
             {
                 long *p;
@@ -554,6 +540,8 @@ static short handle_found_answers(struct DNS_HEADER *dns,
                 addr = inet_ntoa(a.Ipv4.sin_addr);
 
                 (*answer_index)[i] = malloc(256 * sizeof(***answer_index));
+                talos_malloc_assert((*answer_index)[i]);
+
                 c_text_copy(strlen(addr) + 1, (*answer_index)[i], addr);
             }
 
@@ -569,8 +557,8 @@ static short handle_found_answers(struct DNS_HEADER *dns,
         case T_AAAA:
             printf("Found AAAA record.\n");
             *answer_index = malloc(ans_count * sizeof(**answer_index));
-            if (NULL == *answer_index)
-                return 0;
+            talos_malloc_assert(*answer_index);
+
             for (i = 0; i < ans_count; i++)
             {
                 uint8 *p;
@@ -580,8 +568,8 @@ static short handle_found_answers(struct DNS_HEADER *dns,
                 memcpy(&a.Ipv6.sin6_addr, p, sizeof(struct in6_addr));
 
                 (*answer_index)[i] = malloc(256 * sizeof(***answer_index));
-                if ((*answer_index)[i] == NULL)
-                    return 0;
+                talos_malloc_assert((*answer_index)[i]);
+
                 r = inet_ntop(AF_INET6, &a.Ipv6.sin6_addr, (*answer_index)[i], INET6_ADDRSTRLEN);
                 if (r == NULL) strcpy((*answer_index[i]), "IPv6 Conversion Error");
             }
@@ -755,8 +743,7 @@ static uint8 *read_name(uint8 *reader, uint8 *buffer, int *count)
 
     *count = 1;
     name = malloc(256);
-    if (NULL == name)
-        return NULL;
+    talos_malloc_assert(name);
 
     name[0] = '\0';
 

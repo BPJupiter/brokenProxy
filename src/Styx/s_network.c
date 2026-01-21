@@ -275,7 +275,7 @@ boolean styx_socket_assert(VSocket sock, const char *msg)
 
 #endif
 
-static boolean styx_network_address_compare(StyxNetworkAddress *a, StyxNetworkAddress *b)
+boolean styx_network_address_compare(StyxNetworkAddress *a, StyxNetworkAddress *b)
 {
     return a->ip == b->ip && a->port == b->port;
 }

@@ -1,6 +1,5 @@
 #include <stdio.h>
 
-#include "Clay/clay.h"
 #include "Europa/europa.h"
 #include "shared_context.h"
 #include "traceroute.h"
@@ -55,7 +54,7 @@ int sharedContext_getVariable(SCVariable var, void *value)
             tContext.rtt_cutoff = gContext.rtt_cutoff;
             unlock(gContext.lock_rtt);
 
-            *(double*) value = tContext.rtt_cutoff;
+            *(double *) value = tContext.rtt_cutoff;
         break;
         case SCV_VAR_COUNT:
             *(int *)value = SCV_VAR_COUNT;

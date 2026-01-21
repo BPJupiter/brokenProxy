@@ -1,6 +1,6 @@
 #include <stdlib.h>
-#include <signal.h>
 #include <stdio.h>
+#include <signal.h>
 
 
 #include "Clay/clay.h"
@@ -9,7 +9,6 @@
 #include "proxy.h"
 
 #define PROXY_PORT 13406
-#define UNUSED(x) (void)(x)
 
 void signal_handler(int sig)
 {
@@ -29,10 +28,9 @@ int main(int argc, char *argv[])
         sharedContext_setVariable(SCV_MAX_RTT, &rtt_cutoff);
     }
 
-#if defined(C_MEMORY_DEBUG)
     c_debug_memory_init(europa_mutex_lock, europa_mutex_unlock, europa_mutex_create());
     signal(SIGINT, signal_handler);
-#endif
+
     sharedContext_init();
 
     proxy_start(proxy_port);

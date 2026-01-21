@@ -1,6 +1,5 @@
 #include <stdlib.h>
 #include <stdio.h>
-#include "Clay/clay.h"
 #include "Europa/europa.h"
 
 #ifdef _WIN32
@@ -9,6 +8,7 @@
 #include <winreg.h>
 #include <mmsystem.h>
 #include <process.h>
+#include "Clay/clay.h"
 
 void *europa_mutex_create(void)
 {
@@ -41,6 +41,7 @@ void europa_mutex_unlock(void *mutex)
 #else
 #include <pthread.h>
 #include <unistd.h>
+#include "Clay/clay.h"
 
 void *europa_mutex_create(void)
 {
@@ -213,6 +214,8 @@ EuropaThread europa_thread(void (*func)(void *data), void *data, char *name)
     pthread_t thread_id;
     EuropaThreadParams *thread_param;
 
+    UNUSED(name);
+
     thread_param = malloc(sizeof *thread_param);
     thread_param->func = func;
     thread_param->data = data;
@@ -247,7 +250,7 @@ void europa_sleepi(uint seconds, uint nano_seconds)
 void europa_sleepi(uint seconds, uint nano_seconds)
 {
     struct timespec times;
-    times.tv_sec = 0;           /* seconds */
+    times.tv_sec = seconds;
     times.tv_sec = nano_seconds;
     nanosleep(&times, NULL);
 }

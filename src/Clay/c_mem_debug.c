@@ -3,7 +3,7 @@
 #include <string.h>
 #define C_MEMORY_INTERNAL
 #define C_NO_MEMORY_DEBUG
-#include "clay.h"
+#include "Clay/clay.h"
 
 extern void c_debug_mem_print(unsigned int min_allocs);
 
@@ -61,12 +61,16 @@ void c_debug_memory_init(void (*lock)(void *mutex), void (*unlock)(void *mutex),
 void *c_debug_mem_fopen(const char *file_name, const char *mode, char *file, uint line)
 {
     FILE *f;
+    UNUSED(file);
+    UNUSED(line);
     f = fopen(file_name, mode);
     return f;
 }
 
 void c_debug_mem_fclose(void *f, char *file, uint line)
 {
+    UNUSED(file);
+    UNUSED(line);
     fclose(f);
 }
 
@@ -176,7 +180,6 @@ void *c_debug_mem_malloc(size_t size, char *file, uint line)
     uint i;
     if (c_alloc_mutex != NULL)
         c_alloc_mutex_lock(c_alloc_mutex);
-    c_debug_memory();
     pointer = malloc(size + C_MEMORY_OVER_ALLOC);
 
 #ifdef C_MEMORY_PRINT
@@ -185,7 +188,7 @@ void *c_debug_mem_malloc(size_t size, char *file, uint line)
 
     if (pointer == NULL)
     {
-        printf("MEM ERROR: Malloc returns NULL when trying to allocated %u bytes at line %u in file %s\n", size, line, file);
+        printf("MEM ERROR: Malloc returns NULL when trying to allocated %lu bytes at line %u in file %s\n", size, line, file);
         if (c_alloc_mutex != NULL)
             c_alloc_mutex_unlock(c_alloc_mutex);
         c_debug_mem_print(0);
@@ -252,11 +255,10 @@ boolean c_debug_mem_remove(void *buf, char *file, uint line, boolean realloc, si
     {
         if (f != &c_freed_memory[i] && buf == c_freed_memory[i].pointer)
         {
-            uint *a = NULL;
             if (f->realloc)
-                printf("MEM ERROR: Pointer %p in file is freed twice! It was freed on line %u in %s, was reallocated to %u bytes long on line %u in file %s\n", f->pointer, f->free_line, f->free_file, f->size, f->alloc_line, f->alloc_file);
+                printf("MEM ERROR: Pointer %p in file is freed twice! It was freed on line %u in %s, was reallocated to %lu bytes long on line %u in file %s\n", f->pointer, f->free_line, f->free_file, f->size, f->alloc_line, f->alloc_file);
             else
-                printf("MEM ERROR: Pointer %p in file is freed twice! It was freed on line %u in %s, was allocated to %u bytes long on line %u in file %s\n", f->pointer, f->free_line, f->free_file, f->size, f->alloc_line, f->alloc_file);
+                printf("MEM ERROR: Pointer %p in file is freed twice! It was freed on line %u in %s, was allocated to %lu bytes long on line %u in file %s\n", f->pointer, f->free_line, f->free_file, f->size, f->alloc_line, f->alloc_file);
 
             return FALSE;
         }
@@ -266,7 +268,6 @@ boolean c_debug_mem_remove(void *buf, char *file, uint line, boolean realloc, si
 
 void c_debug_mem_free(void *buf, char *file, uint line)
 {
-    STMemFreeBuf b;
     size_t size = 0;
     if (c_alloc_mutex != NULL)
         c_alloc_mutex_lock(c_alloc_mutex);
@@ -287,7 +288,7 @@ void c_debug_mem_free(void *buf, char *file, uint line)
 
 boolean c_debug_mem_comment(void *buf, char *comment)
 {
-    uint i, j, k;
+    uint i, j;
     if (c_alloc_mutex != NULL)
         c_alloc_mutex_lock(c_alloc_mutex);
 
@@ -309,7 +310,8 @@ boolean c_debug_mem_comment(void *buf, char *comment)
 
 void *c_debug_mem_realloc(void *pointer, size_t size, char *file, uint line)
 {
-    uint i, j = 0, k, move;
+    uint i, j = 0, k;
+    size_t move;
     void *pointer2;
 
     if (pointer == NULL)
@@ -354,7 +356,7 @@ void *c_debug_mem_realloc(void *pointer, size_t size, char *file, uint line)
     pointer2 = malloc(size + C_MEMORY_OVER_ALLOC);
     if (pointer2 == NULL)
     {
-        printf("MEM ERROR: Realloc returns NULL when trying to allocate %u bytes at line %u in file %s\n", size, line, file);
+        printf("MEM ERROR: Realloc returns NULL when trying to allocate %lu bytes at line %u in file %s\n", size, line, file);
         if (c_alloc_mutex != NULL)
             c_alloc_mutex_unlock(c_alloc_mutex);
         c_debug_mem_print(0);
@@ -362,20 +364,20 @@ void *c_debug_mem_realloc(void *pointer, size_t size, char *file, uint line)
     }
     for (i = 0; i < size + C_MEMORY_OVER_ALLOC; i++)
         ((uint8 *)pointer2)[i] = C_MEMORY_MAGIC_NUMBER + 1;
-        memcpy(pointer2, pointer, move);
+    memcpy(pointer2, pointer, move);
 
-        c_debug_mem_add(pointer2, size, file, line);
-        move = 0;
-        c_debug_mem_remove(pointer, file, line, TRUE, &move);
+    c_debug_mem_add(pointer2, size, file, line);
+    move = 0;
+    c_debug_mem_remove(pointer, file, line, TRUE, &move);
 #ifdef C_MEMORY_PRINT
-        printf("Realloc %u bytes at pointer %p to %u bytes at pointer %p at %s line %u\n", size, pointer, move, pointer2, file, line);
+    printf("Realloc %u bytes at pointer %p to %u bytes at pointer %p at %s line %u\n", size, pointer, move, pointer2, file, line);
 #endif
-        free(pointer);
+    free(pointer);
 
-        if (c_alloc_mutex != NULL)
-            c_alloc_mutex_unlock(c_alloc_mutex);
+    if (c_alloc_mutex != NULL)
+        c_alloc_mutex_unlock(c_alloc_mutex);
 
-        return pointer2;
+    return pointer2;
 }
 
 void c_debug_mem_print(uint min_allocs)
@@ -389,7 +391,7 @@ void c_debug_mem_print(uint min_allocs)
         if (min_allocs < c_alloc_lines[i].allocated - c_alloc_lines[i].freed)
         {
             printf("%s line: %u\n", c_alloc_lines[i].file, c_alloc_lines[i].line);
-            printf(" - Bytes allocated: %u\n - Allocations: %u\n - Frees: %u\n\n", c_alloc_lines[i].size, c_alloc_lines[i].allocated, c_alloc_lines[i].freed);
+            printf(" - Bytes allocated: %lu\n - Allocations: %lu\n - Frees: %lu\n\n", c_alloc_lines[i].size, c_alloc_lines[i].allocated, c_alloc_lines[i].freed);
             for (j = 0; j < c_alloc_lines[i].alloc_count; j++)
                 if (c_alloc_lines[i].allocs[j].comment != NULL)
                     printf("\t\t comment %p : %s\n", c_alloc_lines[i].allocs[j].buf, c_alloc_lines[i].allocs[j].comment);
@@ -402,8 +404,10 @@ void c_debug_mem_print(uint min_allocs)
 
 size_t c_debug_mem_footprint(uint min_allocs)
 {
-    uint i, j;
+    uint i;
     size_t size = 0;
+
+    UNUSED(min_allocs);
 
     if (c_alloc_mutex != NULL)
         c_alloc_mutex_lock(c_alloc_mutex);
@@ -531,6 +535,7 @@ void c_debug_mem_reset(void)
 void exit_crash(uint i)
 {
     uint *a = NULL;
+    UNUSED(i);
     a[0] = 0;
 }
 

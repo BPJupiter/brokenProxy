@@ -432,6 +432,8 @@ uint c_text_parse_real(char *text, int64 *integer_output, double *real_output, b
     boolean comma = FALSE, neg = FALSE, scientific_neg = FALSE;
     double divider = 0.1;
     uint i = 0, j;
+    UNUSED(comma);
+    UNUSED(scientific_neg);
     *integer_output = 0;
 
     if (text[0] == '-')
@@ -559,7 +561,7 @@ uint c_text_parse_real(char *text, int64 *integer_output, double *real_output, b
 
 uint c_text_parse_double(char *text, double *real_output)
 {
-    uint64 integer_output;
+    int64 integer_output;
     boolean decimal;
     return c_text_parse_real(text, &integer_output, real_output, &decimal);
 }
@@ -784,7 +786,7 @@ uint c_text_to_bits(uint64 *bits, char *text)
         code = c_text_to_bits_lookup_table[(unsigned char)text[i]];
         if (code < CLAY_BITS_TO_TEXT_SKIP)
         {
-            out |= code + code << pos;
+            out |= code + (code << pos);
             if (pos == 0)
             {
                 *bits = out;
@@ -801,6 +803,7 @@ uint c_text_to_bits(uint64 *bits, char *text)
 void c_bits_to_text(uint64 bits, char *text)
 {
     uint i, code;
+    UNUSED(code);
     for (i = 0; i < 13; i++)
     {
         text[i] = c_bit_to_text_lookup_table[bits & 31];

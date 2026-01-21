@@ -16,11 +16,12 @@
 #define FALSE 0
 #endif
 #if defined _WIN32
+#define WIN32_LEAN_AND_MEAN
 typedef unsigned int uint;
 #else
-#define WIN32_LEAN_AND_MEAN
 #include <sys/types.h>
 #endif
+#include <stdint.h>
 #if !defined(VERSE_TYPES)
 typedef signed char int8;
 typedef unsigned char uint8;
@@ -32,8 +33,10 @@ typedef float real32;
 typedef double real64;
 typedef unsigned char boolean;
 #endif
-typedef signed long long int64;
-typedef unsigned long long uint64;
+/* typedef signed long long int64; */
+/* typedef unsigned long long uint64; */
+typedef int64_t int64;
+typedef uint64_t uint64;
 
 /* #define F_DOUBLE_PRECISION */
 
@@ -43,6 +46,7 @@ typedef double freal;
 typedef float freal;
 #endif
 
+#define UNUSED(x) (void)(x)
 #define PI 3.141592653
 #define CLAY_IS_BIG_ENDIAN (*(short *)"\0\xff" < 0x100)
 
@@ -55,11 +59,11 @@ typedef float freal;
 #endif
 
 #if !defined(C_NO_MEMORY_DEBUG)
-/*#define C_MEMORY_DEBUG*/
-/*#define C_MEMORY_PRINT*/
+/*#define C_MEMORY_DEBUG*/ /* turns on the memory debugging system */
+/*#define C_MEMORY_PRINT*/ /* turns on the memory debugging system */
 #endif
 #if !defined(C_EXIT_CRASH)
-/*#define C_EXIT_CRASH*/
+/*#define C_EXIT_CRASH*/ /* turns on  the crash on exit */
 #endif
 
 #include <stdlib.h>
@@ -90,7 +94,7 @@ extern void c_no_debug_free(void *buf); /* Introduced as some libraries require 
 
 #define malloc(n) c_debug_mem_malloc(n, __FILE__, __LINE__)
 #define realloc(n, m) c_debug_mem_realloc(n, m, __FILE__, __LINE__)
-#define free(n) c_debug_mem_free(n)
+#define free(n) c_debug_mem_free(n, __FILE__, __LINE__)
 
 #define fopen(n, m) c_debug_mem_fopen(n, m, __FILE__, __LINE__)
 #define fclose(n) c_debug_mem_fclose(n, __FILE__, __LINE__)

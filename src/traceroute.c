@@ -123,7 +123,7 @@ double ping(const char *ip)
 
     while (fgets(line, sizeof(line), fp) != NULL);
 
-    c_text_parse_decimal(line+14, &latency);
+    c_text_parse_decimal(line + 14, &latency);
 
     printf("%s Ping on %s : %lld ms\n", PING_TAG, ip, latency);
     _pclose(fp);
