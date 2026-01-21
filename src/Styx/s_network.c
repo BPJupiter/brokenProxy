@@ -152,21 +152,6 @@ void styx_print_error(const char *msg)
 #endif
 }
 
-boolean styx_socket_assert(VSocket sock, const char *msg)
-{
-#ifdef _WIN32
-    if (sock == INVALID_SOCKET)
-    {
-#else
-    if (sock < 0)
-    {
-#endif
-        styx_print_error(msg);
-        return FALSE;
-    }
-    return TRUE;
-}
-
 boolean styx_network_address_lookup(StyxNetworkAddress *address, const char *dns_name, uint16 default_port)
 {
     struct hostent *he = NULL;
@@ -197,7 +182,10 @@ boolean styx_network_address_lookup(StyxNetworkAddress *address, const char *dns
 
 #if defined _WIN32
     if (!styx_socket_init_win32())
+    {
+        printf("Cannot resolve DNS as WSA will not startup.\n");
         return FALSE;
+    }
 #endif
 
     if (dns_name != NULL && (he = gethostbyname(dns_name)) != NULL)
@@ -206,8 +194,11 @@ boolean styx_network_address_lookup(StyxNetworkAddress *address, const char *dns
         address->ip = ntohl(address->ip);
         return TRUE;
     }
+    printf("DNS name null OR gethostbyname returned null.\n");
     return FALSE;
 }
+
+
 
 void styx_local_dns_server_get(char *dest, uint32 dest_buf_len)
 {
@@ -257,6 +248,32 @@ void styx_local_dns_server_get(char *dest, uint32 dest_buf_len)
     }
 #endif
 }
+
+#ifdef _WIN32
+
+boolean styx_socket_assert(VSocket sock, const char *msg)
+{
+    if (sock == INVALID_SOCKET)
+    {
+        styx_print_error(msg);
+        return FALSE;
+    }
+    return TRUE;
+}
+
+#else
+
+boolean styx_socket_assert(VSocket sock, const char *msg)
+{
+    if (sock < 0)
+    {
+        styx_print_error(msg);
+        return FALSE;
+    }
+    return TRUE;
+}
+
+#endif
 
 static boolean styx_network_address_compare(StyxNetworkAddress *a, StyxNetworkAddress *b)
 {

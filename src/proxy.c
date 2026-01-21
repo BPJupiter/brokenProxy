@@ -142,7 +142,7 @@ static FILE *find_localfile_path(const char *filename, const char *perms)
         "END",
     };
     char settings_dir[128] = "\0";
-    FILE *fp;
+    FILE *fp = NULL;
     uint i = 0;
     while (strcmp(settings_paths[i], "END") != 0)
     {
@@ -238,7 +238,7 @@ static FILE *find_settings_path(const char *perms)
     };
     static boolean FOUND = FALSE;
     static char settings_dir[128] = "\0";
-    FILE *fp;
+    FILE *fp = NULL;
     uint i = 0;
     if (!FOUND)
     {
@@ -317,6 +317,11 @@ static void set_json_settings(int client_fd, char *initial_buffer)
     }
 
     buffer = malloc((sizeof *buffer) * BUFFER_SIZE);
+    if (NULL == buffer)
+    {
+        printf("Could not allocate mem!\n");
+        return;
+    }
     bytes_read = fread(buffer, 1, BUFFER_SIZE, fp);
     buffer[bytes_read] = '\0';
     fclose(fp);
@@ -602,6 +607,12 @@ static void handle_client(void *arg)
         tunnel_args_t *c2r_args = malloc(sizeof(*c2r_args));
         tunnel_args_t *r2c_args = malloc(sizeof(*r2c_args));
 
+        if (NULL == c2r_args || NULL == r2c_args)
+        {
+            printf("Could not allocate memory! %s : %d\n", __FILE__, __LINE__);
+            return;
+        }
+
         c2r_args->source_handle = client_handle;
         c2r_args->dest_handle = remote_handle;
 
@@ -758,6 +769,12 @@ int proxy_start(int proxy_port)
 
         client_info = malloc(sizeof(*client_info));
         client_len = sizeof(client_info->client_addr);
+
+        if (NULL == client_info)
+        {
+            printf("Could not allocate memory! %s: %d\n", __FILE__, __LINE__);
+            return 1;
+        }
 
         europa_mutex_lock(settings_mod_mutex);
         if (settings_modified)
