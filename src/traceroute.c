@@ -2,9 +2,55 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "Clay/clay.h"
 #include "traceroute.h"
 #include "termcolor.h"
 
+#ifdef _WIN32
+double traceroute(const char *address, char *output, size_t output_len)
+{
+    FILE *fp;
+    char line[512] = { 0 };
+    char last_hop_line[512] = { 0 };
+    double latency = -1.0;
+    size_t l = 0;
+
+    char command[256] = "tracert -d -h 30 -w 1000 ";
+    strcat(command, address);
+
+    fp = _popen(command, "r");
+    if (fp == NULL)
+    {
+        printf("%s %s Failed to run traceroute command: %s\n", TR_TAG, ERR_TAG, command);
+        return -1;
+    }
+
+    output[0] = '\0';
+    while (fgets(line, sizeof(line), fp) != NULL)
+    {
+        l += strlen(line) + 1;
+        if (l + 1 > output_len)
+        {
+            printf("%s %s Output buffer too small at: %s: %d]n", TR_TAG, ERR_TAG, __FILE__, __LINE__);
+            output[0] = '\0';
+            return -1;
+        }
+        strcat(output, line);
+
+        if (line[0] > '0' && line[0] <= '9' || line[1] >= '0' && line[1] <= '9')
+            c_text_copy(sizeof(line), last_hop_line, line);
+    }
+
+    c_text_parse_double(last_hop_line, &latency);
+
+    printf("%s Traceroute on %s : %.2f ms\n", TR_TAG, address, latency);
+
+    _pclose(fp);
+
+    return latency;
+
+}
+#else
 double traceroute(const char *address, char *output, size_t output_len)
 {
     FILE *fp;
@@ -56,7 +102,35 @@ double traceroute(const char *address, char *output, size_t output_len)
 
     return latency;
 }
+#endif
 
+#ifdef _WIN32
+double ping(const char *ip)
+{
+    FILE *fp;
+    char line[512] = { 0 };
+    int64 latency = -1;
+
+    char command[256] = "ping -n 1 -w 1000 ";
+    strcat(command, ip);
+
+    fp = _popen(command, "r");
+    if (fp == NULL)
+    {
+        printf("%s %s Failed to run ping command: %s\n", PING_TAG, ERR_TAG, command);
+        return -1;
+    }
+
+    while (fgets(line, sizeof(line), fp) != NULL);
+
+    c_text_parse_decimal(line+14, &latency);
+
+    printf("%s Ping on %s : %lld ms\n", PING_TAG, ip, latency);
+    _pclose(fp);
+
+    return (double)latency;
+}
+#else
 double ping(const char *ip)
 {
     FILE *fp;
@@ -105,3 +179,4 @@ double ping(const char *ip)
 
     return latency;
 }
+#endif

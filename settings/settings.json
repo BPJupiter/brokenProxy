@@ -2,7 +2,7 @@
 	"settings":	{
 		"ping":	{
 			"pingEnabled":	true,
-			"maxLatency":	150
+			"maxLatency":	200
 		},
 		"traceroute":	{
 			"trEnabled":	false

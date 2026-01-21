@@ -1,7 +1,7 @@
 #ifndef SHARED_CONTEXT_H
 #define SHARED_CONTEXT_H
 
-#include <pthread.h>
+#include "Europa/europa.h"
 
 typedef enum
 {
@@ -30,7 +30,7 @@ typedef union
     struct resolve_args
     {
         const char *hostname;
-        unsigned char ***answer_index;
+        char ***answer_index;
     } resolve;
 
     struct tracert_args

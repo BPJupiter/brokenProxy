@@ -1,9 +1,6 @@
 #ifndef TERMCOLOR_H
 #define TERMCOLOR_H
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wpedantic"
-
 #define ANSI_COLOR_RED      "\x1b[31m"
 #define ANSI_COLOR_GREEN    "\x1b[32m"
 #define ANSI_COLOR_YELLOW   "\x1b[33m"
@@ -19,7 +16,5 @@
 
 #define ERR_TAG   ANSI_COLOR_RED "[Error]"ANSI_COLOR_END
 #define WARN_TAG  ANSI_COLOR_YELLOW "[Warning]"ANSI_COLOR_END
-
-#pragma GCC diagnostic pop
 
 #endif

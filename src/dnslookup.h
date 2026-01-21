@@ -3,6 +3,8 @@
 
 #include <stddef.h>
 
+#define DNS_DEBUG
+
 typedef enum RootServerIndex
 {
     A,
@@ -33,10 +35,10 @@ typedef enum RootServerIndex
 
 #endif
 
-short quick_resolve(const char *host, unsigned char ***answer_index);
-short dns_resolve(const char *host, unsigned char ***answer_index);
+short quick_resolve(const char *host, char ***answer_index);
+short dns_resolve(const char *host, char ***answer_index);
 /* -------- UNIMPLEMENTED ---------- */
-short local_resolve(const char *host, unsigned char ***answer_index);
+short local_resolve(const char *host, char ***answer_index);
 
 #ifdef DNS_DEBUG
 extern void print_response_info(void *);

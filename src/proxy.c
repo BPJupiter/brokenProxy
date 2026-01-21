@@ -1,3 +1,4 @@
+/*
 #include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -12,6 +13,19 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <unistd.h>
+*/
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <stdarg.h>
+#include <string.h>
+#include <errno.h>
+#include <signal.h>
+
+#include "Clay/clay.h"
+#include "Europa/europa.h"
+#include "Styx/styx.h"
+#include "Talos/talos.h"
 
 #include "shared_context.h"
 #include "cjson/cJSON.h"
@@ -23,24 +37,21 @@
 #define PROXY_HOST "127.0.0.1"
 #define BUFFER_SIZE 16384
 #define MAX_CLIENTS 8
-#define SETTINGS_DIR "settings/settings.json"
+
 
 static int proxy_printf(const char *format, ...);
 #define printf proxy_printf
 
-typedef unsigned char uchar;
-typedef unsigned int uint;
-
 typedef struct
 {
-    int client_fd;
-    struct sockaddr_in client_addr;
+    VSocket client_handle;
+    StyxSockaddrInet client_addr;
 } client_info_t;
 
 typedef struct
 {
-    int source_fd;
-    int dest_fd;
+    VSocket source_handle;
+    VSocket dest_handle;
 } tunnel_args_t;
 
 struct settings
@@ -51,22 +62,22 @@ struct settings
     double rtt;
 };
 
-static void free_answers(unsigned char **answers, int n_ans);
+static void free_answers(char **answers, int n_ans);
 static int host_port_from_url(const char *url, char *host, int *port);
-static void send_local_file(char *filename, char *buffer, int client_fd);
+static void send_local_file(char *filename, char *buffer, int buffer_len, int client_fd);
 static int get_content_length(const char *request);
 static void set_json_settings(int client_fd, char *initial_buffer);
 static void *tunnel_data(void *arg);
 static void *handle_client(void *arg);
 static void update_proxy_settings(void);
 
-static pthread_mutex_t thread_count_mutex = PTHREAD_MUTEX_INITIALIZER;
+static void *thread_count_mutex = NULL;
 static int active_thread_count = 0;
 
-static pthread_mutex_t settings_mod_mutex = PTHREAD_MUTEX_INITIALIZER;
+static void *settings_mod_mutex = NULL;
 static int settings_modified = 1;
 
-static void free_answers(unsigned char **answers, int n_ans)
+static void free_answers(char **answers, int n_ans)
 {
     int i;
     for (i = 0; i < n_ans; i++)
@@ -119,7 +130,41 @@ static int host_port_from_url(const char *url, char *host, int *port)
     }
 }
 
-static void send_local_file(char *filename, char *buffer, int client_fd)
+static FILE *find_localfile_path(const char *filename, const char *perms)
+{
+    char *settings_paths[] = {
+        "",
+        "../",
+        "../../",
+        "../../../",
+        "../../../../",
+        "../../../../../",
+        "END",
+    };
+    char settings_dir[128] = "\0";
+    FILE *fp;
+    uint i = 0;
+	while (strcmp(settings_paths[i], "END") != 0)
+	{
+		strcat(settings_dir, settings_paths[i]);
+		strcat(settings_dir, filename);
+		fp = fopen(settings_dir, perms);
+		if (fp != NULL)
+			break;
+		i++;
+		settings_dir[0] = '\0';
+	}
+	c_text_copy(strlen(settings_paths[i]) + 1, settings_dir, settings_paths[i]);
+	return fp;
+    /*
+    strcat(settings_dir, filename);
+    printf("\n opening %s \n", settings_dir);
+    fp = fopen(settings_dir, perms);
+    c_text_copy(strlen(settings_paths[i]) + 1, settings_dir, settings_paths[i]);
+    return fp;*/
+}
+
+static void send_local_file(char *filename, char *buffer, int buffer_len, int client_fd)
 {
     FILE *fp;
 
@@ -145,7 +190,7 @@ static void send_local_file(char *filename, char *buffer, int client_fd)
     else if (strstr(path, ".js") != NULL)     strcpy(extension, "text/javascript");
     else if (strstr(path, ".ico") != NULL)    strcpy(extension, "image/x-icon");
 
-    fp = fopen(path, "rb");
+    fp = find_localfile_path(path, "rb");
     if (!fp)
     {
         printf("404 File not found: %s\n", path);
@@ -182,10 +227,39 @@ static int get_content_length(const char *request)
     return 0;
 }
 
+static FILE *find_settings_path(const char *perms)
+{
+	const char *settings_paths[] = {
+		"settings/settings.json",
+		"../settings/settings.json",
+		"../../settings/settings.json",
+		"../../../settings/settings.json",
+		"END",
+	};
+    static boolean FOUND = FALSE;
+    static char settings_dir[128] = "\0";
+    FILE *fp;
+    uint i = 0;
+    if (!FOUND) {
+        while (strcmp(settings_paths[i], "END") != 0)
+        {
+            fp = fopen(settings_paths[i], perms);
+            if (fp != NULL)
+                break;
+            i++;
+        }
+        c_text_copy(strlen(settings_paths[i])+1, settings_dir, settings_paths[i]);
+        FOUND = TRUE;
+        return fp;
+    }
+    fp = fopen(settings_dir, perms);
+    return fp;
+}
+
 static void set_json_settings(int client_fd, char *initial_buffer)
 {
     FILE *fp;
-    char buffer[BUFFER_SIZE];
+    char *buffer;
     char *new_json;
 
     cJSON *file_json;
@@ -232,16 +306,17 @@ static void set_json_settings(int client_fd, char *initial_buffer)
         return;
     }
 
-    fp = fopen(SETTINGS_DIR, "r");
+    fp = find_settings_path("r");
     if (fp == NULL)
     {
-        perror("Error opening settings.json file!");
+        talos_print_error("Error opening settings.json file!");
         cJSON_Delete(payload_json);
         send(client_fd, HTTP_500, strlen(HTTP_500), 0);
         return;
     }
 
-    bytes_read = fread(buffer, 1, sizeof(buffer), fp);
+    buffer = malloc((sizeof * buffer) * BUFFER_SIZE);
+    bytes_read = fread(buffer, 1, BUFFER_SIZE, fp);
     buffer[bytes_read] = '\0';
     fclose(fp);
 
@@ -297,7 +372,7 @@ static void set_json_settings(int client_fd, char *initial_buffer)
     }
 
     new_json = cJSON_Print(file_json);
-    fp = fopen(SETTINGS_DIR, "w");
+    fp = find_settings_path("w");
     if (fp)
     {
         fputs(new_json, fp);
@@ -317,6 +392,7 @@ static void set_json_settings(int client_fd, char *initial_buffer)
     }
     cJSON_Delete(file_json);
     cJSON_Delete(payload_json);
+    free(buffer);
 }
 
 /* Tunnel data from source to destination */
@@ -329,11 +405,11 @@ static void *tunnel_data(void *arg)
 
     timeout.tv_sec = 60;
     timeout.tv_usec = 0;
-    setsockopt(args->source_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    setsockopt(args->source_handle, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 
     while (1)
     {
-        int n = recv(args->source_fd, buffer, BUFFER_SIZE, 0);
+        int n = recv(args->source_handle, buffer, BUFFER_SIZE, 0);
         if (n <= 0)
         {
             break;
@@ -342,7 +418,7 @@ static void *tunnel_data(void *arg)
         sent = 0;
         while (sent < n)
         {
-            int s = send(args->dest_fd, buffer + sent, n - sent, 0);
+            int s = send(args->dest_handle, buffer + sent, n - sent, 0);
             if (s <= 0)
             {
                 return NULL;
@@ -360,18 +436,18 @@ static void *handle_client(void *arg)
     client_info_t *client_info = (client_info_t *)arg;
     argType a = {0};
     retType r = {0};
-    int client_fd = client_info->client_fd;
-    int remote_fd = -1;
+    VSocket client_handle = client_info->client_handle;
+    VSocket remote_handle = NULL;
 
     char buffer[BUFFER_SIZE] = {0};
     char host[512] = {0};
     char first_line[1024] = {0};
     char method[16], url_buf[512], version[16];
     char *url = NULL;
-    char *first_line_end;
+    char *first_line_end = NULL;
 
-    unsigned char **answers;
-    char *destination_ip;
+    char **answers;
+    char *destination_ip = NULL;
     int n_ans;
     struct sockaddr_in remote_addr;
 
@@ -383,16 +459,16 @@ static void *handle_client(void *arg)
 
     sharedContext_getVariable(SCV_MAX_RTT, &rtt_cutoff);
 
-    pthread_mutex_lock(&thread_count_mutex);
+    europa_mutex_lock(thread_count_mutex);
     active_thread_count++;
     current_thread_count = active_thread_count;
-    pthread_mutex_unlock(&thread_count_mutex);
+    europa_mutex_unlock(thread_count_mutex);
 
     printf("\x1b[33m[Info]\x1b[0m ThreadCount: %d\n", current_thread_count);
     printf("Thread %ld: %s\n", (long)arg, get_memory_usage_str_kb());
 
     /* Receive initial request */
-    bytes_recvd = recv(client_fd, buffer, BUFFER_SIZE - 1, 0);
+    bytes_recvd = recv(client_handle, buffer, BUFFER_SIZE - 1, 0);
     if (bytes_recvd <= 0)
     {
         goto cleanup;
@@ -442,7 +518,7 @@ static void *handle_client(void *arg)
         goto cleanup;
     }
 
-    destination_ip = (char *)answers[0];
+    destination_ip = answers[0];
     printf("%s resolved to %s\n", host, destination_ip);
 
     if (strcmp(destination_ip, "127.0.0.1") != 0)
@@ -462,7 +538,7 @@ static void *handle_client(void *arg)
     /* This code sucks. But its short enough that i dont care. */
     if (strstr(first_line, "GET") != NULL)
     {
-        send_local_file(host, buffer, client_fd);
+        send_local_file(host, buffer, sizeof(buffer), client_handle);
 
         free_answers(answers, n_ans);
         goto cleanup;
@@ -470,18 +546,18 @@ static void *handle_client(void *arg)
 
     if (strstr(first_line, "POST") != NULL)
     {
-        pthread_mutex_lock(&settings_mod_mutex);
-        set_json_settings(client_fd, buffer);
+        europa_mutex_lock(settings_mod_mutex);
+        set_json_settings(client_handle, buffer);
         settings_modified = 1;
-        pthread_mutex_unlock(&settings_mod_mutex);
+        europa_mutex_unlock(settings_mod_mutex);
 
         free_answers(answers, n_ans);
         goto cleanup;
     }
 
     /* Connect to remote server */
-    remote_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (remote_fd < 0)
+    remote_handle = styx_socket_create(1, 0);
+    if (!styx_socket_assert(remote_handle, "Couldn't create remote socket "))
     {
         free_answers(answers, n_ans);
         goto cleanup;
@@ -492,8 +568,7 @@ static void *handle_client(void *arg)
     remote_addr.sin_port = htons(port);
     remote_addr.sin_addr.s_addr = inet_addr(destination_ip);
 
-    if (connect(remote_fd, (struct sockaddr *)&remote_addr, sizeof(remote_addr)) <
-        0)
+    if (connect(remote_handle, (struct sockaddr *)&remote_addr, sizeof(remote_addr)) < 0)
     {
         printf("\x1b[31m[Error]\x1b[0m Failed to connect to %s:%d - %s\n",
                destination_ip, port, strerror(errno));
@@ -507,13 +582,13 @@ static void *handle_client(void *arg)
     if (strstr(first_line, "CONNECT") != NULL)
     {
         const char *response = "HTTP/1.1 200 Connection Established\r\n\r\n";
-        send(client_fd, response, strlen(response), 0);
+        send(client_handle, response, strlen(response), 0);
         printf("Client established connection!\n");
     }
     else
     {
         /* Regular HTTP - forward the initial request */
-        send(remote_fd, buffer, bytes_recvd, 0);
+        send(remote_handle, buffer, bytes_recvd, 0);
         printf("Remote socket sent request!\n");
     }
 
@@ -521,38 +596,38 @@ static void *handle_client(void *arg)
 
     /* Create bidirectional tunnel */
     {
-        pthread_t client_to_remote_thread, remote_to_client_thread;
+        EuropaThread client_to_remote_thread, remote_to_client_thread;
 
         tunnel_args_t *c2r_args = malloc(sizeof(*c2r_args));
         tunnel_args_t *r2c_args = malloc(sizeof(*r2c_args));
 
-        c2r_args->source_fd = client_fd;
-        c2r_args->dest_fd = remote_fd;
+        c2r_args->source_handle = client_handle;
+        c2r_args->dest_handle = remote_handle;
 
-        r2c_args->source_fd = remote_fd;
-        r2c_args->dest_fd = client_fd;
+        r2c_args->source_handle = remote_handle;
+        r2c_args->dest_handle = client_handle;
 
-        pthread_create(&client_to_remote_thread, NULL, tunnel_data, c2r_args);
-        pthread_create(&remote_to_client_thread, NULL, tunnel_data, r2c_args);
+        client_to_remote_thread = europa_thread(tunnel_data, c2r_args, NULL);
+        remote_to_client_thread = europa_thread(tunnel_data, r2c_args, NULL);
 
         /* Wait for both threads to complete */
-        pthread_join(client_to_remote_thread, NULL);
-        pthread_join(remote_to_client_thread, NULL);
+        europa_join(client_to_remote_thread);
+        europa_join(remote_to_client_thread);
 
         free(c2r_args);
         free(r2c_args);
     }
 
 cleanup:
-    if (client_fd >= 0)
-        close(client_fd);
-    if (remote_fd >= 0)
-        close(remote_fd);
+    if (styx_socket_assert(client_handle, NULL))
+        styx_socket_destroy(client_handle);
+    if (styx_socket_assert(remote_handle, NULL))
+        styx_socket_destroy(remote_handle);
     free(client_info);
 
-    pthread_mutex_lock(&thread_count_mutex);
+    europa_mutex_lock(thread_count_mutex);
     active_thread_count--;
-    pthread_mutex_unlock(&thread_count_mutex);
+    europa_mutex_unlock(thread_count_mutex);
 
     return NULL;
 }
@@ -560,7 +635,7 @@ cleanup:
 static void update_proxy_settings(void)
 {
     FILE *fp;
-    char buffer[16384];
+    char buffer[BUFFER_SIZE];
     cJSON *json;
     cJSON *settings;
 
@@ -575,10 +650,10 @@ static void update_proxy_settings(void)
 
     cJSON *locDNSEnabled;
 
-    fp = fopen(SETTINGS_DIR, "r");
+    fp = find_settings_path("r");
     if (fp == NULL)
     {
-        perror("Error opening settings.json file!");
+        talos_print_error("Error opening settings.json file!");
         return;
     }
 
@@ -632,91 +707,87 @@ static void update_proxy_settings(void)
 
 int proxy_start(int proxy_port)
 {
-    int server_fd;
+    VSocket server_handle;
     struct sockaddr_in addr;
     int opt;
 
+#ifndef _WIN32
     /* Ignore SIGPIPE - prevents crash when writing to closed socket */
     signal(SIGPIPE, SIG_IGN);
+#endif
 
-    server_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_fd < 0)
-    {
-        perror("socket");
+    server_handle = styx_socket_create(TRUE, 0);
+    if (!styx_socket_assert(server_handle, "Server socket creation: "))
         exit(1);
-    }
 
     /* Set socket options */
     opt = 1;
-    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    setsockopt(server_handle, SOL_SOCKET, SO_REUSEADDR, (const char *)&opt, sizeof(opt));
 
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = inet_addr(PROXY_HOST);
     addr.sin_port = htons(proxy_port);
 
-    if (bind(server_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0)
+    if (bind(server_handle, (struct sockaddr *)&addr, sizeof(addr)) < 0)
     {
-        perror("bind");
+        styx_print_error("Bind failed. ");
         exit(1);
     }
 
-    if (listen(server_fd, MAX_CLIENTS) < 0)
+    if (listen(server_handle, MAX_CLIENTS) < 0)
     {
-        perror("listen");
+        styx_print_error("Listen failed");
         exit(1);
     }
 
     sharedContext_toggleCb(SCC_RESOLVE, 1);
+    settings_mod_mutex = europa_mutex_create();
+    thread_count_mutex = europa_mutex_create();
 
     printf("Proxy server listening on %s:%d\n", PROXY_HOST, proxy_port);
 
     /* Accept connections and spawn threads */
     while (1)
     {
-        pthread_t thread;
-        pthread_attr_t attr;
-        client_info_t *client_info;
+        EuropaThread thread = 0;
+        client_info_t *client_info = NULL;
         socklen_t client_len;
         printf("Memory (KB): %s\n", get_memory_usage_str_kb());
+
         client_info = malloc(sizeof(*client_info));
         client_len = sizeof(client_info->client_addr);
 
-        pthread_mutex_lock(&settings_mod_mutex);
+        europa_mutex_lock(settings_mod_mutex);
         if (settings_modified)
         {
             update_proxy_settings();
             settings_modified = 0;
         }
-        pthread_mutex_unlock(&settings_mod_mutex);
+        europa_mutex_unlock(settings_mod_mutex);
 
-        client_info->client_fd = accept(server_fd, (struct sockaddr *)&client_info->client_addr, &client_len);
+        client_info->client_handle = accept(server_handle, (struct sockaddr *)&client_info->client_addr.Ipv4, &client_len);
 
-        if (client_info->client_fd < 0)
+        if (!styx_socket_assert(client_info->client_handle, "Accept error"))
         {
-            perror("accept");
             free(client_info);
             continue;
         }
 
         printf("Accepted connection from %s:%d\n",
-               inet_ntoa(client_info->client_addr.sin_addr),
-               ntohs(client_info->client_addr.sin_port));
+               inet_ntoa(client_info->client_addr.Ipv4.sin_addr),
+               ntohs(client_info->client_addr.Ipv4.sin_port));
 
-        pthread_attr_init(&attr);
-        pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-
-        if (pthread_create(&thread, &attr, handle_client, client_info) != 0)
+        thread = europa_thread(handle_client, client_info, NULL);
+        if (thread == 0)
         {
-            perror("pthread_create");
-            close(client_info->client_fd);
+            talos_print_error("Thread creation");
+            styx_socket_destroy(client_info->client_handle);
             free(client_info);
         }
-
-        pthread_attr_destroy(&attr);
     }
 
-    close(server_fd);
+    styx_socket_destroy(server_handle);
     return 0;
 }
 
