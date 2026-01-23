@@ -17,38 +17,29 @@ static int dns_printf(const char *format, ...);
 struct DNS_HEADER
 {
     uint16 id;
-
     uint16 flags;
-	/*
-    uint rd : 1;
-    uint tc : 1;
-    uint aa : 1;
-    uint opcode : 4;
-    uint qr : 1;
-
-    uint rcode : 4;
-    uint cd : 1;
-    uint ad : 1;
-    uint z : 1;
-    uint ra : 1;
-    */
-
-    uint16 q_count;
+	uint16 q_count;
     uint16 ans_count;
     uint16 auth_count;
     uint16 add_count;
 };
 
-#define DNS_FLAG_QR 0x8000
+/**   0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
+*   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+*   |QR|   Opcode  |AA|TC|RD|RA| Z|AD|CD|   RCODE   |
+*   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+*/
+
+#define DNS_FLAG_QR     0x8000
 #define DNS_FLAG_OPCODE 0x7800
-#define DNS_FLAG_AA 0x0400
-#define DNS_FLAG_TC 0x0200
-#define DNS_FLAG_RD 0x0100
-#define DNS_FLAG_RA 0x0080
-#define DNS_FLAG_Z 0x0040
-#define DNS_FLAG_AD 0x0020
-#define DNS_FLAG_CD 0x0010
-#define DNS_FLAG_RCODE 0x000F
+#define DNS_FLAG_AA     0x0400
+#define DNS_FLAG_TC     0x0200
+#define DNS_FLAG_RD     0x0100
+#define DNS_FLAG_RA     0x0080
+#define DNS_FLAG_Z      0x0040
+#define DNS_FLAG_AD     0x0020
+#define DNS_FLAG_CD     0x0010
+#define DNS_FLAG_RCODE  0x000F
 
 struct SOA_DATA
 {
