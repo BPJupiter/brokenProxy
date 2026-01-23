@@ -14,16 +14,12 @@
 static int dns_printf(const char *format, ...);
 #define printf dns_printf
 
-typedef union
-{
-    struct sockaddr_in ipv4;
-    struct sockaddr_in6 ipv6;
-} sockaddr_inet;
-
 struct DNS_HEADER
 {
     uint16 id;
 
+    uint16 flags;
+	/*
     uint rd : 1;
     uint tc : 1;
     uint aa : 1;
@@ -35,12 +31,24 @@ struct DNS_HEADER
     uint ad : 1;
     uint z : 1;
     uint ra : 1;
+    */
 
     uint16 q_count;
     uint16 ans_count;
     uint16 auth_count;
     uint16 add_count;
 };
+
+#define DNS_FLAG_QR 0x8000
+#define DNS_FLAG_OPCODE 0x7800
+#define DNS_FLAG_AA 0x0400
+#define DNS_FLAG_TC 0x0200
+#define DNS_FLAG_RD 0x0100
+#define DNS_FLAG_RA 0x0080
+#define DNS_FLAG_Z 0x0040
+#define DNS_FLAG_AD 0x0020
+#define DNS_FLAG_CD 0x0010
+#define DNS_FLAG_RCODE 0x000F
 
 struct SOA_DATA
 {
@@ -366,19 +374,12 @@ static size_t init_dns_query(uint8 *buf, const char *host, int query_type)
 {
     struct DNS_HEADER *dns = (struct DNS_HEADER *)buf;
     uint8 *qname;
+    uint16 f = 0;
     struct QUERY *qinfo = {0};
 
     dns->id = (uint16)htons(getpid());
-    dns->qr = 0;
-    dns->opcode = 0;
-    dns->aa = 0;
-    dns->tc = 0;
-    dns->rd = 1;
-    dns->ra = 0;
-    dns->z = 0;
-    dns->ad = 0;
-    dns->cd = 0;
-    dns->rcode = 0;
+    f |= DNS_FLAG_RD;
+    dns->flags = htons(f);
     dns->q_count = htons(1); /* we have 1 question */
     dns->ans_count = 0;
     dns->auth_count = 0;
