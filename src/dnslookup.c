@@ -14,7 +14,7 @@
 static int dns_printf(const char *format, ...);
 #define printf dns_printf
 
-struct DNS_HEADER
+typedef struct
 {
     uint16 id;
     uint16 flags;
@@ -22,7 +22,7 @@ struct DNS_HEADER
     uint16 ans_count;
     uint16 auth_count;
     uint16 add_count;
-};
+} DNS_HEADER;
 
 /**   0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
 *   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
@@ -41,7 +41,7 @@ struct DNS_HEADER
 #define DNS_FLAG_CD     0x0010
 #define DNS_FLAG_RCODE  0x000F
 
-struct SOA_DATA
+typedef struct
 {
     uint8 *mname;
     uint8 *rname;
@@ -50,60 +50,59 @@ struct SOA_DATA
     uint retry;
     uint expire;
     uint minimum;
-};
+} SOA_DATA;
 
 /* Constant sized fields of query structure */
-struct QUERY
+typedef struct
 {
     uint16 qtype;
     uint16 qclass;
-};
+} QUERY;
 
 /* Constant sized fields of the resource record structure */
 #pragma pack(push, 1)
-struct R_DATA
+typedef struct
 {
     uint16 type;
     uint16 _class;
     uint ttl;
     uint16 data_len;
-};
+} R_DATA;
 #pragma pack(pop)
 
 /* Pointers to resource record contents */
-struct RES_RECORD
+typedef struct
 {
     uint8 *name;
-    struct R_DATA *resource;
+    R_DATA *resource;
     uint8 *rdata;
-};
+} RES_RECORD;
 
 /* Structure of a query */
-struct QUESTION
+typedef struct
 {
     char *name;
-    struct QUERY *ques;
-};
+    QUERY *ques;
+} QUESTION;
 
 static short dns_recursive_worker(const char *host, int query_type, char *current_ns_ip, char ***answer_index, int depth);
 static size_t init_dns_query(uint8 *buf, const char *host, int query_type);
-static void read_answers(struct DNS_HEADER *dns, struct RES_RECORD *answers, uint8 **reader, uint8 *buf, int *stop);
-static void read_authorities(struct DNS_HEADER *dns, struct RES_RECORD *auth, uint8 **reader, uint8 *buf, int *stop);
-static void read_additional(struct DNS_HEADER *dns, struct RES_RECORD *addit, uint8 **reader, uint8 *buf, int *stop);
-static short handle_found_answers(struct DNS_HEADER *dns,
-                                  struct RES_RECORD *answers,
-                                  struct RES_RECORD *auth,
-                                  struct RES_RECORD *addit,
+static void read_answers(DNS_HEADER *dns, RES_RECORD *answers, uint8 **reader, uint8 *buf, int *stop);
+static void read_authorities(DNS_HEADER *dns, RES_RECORD *auth, uint8 **reader, uint8 *buf, int *stop);
+static void read_additional(DNS_HEADER *dns, RES_RECORD *addit, uint8 **reader, uint8 *buf, int *stop);
+static short handle_found_answers(DNS_HEADER *dns,
+                                  RES_RECORD *answers,
+                                  RES_RECORD *auth,
+                                  RES_RECORD *addit,
                                   char ***answer_index, int query_type, int depth);
-static short process_auth_records(struct DNS_HEADER *dns,
-                                  struct RES_RECORD *answers,
-                                  struct RES_RECORD *auth,
-                                  struct RES_RECORD *addit,
+static short process_auth_records(DNS_HEADER *dns,
+                                  RES_RECORD *answers,
+                                  RES_RECORD *auth,
+                                  RES_RECORD *addit,
                                   const char *host, int query_type, char ***answer_index, int depth);
 static void  change_to_dns_name_format(uint8 *, const char *);
 static uint8 *read_name(uint8 *, uint8 *, int *);
-static void  dns_free_mem(struct DNS_HEADER *dns, struct RES_RECORD *answers, struct RES_RECORD *auth,
-                          struct RES_RECORD *addit);
+static void  dns_free_mem(DNS_HEADER *dns, RES_RECORD *answers, RES_RECORD *auth, RES_RECORD *addit);
 static int   external_dns_is_blocked(void);
 static void  set_to_local_dns(void);
 
@@ -266,10 +265,10 @@ static short dns_recursive_worker(const char *host, int query_type, char *ns_ip,
 {
     uint8 buf[65536] = {0};
     uint8 *qname, *reader;
-    struct RES_RECORD answers[20] = {0};
-    struct RES_RECORD auth[20] = {0};
-    struct RES_RECORD addit[20] = {0};
-    struct DNS_HEADER *dns = NULL;
+    RES_RECORD answers[20] = {0};
+    RES_RECORD auth[20] = {0};
+    RES_RECORD addit[20] = {0};
+    DNS_HEADER *dns = NULL;
     VSocket s;
 
     StyxSockaddrInet a = {0};
@@ -296,8 +295,8 @@ static short dns_recursive_worker(const char *host, int query_type, char *ns_ip,
     styx_socket_set_timeout(s, 5);
 
     send_size = init_dns_query(buf, host, query_type);
-    dns = (struct DNS_HEADER *)buf;
-    qname = &buf[sizeof(struct DNS_HEADER)];
+    dns = (DNS_HEADER *)buf;
+    qname = &buf[sizeof(DNS_HEADER)];
 
     printf("Querying NS: %s\n", inet_ntoa(dest.Ipv4.sin_addr));
 
@@ -337,7 +336,7 @@ static short dns_recursive_worker(const char *host, int query_type, char *ns_ip,
 #endif
 
     /* move ahead of dns header and query field */
-    reader = &buf[sizeof(struct DNS_HEADER) + (strlen((const char *)qname) + 1) + sizeof(struct QUERY)];
+    reader = &buf[sizeof(DNS_HEADER) + (strlen((const char *)qname) + 1) + sizeof(QUERY)];
     stop = 0;
 
     read_answers(dns, answers, &reader, buf, &stop);
@@ -363,10 +362,10 @@ static short dns_recursive_worker(const char *host, int query_type, char *ns_ip,
 
 static size_t init_dns_query(uint8 *buf, const char *host, int query_type)
 {
-    struct DNS_HEADER *dns = (struct DNS_HEADER *)buf;
+    DNS_HEADER *dns = (DNS_HEADER *)buf;
     uint8 *qname;
     uint16 f = 0;
-    struct QUERY *qinfo = {0};
+    QUERY *qinfo = {0};
 
     dns->id = (uint16)htons(getpid());
     f |= DNS_FLAG_RD;
@@ -376,18 +375,18 @@ static size_t init_dns_query(uint8 *buf, const char *host, int query_type)
     dns->auth_count = 0;
     dns->add_count = 0;
 
-    qname = (uint8 *)&buf[sizeof(struct DNS_HEADER)];
+    qname = (uint8 *)&buf[sizeof(DNS_HEADER)];
     change_to_dns_name_format(qname, host);
 
-    qinfo = (struct QUERY *)&buf[sizeof(struct DNS_HEADER) + (strlen((const char *)qname) + 1)]; /* fill */
+    qinfo = (QUERY *)&buf[sizeof(DNS_HEADER) + (strlen((const char *)qname) + 1)]; /* fill */
 
     qinfo->qtype = htons(query_type);
     qinfo->qclass = htons(1); /* it is indeed internet */
 
-    return sizeof(struct DNS_HEADER) + (strlen((const char *)qname) + 1) + sizeof(struct QUERY);
+    return sizeof(DNS_HEADER) + (strlen((const char *)qname) + 1) + sizeof(QUERY);
 }
 
-static void read_answers(struct DNS_HEADER *dns, struct RES_RECORD *answers, uint8 **reader, uint8 *buf, int *stop)
+static void read_answers(DNS_HEADER *dns, RES_RECORD *answers, uint8 **reader, uint8 *buf, int *stop)
 {
     int i, j;
     for (i = 0; i < ntohs(dns->ans_count); i++)
@@ -395,8 +394,8 @@ static void read_answers(struct DNS_HEADER *dns, struct RES_RECORD *answers, uin
         answers[i].name = read_name(*reader, buf, stop);
         *reader = *reader + *stop;
 
-        answers[i].resource = (struct R_DATA *)*reader;
-        *reader = *reader + sizeof(struct R_DATA);
+        answers[i].resource = (R_DATA *)*reader;
+        *reader = *reader + sizeof(R_DATA);
 
         switch (ntohs(answers[i].resource->type))
         {
@@ -424,7 +423,7 @@ static void read_answers(struct DNS_HEADER *dns, struct RES_RECORD *answers, uin
     }
 }
 
-static void read_authorities(struct DNS_HEADER *dns, struct RES_RECORD *auth, uint8 **reader, uint8 *buf, int *stop)
+static void read_authorities(DNS_HEADER *dns, RES_RECORD *auth, uint8 **reader, uint8 *buf, int *stop)
 {
     int i;
     for (i = 0; i < ntohs(dns->auth_count); i++)
@@ -432,8 +431,8 @@ static void read_authorities(struct DNS_HEADER *dns, struct RES_RECORD *auth, ui
         auth[i].name = read_name(*reader, buf, stop);
         *reader += *stop;
 
-        auth[i].resource = (struct R_DATA *)*reader;
-        *reader += sizeof(struct R_DATA);
+        auth[i].resource = (R_DATA *)*reader;
+        *reader += sizeof(R_DATA);
 
         switch (ntohs(auth[i].resource->type))
         {
@@ -462,7 +461,7 @@ static void read_authorities(struct DNS_HEADER *dns, struct RES_RECORD *auth, ui
     }
 }
 
-static void read_additional(struct DNS_HEADER *dns, struct RES_RECORD *addit, uint8 **reader, uint8 *buf, int *stop)
+static void read_additional(DNS_HEADER *dns, RES_RECORD *addit, uint8 **reader, uint8 *buf, int *stop)
 {
     int i, j;
     for (i = 0; i < ntohs(dns->add_count); i++)
@@ -470,8 +469,8 @@ static void read_additional(struct DNS_HEADER *dns, struct RES_RECORD *addit, ui
         addit[i].name = read_name(*reader, buf, stop);
         *reader += *stop;
 
-        addit[i].resource = (struct R_DATA *)*reader;
-        *reader += sizeof(struct R_DATA);
+        addit[i].resource = (R_DATA *)*reader;
+        *reader += sizeof(R_DATA);
 
         switch (ntohs(addit[i].resource->type))
         {
@@ -503,10 +502,10 @@ static void read_additional(struct DNS_HEADER *dns, struct RES_RECORD *addit, ui
     }
 }
 
-static short handle_found_answers(struct DNS_HEADER *dns,
-                                  struct RES_RECORD *answers,
-                                  struct RES_RECORD *auth,
-                                  struct RES_RECORD *addit,
+static short handle_found_answers(DNS_HEADER *dns,
+                                  RES_RECORD *answers,
+                                  RES_RECORD *auth,
+                                  RES_RECORD *addit,
                                   char ***answer_index, int query_type, int depth)
 {
     StyxSockaddrInet a = {0};
@@ -578,10 +577,10 @@ static short handle_found_answers(struct DNS_HEADER *dns,
     }
 }
 
-static short process_auth_records(struct DNS_HEADER *dns,
-                                  struct RES_RECORD *answers,
-                                  struct RES_RECORD *auth,
-                                  struct RES_RECORD *addit,
+static short process_auth_records(DNS_HEADER *dns,
+                                  RES_RECORD *answers,
+                                  RES_RECORD *auth,
+                                  RES_RECORD *addit,
                                   const char *host, int query_type, char ***answer_index, int depth)
 {
     StyxSockaddrInet a = {0};
@@ -795,7 +794,7 @@ static void change_to_dns_name_format(uint8 *dns, const char *hostname)
     unsigned long lock = 0;
     char host[256] = {0};
     unsigned long i;
-    strcpy(host, hostname);
+    c_text_copy(strlen(hostname) + 1, host, hostname);
     strcat((char *)host, ".");
 
     for (i = 0; i < strlen((char *)host); i++)
@@ -829,7 +828,7 @@ static int dns_printf(const char *format, ...)
     return ret;
 }
 
-static void dns_free_mem(struct DNS_HEADER *dns, struct RES_RECORD *answers, struct RES_RECORD *auth, struct RES_RECORD *addit)
+static void dns_free_mem(DNS_HEADER *dns, RES_RECORD *answers, RES_RECORD *auth, RES_RECORD *addit)
 {
     int ans_count = ntohs(dns->ans_count);
     int auth_count = ntohs(dns->auth_count);
@@ -905,7 +904,7 @@ static void set_to_local_dns(void)
 /* -------------- debug printing ------------------ */
 void print_response_info(void *dns_ptr)
 {
-    struct DNS_HEADER *dns = (struct DNS_HEADER *)dns_ptr;
+    DNS_HEADER *dns = (DNS_HEADER *)dns_ptr;
     printf("The response contains : \n");
     printf("%d Questions.\n", ntohs(dns->q_count));
     printf("%d Answers.\n", ntohs(dns->ans_count));
@@ -915,10 +914,10 @@ void print_response_info(void *dns_ptr)
 
 void print_response_contents(void *dns_ptr, void *answers_ptr, void *auth_ptr, void *addit_ptr, void *a_ptr)
 {
-    struct DNS_HEADER *dns = (struct DNS_HEADER *)dns_ptr;
-    struct RES_RECORD *answers = (struct RES_RECORD *)answers_ptr;
-    struct RES_RECORD *auth = (struct RES_RECORD *)auth_ptr;
-    struct RES_RECORD *addit = (struct RES_RECORD *)addit_ptr;
+    DNS_HEADER *dns = (DNS_HEADER *)dns_ptr;
+    RES_RECORD *answers = (RES_RECORD *)answers_ptr;
+    RES_RECORD *auth = (RES_RECORD *)auth_ptr;
+    RES_RECORD *addit = (RES_RECORD *)addit_ptr;
     StyxSockaddrInet a = *((StyxSockaddrInet *)a_ptr);
 
     int i;
