@@ -30,7 +30,7 @@ typedef union
     struct resolve_args
     {
         const char *hostname;
-        char ***answer_index;
+        uint *n_ans;
     } resolve;
 
     struct tracert_args
@@ -49,7 +49,7 @@ typedef union
 
 typedef union
 {
-    short resolve;
+    char **resolve;
     double tracert;
     double ping;
 } retType;

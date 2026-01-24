@@ -1,20 +1,3 @@
-/*
- #include <arpa/inet.h>
- #include <errno.h>
- #include <fcntl.h>
- #include <netdb.h>
- #include <netinet/in.h>
- #include <pthread.h>
- #include <signal.h>
- #include <stdarg.h>
- #include <stdio.h>
- #include <stdlib.h>
- #include <string.h>
- #include <sys/socket.h>
- #include <sys/time.h>
- #include <unistd.h>
- */
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -448,9 +431,9 @@ static void handle_client(void *arg)
     char *url = NULL;
     char *first_line_end = NULL;
 
-    char **answers;
+    char **answers = NULL;
     char *destination_ip = NULL;
-    int n_ans;
+    uint n_ans = 0;
     struct sockaddr_in remote_addr;
 
     int first_line_len;
@@ -504,9 +487,9 @@ static void handle_client(void *arg)
 
     /* Resolve hostname using custom DNS resolver */
     a.resolve.hostname = host;
-    a.resolve.answer_index = &answers;
+    a.resolve.n_ans = &n_ans;
     sharedContext_execCb(SCC_RESOLVE, &r, &a);
-    n_ans = r.resolve;
+    answers = r.resolve;
 
     if (n_ans == (int)((unsigned short)-1))
     {

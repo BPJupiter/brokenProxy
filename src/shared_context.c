@@ -10,7 +10,7 @@ typedef struct SharedContext
     void *lock_rtt;
     double rtt_cutoff;
     void *lock_resolve;
-    short (*resolve_cb)(const char *hostname, char ***answer_index);
+    char **(*resolve_cb)(const char *hostname, uint *n_ans);
     void *lock_tracert;
     double (*tracert_cb)(const char *ip, char *out_buf, size_t out_size);
     void *lock_ping;
@@ -92,16 +92,16 @@ int sharedContext_toggleCb(SCCallback cb, char enabled)
             switch (enabled)
             {
                 case RS_QUICK:
-                    tContext.resolve_cb = quick_resolve;
+                    tContext.resolve_cb = dns_resolve_recursive_local;
                 break;
                 case RS_FULL:
-                    tContext.resolve_cb = dns_resolve;
+                    tContext.resolve_cb = dns_resolve_iterative_root;
                 break;
                 case RS_LOCAL: /* UNIMPLEMENTED */
-                    tContext.resolve_cb = local_resolve;
+                    tContext.resolve_cb = dns_resolve_iterative_local;
                 break;
                 case RS_COUNT:
-                    tContext.resolve_cb = quick_resolve;
+                    tContext.resolve_cb = dns_resolve_recursive_local;
                     success = 1;
                 break;
             }
@@ -146,7 +146,7 @@ int sharedContext_execCb(SCCallback cb, retType *result, argType *args)
             a = *args;
             if (tContext.resolve_cb != NULL)
             {
-                r.resolve = tContext.resolve_cb(a.resolve.hostname, a.resolve.answer_index);
+                r.resolve = tContext.resolve_cb(a.resolve.hostname, a.resolve.n_ans);
                 if (result != NULL)
                     result->resolve = r.resolve;
             }

@@ -85,25 +85,26 @@ typedef struct
     QUERY *ques;
 } QUESTION;
 
-static short dns_recursive_worker(const char *host, int query_type, char *current_ns_ip, char ***answer_index, int depth);
+static char **dns_iterative_root_worker(const char *host, int query_type, char *current_ns_ip, uint *n_ans, uint depth); /* Confusing naming; Function is recursive in the programming sense. Overall resolves DNS through the iterative resolution process. */
 static size_t init_dns_query(uint8 *buf, const char *host, int query_type);
 static void read_answers(DNS_HEADER *dns, RES_RECORD *answers, uint8 **reader, uint8 *buf, int *stop);
 static void read_authorities(DNS_HEADER *dns, RES_RECORD *auth, uint8 **reader, uint8 *buf, int *stop);
 static void read_additional(DNS_HEADER *dns, RES_RECORD *addit, uint8 **reader, uint8 *buf, int *stop);
-static short handle_found_answers(DNS_HEADER *dns,
+static char **handle_found_answers(DNS_HEADER *dns,
                                   RES_RECORD *answers,
                                   RES_RECORD *auth,
                                   RES_RECORD *addit,
-                                  char ***answer_index, int query_type, int depth);
-static short process_auth_records(DNS_HEADER *dns,
+                                  int query_type, uint *n_ans, uint depth);
+static char **process_auth_records(DNS_HEADER *dns,
                                   RES_RECORD *answers,
                                   RES_RECORD *auth,
                                   RES_RECORD *addit,
-                                  const char *host, int query_type, char ***answer_index, int depth);
+                                  const char *host, int query_type, uint *n_ans, uint depth);
+static char **localhost(uint *n_ans);
 static void  change_to_dns_name_format(uint8 *, const char *);
 static uint8 *read_name(uint8 *, uint8 *, int *);
 static void  dns_free_mem(DNS_HEADER *dns, RES_RECORD *answers, RES_RECORD *auth, RES_RECORD *addit);
-static int   external_dns_is_blocked(void);
+static boolean external_dns_is_blocked(void);
 static void  set_to_local_dns(void);
 
 void print_response_contents(void *dns_ptr, void *answers_ptr, void *auth_ptr, void *addit_ptr, void *a_ptr);
@@ -123,6 +124,37 @@ char RootServers[][16] = {
     "199.7.83.42",    /* L */
     "202.12.27.33",   /* M */
 };
+
+typedef enum RootServerIndex
+{
+    A,
+    B,
+    C,
+    D,
+    E,
+    F,
+    G,
+    H,
+    I,
+    J,
+    K,
+    L,
+    M,
+    RSI_COUNT
+} RootServerIndex;
+
+#ifndef _ARPA_NAMESER_H_
+
+#define T_A 1     /* Ipv4 address */
+#define T_NS 2    /* Nameserver */
+#define T_CNAME 5 /* Canonical name */
+#define T_SOA 6   /* Start of authority zone */
+#define T_PTR 12  /* Domain name pointer */
+#define T_MX 15   /* Mail server */
+#define T_AAAA 28 /* IPv6 address */
+
+#endif
+
 int dns_server_count = 16;
 
 char current_root_ip[16];
@@ -167,54 +199,61 @@ int main()
 }
 #endif
 
-short localhost(char ***answer_index)
+static char **localhost(uint *n_ans)
 {
+    char **answer_index = NULL;
     char lh[] = "127.0.0.1";
 
-    *answer_index = malloc(sizeof **answer_index);
-    talos_malloc_assert(*answer_index);
+    answer_index = malloc(1 * (sizeof *answer_index));
+    talos_malloc_assert(answer_index);
 
-    (*answer_index)[0] = malloc(256 * sizeof(***answer_index));
-    talos_malloc_assert((*answer_index)[0]);
+    answer_index[0] = malloc(256 * sizeof(**answer_index));
+    talos_malloc_assert(answer_index[0]);
 
-    c_text_copy(strlen(lh) + 1, (*answer_index)[0], lh);
-    return 1;
+    c_text_copy(strlen(lh) + 1, answer_index[0], lh);
+
+    *n_ans = 1;
+    return answer_index;
 }
 
-short quick_resolve(const char *host, char ***answer_index)
+char **dns_resolve_recursive_local(const char *host, uint *n_ans)
 {
+    char **answer_index = NULL;
     StyxNetworkAddress address;
     char ipstr[16];
     if (host[0] == '/')
     {
-        return localhost(answer_index);
+        return localhost(n_ans);
     }
 
     if (!styx_network_address_lookup(&address, host, 443))
     {
         printf("Quick Resolve: Could not resolve!\n");
-        return 0;
+        *n_ans = 0;
+        return NULL;
     }
 
-    *answer_index = malloc(sizeof(**answer_index));
-    talos_malloc_assert(*answer_index);
+    answer_index = malloc(sizeof(*answer_index));
+    talos_malloc_assert(answer_index);
 
-    (*answer_index)[0] = malloc((sizeof ***answer_index) * 256);
-    talos_malloc_assert((*answer_index)[0]);
+    answer_index[0] = malloc((sizeof **answer_index) * 256);
+    talos_malloc_assert(answer_index[0]);
 
     styx_ipv4_to_string(ipstr, &address);
-    c_text_copy(strlen(ipstr) + 1, (*answer_index)[0], ipstr);
-    return 1;
+    c_text_copy(strlen(ipstr) + 1, answer_index[0], ipstr);
+
+    *n_ans = 1;
+    return answer_index;
 }
 
-short dns_resolve(const char *host, char ***answer_index)
+char **dns_resolve_iterative_root(const char *host, uint *n_ans)
 {
-    short n_ans = 0;
     int i = 0;
+    char **answer_index = NULL;
 
     if (host[0] == '/')
     {
-        return localhost(answer_index);
+        return localhost(n_ans);
     }
 
     if (!root_server_found && strcmp(host, "127.0.0.1") != 0)
@@ -240,28 +279,27 @@ short dns_resolve(const char *host, char ***answer_index)
         strcpy(current_root_ip, RootServers[i]);
         root_server_found = 1;
     }
-    n_ans = dns_recursive_worker(host, T_A, current_root_ip, answer_index, 0);
-    if (n_ans <= 0)
+    answer_index = dns_iterative_root_worker(host, T_A, current_root_ip, n_ans, 0);
+    if (*n_ans <= 0)
     {
         printf("Could not resolve!\n");
-        return 0;
     }
-    else
-        return n_ans;
+	return answer_index;
 }
 
 /* --------- UNIMPLEMENTED ---------- */
-short local_resolve(const char *host, char ***answer_index)
+char **dns_resolve_iterative_local(const char *host, uint *n_ans)
 {
     if (host[0] == '/')
     {
-        return localhost(answer_index);
+        return localhost(n_ans);
     }
-    return 0;
+    *n_ans = 0;
+    return NULL;
 }
 
 /* Perform a DNS query by sending a packet */
-static short dns_recursive_worker(const char *host, int query_type, char *ns_ip, char ***answer_index, int depth)
+static char **dns_iterative_root_worker(const char *host, int query_type, char *ns_ip, uint *n_ans, uint depth)
 {
     uint8 buf[65536] = {0};
     uint8 *qname, *reader;
@@ -281,7 +319,9 @@ static short dns_recursive_worker(const char *host, int query_type, char *ns_ip,
     if (depth > 10)
     {
         printf("\x1b[31m[Loop Detected]\x1b[0m Maximum recursion depth exceeded for %s\n", host);
-        return 0;
+
+        *n_ans = 0;
+        return NULL;
     }
 
     printf("Starting iterative resolution for: %s\n", host);
@@ -302,10 +342,12 @@ static short dns_recursive_worker(const char *host, int query_type, char *ns_ip,
 
     if (sendto(s, (char *)buf, send_size, 0, (struct sockaddr *)&dest, sizeof(dest)) < 0)
     {
-        perror("sendto failed");
+        talos_print_error("sendto failed");
 
         dns_free_mem(dns, answers, auth, addit);
-        return 0;
+
+        *n_ans = 0;
+        return NULL;
     }
 
     /* Recv ans */
@@ -321,10 +363,12 @@ static short dns_recursive_worker(const char *host, int query_type, char *ns_ip,
     {
         if (errno == EAGAIN) printf("\x1b[33m[Timeout]\x1b[0m Recvieve from %s timed out.\n", inet_ntoa(dest.Ipv4.sin_addr));
         else
-            perror("recvfrom failed");
+			talos_print_error("recvfrom failed");
 
         dns_free_mem(dns, answers, auth, addit);
-        return 0;
+
+        *n_ans = 0;
+        return NULL;
     }
 
     if (ntohs(dns->ans_count) > 20)  dns->ans_count = htons(20);
@@ -348,16 +392,18 @@ static short dns_recursive_worker(const char *host, int query_type, char *ns_ip,
 #endif
 
     if (ntohs(dns->ans_count) > 0)
-        return handle_found_answers(dns, answers, auth, addit, answer_index, query_type, depth);
+        return handle_found_answers(dns, answers, auth, addit, query_type, n_ans, depth);
 
     if (ntohs(dns->auth_count) > 0)
-        return process_auth_records(dns, answers, auth, addit, host, query_type, answer_index, depth);
+        return process_auth_records(dns, answers, auth, addit, host, query_type, n_ans, depth);
 
     printf("No answer or authority records found. Cannot resolve iteratively.\n");
     print_response_contents((void *)dns, (void *)answers, (void *)auth, (void *)addit, (void *)&a);
 
     dns_free_mem(dns, answers, auth, addit);
-    return 0;
+
+    *n_ans = 0;
+    return NULL;
 }
 
 static size_t init_dns_query(uint8 *buf, const char *host, int query_type)
@@ -502,15 +548,16 @@ static void read_additional(DNS_HEADER *dns, RES_RECORD *addit, uint8 **reader, 
     }
 }
 
-static short handle_found_answers(DNS_HEADER *dns,
+static char **handle_found_answers(DNS_HEADER *dns,
                                   RES_RECORD *answers,
                                   RES_RECORD *auth,
                                   RES_RECORD *addit,
-                                  char ***answer_index, int query_type, int depth)
+                                  int query_type, uint *n_ans, uint depth)
 {
+    char **answer_index = NULL;
     StyxSockaddrInet a = {0};
     char cname_target[256] = {0};
-    int ans_count;
+    uint ans_count;
     int i;
 
     ans_count = ntohs(dns->ans_count);
@@ -519,8 +566,8 @@ static short handle_found_answers(DNS_HEADER *dns,
     {
         case T_A:
             printf("Found A record.\n");
-            *answer_index = malloc((sizeof **answer_index) * ans_count);
-            talos_malloc_assert(*answer_index);
+            answer_index = malloc((sizeof *answer_index) * ans_count);
+            talos_malloc_assert(answer_index);
 
             for (i = 0; i < ans_count; i++)
             {
@@ -530,25 +577,26 @@ static short handle_found_answers(DNS_HEADER *dns,
                 a.Ipv4.sin_addr.s_addr = (*p);
                 addr = inet_ntoa(a.Ipv4.sin_addr);
 
-                (*answer_index)[i] = malloc(256 * sizeof(***answer_index));
-                talos_malloc_assert((*answer_index)[i]);
+                answer_index[i] = malloc(256 * sizeof(**answer_index));
+                talos_malloc_assert(answer_index[i]);
 
-                c_text_copy(strlen(addr) + 1, (*answer_index)[i], addr);
+                c_text_copy(strlen(addr) + 1, answer_index[i], addr);
             }
 
             dns_free_mem(dns, answers, auth, addit);
-            return ans_count;
+            *n_ans = ans_count;
+            return answer_index;
         break;
         case T_CNAME:
             c_text_copy(strlen((char *)answers[0].rdata) + 1, cname_target, (char *)answers[0].rdata);
             printf("Found CNAME alias: %s. Requerying...\n", answers[0].rdata);
             dns_free_mem(dns, answers, auth, addit);
-            return dns_recursive_worker(cname_target, query_type, current_root_ip, answer_index, depth++);
+            return dns_iterative_root_worker(cname_target, query_type, current_root_ip, n_ans, depth++);
         break;
         case T_AAAA:
             printf("Found AAAA record.\n");
-            *answer_index = malloc(ans_count * sizeof(**answer_index));
-            talos_malloc_assert(*answer_index);
+            answer_index = malloc(ans_count * sizeof(*answer_index));
+            talos_malloc_assert(answer_index);
 
             for (i = 0; i < ans_count; i++)
             {
@@ -558,31 +606,34 @@ static short handle_found_answers(DNS_HEADER *dns,
                 p = (uint8 *)answers[i].rdata;
                 memcpy(&a.Ipv6.sin6_addr, p, sizeof(struct in6_addr));
 
-                (*answer_index)[i] = malloc(256 * sizeof(***answer_index));
-                talos_malloc_assert((*answer_index)[i]);
+                answer_index[i] = malloc(256 * sizeof(**answer_index));
+                talos_malloc_assert(answer_index[i]);
 
-                r = inet_ntop(AF_INET6, &a.Ipv6.sin6_addr, (*answer_index)[i], INET6_ADDRSTRLEN);
-                if (r == NULL) strcpy((*answer_index[i]), "IPv6 Conversion Error");
+                r = inet_ntop(AF_INET6, &a.Ipv6.sin6_addr, answer_index[i], INET6_ADDRSTRLEN);
+                if (r == NULL) strcpy(answer_index[i], "IPv6 Conversion Error");
             }
 
             dns_free_mem(dns, answers, auth, addit);
-            return ans_count;
+            *n_ans = ans_count;
+            return answer_index;
         break;
         default:
             printf("Unknown RR Type code : %d\n", ntohs(answers[0].resource->type));
 
             dns_free_mem(dns, answers, auth, addit);
-            return ans_count;
+            *n_ans = ans_count;
+            return answer_index;
         break;
     }
 }
 
-static short process_auth_records(DNS_HEADER *dns,
+static char **process_auth_records(DNS_HEADER *dns,
                                   RES_RECORD *answers,
                                   RES_RECORD *auth,
                                   RES_RECORD *addit,
-                                  const char *host, int query_type, char ***answer_index, int depth)
+                                  const char *host, int query_type, uint *n_ans, uint depth)
 {
+    char **answer_index = NULL;
     StyxSockaddrInet a = {0};
     char next_ns_ip[16] = {0};
     char next_ns_name[256] = "\0";
@@ -597,7 +648,8 @@ static short process_auth_records(DNS_HEADER *dns,
         {
             printf("SOA Record: %s does not exist.\n", host);
             dns_free_mem(dns, answers, auth, addit);
-            return 0;
+            *n_ans = 0;
+            return NULL;
         }
         if (ntohs(auth[i].resource->type) != T_NS) continue;
 
@@ -656,20 +708,22 @@ static short process_auth_records(DNS_HEADER *dns,
         if (found_glue)
         {
             /* Recursion */
-            short ans_count = dns_recursive_worker(host, query_type, next_ns_ip, answer_index, depth++);
+            uint ans_count = 0;
+            answer_index = dns_iterative_root_worker(host, query_type, next_ns_ip, &ans_count, depth++);
 
             if (ans_count > 0)
             {
                 dns_free_mem(dns, answers, auth, addit);
-                return ans_count;
+                *n_ans = ans_count;
+                return answer_index;
             }
         }
         else
         {
-            char **ns_answers;
+            uint ns_count = 0;
+            char **ns_answers = NULL;
 
-            int ns_count;
-            short result;
+            uint result = 0;
 
             if (strcmp(host, next_ns_name) == 0)
             {
@@ -678,8 +732,7 @@ static short process_auth_records(DNS_HEADER *dns,
             }
             printf("No glue record for %s. Recrusively resolving NS IP...\n", next_ns_name);
 
-            /*int ns_count = dns_recursive_worker((char *)next_ns_name, T_A, current_root_ip, ns_answers); */
-            ns_count = dns_resolve(next_ns_name, &ns_answers);
+            ns_answers = dns_resolve_iterative_root(next_ns_name, &ns_count);
 
             if (ns_count > 0)
             {
@@ -705,7 +758,7 @@ static short process_auth_records(DNS_HEADER *dns,
                         /* TODO: Determine cable and whether or not to foward packet */
                     }
 
-                    result = dns_recursive_worker(host, query_type, next_ns_ip, answer_index, depth++);
+                    answer_index = dns_iterative_root_worker(host, query_type, next_ns_ip, &result, depth++);
                     if (result > 0)
                     {
                         for (i = 0; i < ns_count; i++)
@@ -713,7 +766,8 @@ static short process_auth_records(DNS_HEADER *dns,
                         free(ns_answers);
 
                         dns_free_mem(dns, answers, auth, addit);
-                        return result;
+                        *n_ans = result;
+                        return answer_index;
                     }
                 }
                 for (i = 0; i < ns_count; i++)
@@ -723,7 +777,8 @@ static short process_auth_records(DNS_HEADER *dns,
         }
     }
     dns_free_mem(dns, answers, auth, addit);
-    return 0;
+    *n_ans = 0;
+    return NULL;
 }
 
 static uint8 *read_name(uint8 *reader, uint8 *buffer, int *count)
@@ -880,17 +935,17 @@ static void dns_free_mem(DNS_HEADER *dns, RES_RECORD *answers, RES_RECORD *auth,
     }
 }
 
-static int external_dns_is_blocked(void)
+static boolean external_dns_is_blocked(void)
 {
     int n_ans, i;
-    char **answers;
-    n_ans = dns_recursive_worker("www.google.com", T_A, current_root_ip, &answers, 0);
+    char **answers = NULL;
+    answers = dns_iterative_root_worker("www.google.com", T_A, current_root_ip, &n_ans, 0);
     if (n_ans <= 0)
-        return 1;
+        return TRUE;
     for (i = 0; i < n_ans; i++)
         free(answers[i]);
     free(answers);
-    return 0;
+    return FALSE;
 }
 
 static void set_to_local_dns(void)
