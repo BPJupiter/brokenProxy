@@ -14,8 +14,11 @@ Here you can hotload proxy configuration.
 This project is written to the C89 standard on Windows and Linux.
 
 Windows: Build with MSVC
+
 Linux: Build with
+
 ```$ cmake -S . -B build```
+
 ```$ cmake --build build```
 
 ## Curl commandline args
