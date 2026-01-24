@@ -11,10 +11,12 @@ Here you can hotload proxy configuration.
 
 ## Build
 
-This project is written to the gnu89 standard, and as such is Linux-only for now. Future cross-platform c89 integration is tentatively planned.
+This project is written to the C89 standard on Windows and Linux.
 
-Build with
-`$ make release` in the project root.
+Windows: Build with MSVC
+Linux: Build with
+```$ cmake -S . -B build```
+```$ cmake --build build```
 
 ## Curl commandline args
 
