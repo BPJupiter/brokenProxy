@@ -159,7 +159,7 @@ DWORD WINAPI e_win32_thread(LPVOID param)
     EuropaThreadParams *thread_param;
     thread_param = (EuropaThreadParams *)param;
     thread_param->func(thread_param->data);
-    /*free(thread_param);*/
+    free(thread_param);
     return 0;
 }
 

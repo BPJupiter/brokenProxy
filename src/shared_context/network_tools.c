@@ -3,11 +3,20 @@
 #include <string.h>
 
 #include "Clay/clay.h"
-#include "traceroute.h"
+#include "shared_context/shared_context.h"
 #include "termcolor.h"
 
+void TracertResult_free(TracertResult *tracert_result)
+{
+}
+
+TracertResult traceroute(const char *ip) {
+    TracertResult result = { 0 };
+    return result;
+}
+
 #ifdef _WIN32
-double traceroute(const char *address, char *output, size_t output_len)
+double _traceroute(const char *address, char *output, size_t output_len)
 {
     FILE *fp;
     char line[512] = { 0 };
@@ -51,7 +60,7 @@ double traceroute(const char *address, char *output, size_t output_len)
 
 }
 #else
-double traceroute(const char *address, char *output, size_t output_len)
+double _traceroute(const char *address, char *output, size_t output_len)
 {
     FILE *fp;
     char line[512] = {0};
@@ -105,11 +114,12 @@ double traceroute(const char *address, char *output, size_t output_len)
 #endif
 
 #ifdef _WIN32
-double ping(const char *ip)
+PingResult ping(const char *ip)
 {
     FILE *fp;
     char line[512] = { 0 };
     int64 latency = -1;
+    PingResult result = { 0 };
 
     char command[256] = "ping -n 1 -w 1000 ";
     strcat(command, ip);
@@ -118,7 +128,8 @@ double ping(const char *ip)
     if (fp == NULL)
     {
         printf("%s %s Failed to run ping command: %s\n", PING_TAG, ERR_TAG, command);
-        return -1;
+        result.rtt = -1.0;
+        return result;
     }
 
     while (fgets(line, sizeof(line), fp) != NULL);
@@ -128,10 +139,11 @@ double ping(const char *ip)
     printf("%s Ping on %s : %lld ms\n", PING_TAG, ip, latency);
     _pclose(fp);
 
-    return (double)latency;
+    result.rtt = latency;
+    return result;
 }
 #else
-double ping(const char *ip)
+PingResult ping(const char *ip)
 {
     FILE *fp;
     char line[512] = {0};
@@ -139,6 +151,7 @@ double ping(const char *ip)
     size_t l = 0;
     char *rtt_info;
     char output[1024] = {0};
+    PingResult result = { 0 };
 
     char command[128] = "/bin/ping -c 1 -w 1 ";
     strcat(command, ip);
@@ -147,7 +160,8 @@ double ping(const char *ip)
     if (fp == NULL)
     {
         printf("%s %s Failed to run ping command: %s\n", PING_TAG, ERR_TAG, command);
-        return -1;
+        result.rtt = -1.0;
+        return result;
     }
 
     output[0] = '\0';
@@ -158,7 +172,8 @@ double ping(const char *ip)
         {
             printf("%s %s Output buffer too small at: %s: %d", PING_TAG, ERR_TAG, __FILE__, __LINE__);
             output[0] = '\0';
-            return -1;
+            result.rtt = 1.0;
+            return result;
         }
         strcat(output, line);
     }
@@ -177,6 +192,7 @@ double ping(const char *ip)
 
     pclose(fp);
 
-    return latency;
+    result.rtt = latency;
+    return result;
 }
 #endif

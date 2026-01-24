@@ -23,25 +23,29 @@ add_executable (${PROJECT_NAME}
 	"src/Clay/c_text.c"
 
 	"src/Europa/europa.h"
+	"src/Europa/e_file.c"
 	"src/Europa/e_threads.c"
 	"src/Europa/e_time.c"
 
 	"src/Styx/styx.h"
 	"src/Styx/s_network.c"
 
-	src/dnslookup.c
-	src/dnslookup.h
+	"src/Talos/talos.h"
+	"src/Talos/t_error.c"
+
+	
+	"src/shared_context/shared_context.h"
+	"src/shared_context/shared_context.c"
+	"src/shared_context/network_tools.c"
+	"src/shared_context/dns_resolution.c"
+	
 	src/memory_usage.h
 	src/proxy.c
 	src/proxy.h
 	src/termcolor.h
 	
-	src/traceroute.c
-	src/traceroute.h
-	src/shared_context.c
-	src/shared_context.h
 	src/main.c
- "src/Talos/talos.h" "src/Talos/t_error.c" "src/Europa/e_file.c")
+)
 
 target_include_directories(${PROJECT_NAME} PRIVATE src lib)
 

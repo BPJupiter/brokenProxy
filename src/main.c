@@ -5,7 +5,7 @@
 
 #include "Clay/clay.h"
 #include "Europa/europa.h"
-#include "shared_context.h"
+#include "shared_context/shared_context.h"
 #include "proxy.h"
 
 #define PROXY_PORT 13406

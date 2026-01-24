@@ -10,7 +10,7 @@
 #include "Styx/styx.h"
 #include "Talos/talos.h"
 
-#include "shared_context.h"
+#include "shared_context/shared_context.h"
 #include "cjson/cJSON.h"
 #include "memory_usage.h"
 
@@ -42,7 +42,6 @@ struct settings
     double rtt;
 };
 
-static void free_answers(char **answers, int n_ans);
 static int host_port_from_url(const char *url, char *host, int *port);
 static void send_local_file(char *filename, char *buffer, int buffer_len, int client_fd);
 static int get_content_length(const char *request);
@@ -56,14 +55,6 @@ static int active_thread_count = 0;
 
 static void *settings_mod_mutex = NULL;
 static int settings_modified = 1;
-
-static void free_answers(char **answers, int n_ans)
-{
-    int i;
-    for (i = 0; i < n_ans; i++)
-        free(answers[i]);
-    free(answers);
-}
 
 static int host_port_from_url(const char *url, char *host, int *port)
 {
@@ -419,8 +410,6 @@ static void tunnel_data(void *arg)
 static void handle_client(void *arg)
 {
     client_info_t *client_info = (client_info_t *)arg;
-    argType a = {0};
-    retType r = {0};
     VSocket client_handle = client_info->client_handle;
     VSocket remote_handle = 0;
 
@@ -431,16 +420,15 @@ static void handle_client(void *arg)
     char *url = NULL;
     char *first_line_end = NULL;
 
-    char **answers = NULL;
+    DnsResult dns_result = {0};
     char *destination_ip = NULL;
-    uint n_ans = 0;
     struct sockaddr_in remote_addr;
 
     int first_line_len;
     int current_thread_count;
     int bytes_recvd;
     int port = 80;
-    double rtt_cutoff, latency;
+    double rtt_cutoff, rtt_current;
 
     sharedContext_getVariable(SCV_MAX_RTT, &rtt_cutoff);
 
@@ -486,36 +474,35 @@ static void handle_client(void *arg)
     }
 
     /* Resolve hostname using custom DNS resolver */
-    a.resolve.hostname = host;
-    a.resolve.n_ans = &n_ans;
-    sharedContext_execCb(SCC_RESOLVE, &r, &a);
-    answers = r.resolve;
+    sharedContext_callback_execute_dnsResolve(&dns_result, host);
 
-    if (n_ans == (int)((unsigned short)-1))
+    if (dns_result.status == DNS_ERR_RTT_EXHAUSTED)
     {
-        printf("DNS RTT Exceeded %.2lf ms! Packet dropped!\n", rtt_cutoff);
+        printf("DNS Resultion failed due to rtt cutoff of %.2lf ms! Packet dropped!\n", rtt_cutoff);
         goto cleanup;
     }
 
-    if (n_ans == 0)
+    if (dns_result.nAns == 0)
     {
+        printf("%d\n", dns_result.status);
         printf("\x1b[31m[Error]\x1b[0m Failed to resolve hostname: %s\n", host);
         goto cleanup;
     }
 
-    destination_ip = answers[0];
+    destination_ip = dns_result.answers[0];
     printf("%s resolved to %s\n", host, destination_ip);
 
     if (strcmp(destination_ip, "127.0.0.1") != 0)
     {
-        a.ping.ip = destination_ip;
-        sharedContext_execCb(SCC_PING, &r, &a);
-        latency = r.ping;
-        if (latency > rtt_cutoff)
-        {
-            printf("Request RTT Exceeded %.2lf ms! Packet dropped!\n", rtt_cutoff);
-            free_answers(answers, n_ans);
-            goto cleanup;
+        PingResult ping_result;
+        if (sharedContext_callback_execute_ping(&ping_result, destination_ip)) {
+            rtt_current = ping_result.rtt;
+            if (rtt_current > rtt_cutoff)
+            {
+                printf("Request RTT Exceeded %.2lf ms! Packet dropped!\n", rtt_cutoff);
+                DnsResult_free(&dns_result);
+                goto cleanup;
+            }
         }
     }
 
@@ -525,7 +512,7 @@ static void handle_client(void *arg)
     {
         send_local_file(host, buffer, sizeof(buffer), client_handle);
 
-        free_answers(answers, n_ans);
+        DnsResult_free(&dns_result);
         goto cleanup;
     }
 
@@ -536,7 +523,7 @@ static void handle_client(void *arg)
         settings_modified = 1;
         europa_mutex_unlock(settings_mod_mutex);
 
-        free_answers(answers, n_ans);
+        DnsResult_free(&dns_result);
         goto cleanup;
     }
 
@@ -544,7 +531,7 @@ static void handle_client(void *arg)
     remote_handle = styx_socket_create(1, 0);
     if (!styx_socket_assert(remote_handle, "Couldn't create remote socket "))
     {
-        free_answers(answers, n_ans);
+        DnsResult_free(&dns_result);
         goto cleanup;
     }
 
@@ -555,9 +542,8 @@ static void handle_client(void *arg)
 
     if (connect(remote_handle, (struct sockaddr *)&remote_addr, sizeof(remote_addr)) < 0)
     {
-        printf("\x1b[31m[Error]\x1b[0m Failed to connect to %s:%d - %s\n",
-               destination_ip, port, strerror(errno));
-        free_answers(answers, n_ans);
+        printf("\x1b[31m[Error]\x1b[0m Failed to connect to %s:%d - %s\n", destination_ip, port, strerror(errno));
+        DnsResult_free(&dns_result);
         goto cleanup;
     }
 
@@ -577,7 +563,7 @@ static void handle_client(void *arg)
         printf("Remote socket sent request!\n");
     }
 
-    free_answers(answers, n_ans);
+    DnsResult_free(&dns_result);
 
     /* Create bidirectional tunnel */
     {
@@ -685,9 +671,9 @@ static void update_proxy_settings(void)
     }
 
     sharedContext_setVariable(SCV_MAX_RTT, &maxLatency->valuedouble);
-    sharedContext_toggleCb(SCC_PING, cJSON_IsTrue(pingEnabled));
-    sharedContext_toggleCb(SCC_TRACERT, cJSON_IsTrue(trEnabled));
-    sharedContext_toggleCb(SCC_RESOLVE, !cJSON_IsTrue(locDNSEnabled));
+    sharedContext_callback_toggle_ping(cJSON_IsTrue(pingEnabled));
+    sharedContext_callback_toggle_traceroute(cJSON_IsTrue(trEnabled));
+    sharedContext_callback_toggle_dnsResolve(!cJSON_IsTrue(locDNSEnabled));
 
     cJSON_Delete(json);
     return;
@@ -729,7 +715,7 @@ int proxy_start(int proxy_port)
         exit(1);
     }
 
-    sharedContext_toggleCb(SCC_RESOLVE, 1);
+    sharedContext_callback_toggle_dnsResolve(RT_FULL);
     settings_mod_mutex = europa_mutex_create();
     thread_count_mutex = europa_mutex_create();
 
