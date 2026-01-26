@@ -259,6 +259,7 @@ DnsResult dns_resolve_iterative_root(const char *host)
         {
             double rtt_cutoff, rtt_current;
             PingResult ping_result;
+            TracertResult tracert_result;
             if (sharedContext_callback_execute_ping(&ping_result, RootServers[i])) {
 				sharedContext_getVariable(SCV_MAX_RTT, &rtt_cutoff);
 				rtt_current = ping_result.rtt;
@@ -271,6 +272,9 @@ DnsResult dns_resolve_iterative_root(const char *host)
 				/* TODO: Query database to avoid excessive traceroute */
 				/* TODO: Determine cable and whether or not to foward packet */
 			}
+            if (sharedContext_callback_execute_traceroute(&tracert_result, RootServers[i])) {
+                TracertResult_free(&tracert_result);
+            }
         }
         strcpy(current_root_ip, RootServers[i]);
         root_server_found = 1;
@@ -726,6 +730,7 @@ static DnsResult process_auth_records(DNS_HEADER *dns,
             {
                 double rtt_cutoff, rtt_current;
                 PingResult ping_result = {0};
+                TracertResult tracert_result = { 0 };
 
                 candidates_found++;
 
@@ -743,6 +748,9 @@ static DnsResult process_auth_records(DNS_HEADER *dns,
                 }
                 /* TODO: Query database to avoid excessive traceroute */
                 /* TODO: Determine cable and whether or not to foward packet */
+                if (sharedContext_callback_execute_traceroute(&tracert_result, next_ns_ip)) {
+                    TracertResult_free(&tracert_result);
+                }
             }
             if (found_glue) break;
         }
@@ -784,6 +792,7 @@ static DnsResult process_auth_records(DNS_HEADER *dns,
                     if (strcmp(next_ns_ip, "127.0.0.1") != 0)
                     {
                         PingResult ping_result = {0};
+                        TracertResult tracert_result = { 0 };
 
                         candidates_found++;
 
@@ -798,6 +807,9 @@ static DnsResult process_auth_records(DNS_HEADER *dns,
                             }
                             /* TODO: Query database to avoid excessive traceroute */
                             /* TODO: Determine cable and whether or not to foward packet */
+                        }
+                        if (sharedContext_callback_execute_traceroute(&tracert_result, next_ns_ip)) {
+                            TracertResult_free(&tracert_result);
                         }
                     }
 

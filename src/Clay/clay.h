@@ -73,22 +73,22 @@ typedef float freal;
  * If C_MEMORY_DEBUG is enabled, the memory debugging system will create macros that replace malloc, free, and realloc, and allows the system to keep track of and report where memory is being allocated, how much and if the memory is being freed. This is very useful for finding memory leaks in large applications. The system can also over allocate memory and fill it with a magic number and can therefore detect if the application writes outside of the allocated memory.
  */
 
-extern void c_debug_memory_init(void (*lock)(void *mutex), void (*unlock)(void *mutex), void *mutex); /* Required for memory debugger to be thread safe */
-extern void *c_debug_mem_malloc(size_t size, char *file, uint line); /* Replaces malloc and records the c file and line where it was called*/
-extern void *c_debug_mem_realloc(void *pointer, size_t size, char *file, uint line); /* Replaces realloc and records the c file and line where it was called*/
-extern void c_debug_mem_free(void *buf, char *file, uint line); /* Replaces free and records the c file and line where it was called*/
-extern boolean c_debug_mem_comment(void *buf, char *comment); /* Adds comment to an allocation to help identify its use */
-extern void c_debug_mem_print(uint min_allocs); /* Prints out a list of all allocations made, their location, how much memorey each has allocated, freed, and how many allocations have been made. The min_allocs parameter can be set to avoid printing any allocations that have been made fewer times then min_allocs */
-extern void c_debug_mem_reset(void); /* f_debug_mem_reset allows you to clear all memory stored in the debugging system if you only want to record allocations after a specific point in your code*/
-extern size_t c_debug_mem_consumption(void); /* sum all memory consumed by mallocs and reallocs covered by the memory debugger */
-extern boolean c_debug_mem_query(void *pointer, uint *line, char **file, size_t *size); /* query the size and place of allocation of a pointer */
-extern boolean c_debug_mem_test(void *pointer, size_t size, boolean ignore_not_found); /* query if a bit of memory is safe to access */
-extern boolean c_debug_memory(void); /*f_debug_memory checks if any of the bounds of any allocation has been over written and reports where to standard out. The function returns TRUE if any error was found*/
+extern void		c_debug_memory_init(void (*lock)(void *mutex), void (*unlock)(void *mutex), void *mutex); /* Required for memory debugger to be thread safe */
+extern void		*c_debug_mem_malloc(size_t size, char *file, uint line); /* Replaces malloc and records the c file and line where it was called*/
+extern void		*c_debug_mem_realloc(void *pointer, size_t size, char *file, uint line); /* Replaces realloc and records the c file and line where it was called*/
+extern void		c_debug_mem_free(void *buf, char *file, uint line); /* Replaces free and records the c file and line where it was called*/
+extern boolean	c_debug_mem_comment(void *buf, char *comment); /* Adds comment to an allocation to help identify its use */
+extern void		c_debug_mem_print(uint min_allocs); /* Prints out a list of all allocations made, their location, how much memorey each has allocated, freed, and how many allocations have been made. The min_allocs parameter can be set to avoid printing any allocations that have been made fewer times then min_allocs */
+extern void		c_debug_mem_reset(void); /* f_debug_mem_reset allows you to clear all memory stored in the debugging system if you only want to record allocations after a specific point in your code*/
+extern size_t	c_debug_mem_consumption(void); /* sum all memory consumed by mallocs and reallocs covered by the memory debugger */
+extern boolean	c_debug_mem_query(void *pointer, uint *line, char **file, size_t *size); /* query the size and place of allocation of a pointer */
+extern boolean	c_debug_mem_test(void *pointer, size_t size, boolean ignore_not_found); /* query if a bit of memory is safe to access */
+extern boolean	c_debug_memory(void); /*f_debug_memory checks if any of the bounds of any allocation has been over written and reports where to standard out. The function returns TRUE if any error was found*/
 
-extern void *c_debug_mem_fopen(const char *file_name, const char *mode, char *file, uint line);
-extern void c_debug_mem_fclose(void *f, char *file, uint line);
+extern void		*c_debug_mem_fopen(const char *file_name, const char *mode, char *file, uint line);
+extern void		c_debug_mem_fclose(void *f, char *file, uint line);
 
-extern void c_no_debug_free(void *buf); /* Introduced as some libraries require use of stdlib free on certain lib objects. malloc and realloc calls within these libs are not tracked by the debugging program and as such calls to free normally crash. */
+extern void		c_no_debug_free(void *buf); /* Introduced as some libraries require use of stdlib free on certain lib objects. malloc and realloc calls within these libs are not tracked by the debugging program and as such calls to free normally crash. */
 
 #ifdef C_MEMORY_DEBUG
 
@@ -130,14 +130,14 @@ extern boolean  c_find_word_compare(char *text_a, char *text_b);
 extern uint     c_text_copy(uint length, char *dest, const char *source);
 extern boolean  c_text_compare(char *text_a, char *text_b);
 extern void     c_text_replaceall(char *text, char find, char replace);
-extern char *c_text_copy_allocate(char *source);
+extern char		*c_text_copy_allocate(char *source);
 extern uint     c_word_copy(uint length, char *dest, char *source);
 extern uint     c_text_copy_until(uint length, char *dest, char *source, char *until);
 extern boolean  c_text_filter(char *text, char *filter);
 extern boolean  c_text_filter_case_insensitive(char *text, char *filter);
 extern uint     c_text_sort(char *text_a, char *text_b);
 extern boolean  c_text_unique(char *text, uint buffer_length, char *compare);
-extern char *c_text_load(char *file_name, size_t *size);
+extern char		*c_text_load(char *file_name, size_t *size);
 
 extern uint     c_text_parse_hex(char *text, uint64 *output);
 extern uint     c_text_parse_decimal(char *text, uint64 *output);

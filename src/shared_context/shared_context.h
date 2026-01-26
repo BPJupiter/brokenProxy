@@ -11,14 +11,6 @@ typedef enum
 
 typedef enum
 {
-    SCC_RESOLVE, /**< Resolves hostname to IPv4 address. Ret: (short) answer count. Params: hostname (const char *) hostname to be resolved., answer_index (unsigned char ***) the address of an array of IPv4 addresses in string format. */
-    SCC_TRACERT, /**< Performs a traceroute on an IPv4 address. Ret: (double) latency of final hop in ms. Params: ip (const char *) IP address., out_buf (char *) Output buffer to store the results of the traceroute., out_size (size_t) Size of out_buf. */
-    SCC_PING, /**< Pings a host. Ret: (double) latency in ms. Params: ip (const char *) IP address. */
-    SCC_COUNT /**< Number of shared context callbacks. */
-} SharedContextCallback;
-
-typedef enum
-{
     RT_QUICK = 0,
     RT_FULL = 1,
     RT_LOCAL, /* UNIMPLEMENTED */
@@ -44,9 +36,17 @@ typedef struct DnsResult {
     char **answers;
 } DnsResult;
 
+/*
+typedef struct Hop {
+    uint nAddr;
+    uint *rtts;
+    char *addresses;
+} Hop;
+*/
+
 typedef struct TracertResult {
-    double hopCount;
-    double *hopRtt;
+    uint hopCount;
+    uint *hopRtt;
     char **hopAddress;
 } TracertResult;
 

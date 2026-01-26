@@ -495,6 +495,8 @@ static void handle_client(void *arg)
     if (strcmp(destination_ip, "127.0.0.1") != 0)
     {
         PingResult ping_result;
+        TracertResult tracert_result;
+		/* TODO: DB LOOKUP */
         if (sharedContext_callback_execute_ping(&ping_result, destination_ip)) {
             rtt_current = ping_result.rtt;
             if (rtt_current > rtt_cutoff)
@@ -503,6 +505,9 @@ static void handle_client(void *arg)
                 DnsResult_free(&dns_result);
                 goto cleanup;
             }
+        }
+        if (sharedContext_callback_execute_traceroute(&tracert_result, destination_ip)) {
+            TracertResult_free(&tracert_result);
         }
     }
 
