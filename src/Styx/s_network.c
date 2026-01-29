@@ -23,7 +23,6 @@ typedef unsigned int uint;
 #include <arpa/inet.h>
 #include <arpa/nameser.h>
 #include <sys/wait.h>
-#include <signal.h>
 #include <ifaddrs.h>
 #include <net/if.h>
 #include <resolv.h>

@@ -15,9 +15,8 @@ void TracertResult_free(TracertResult *tracert_result)
 {
     uint i;
     free(tracert_result->hopRtt);
-    for (i = 0; i < tracert_result->hopCount; i++) {
+    for (i = 0; i < tracert_result->hopCount; i++)
         free(tracert_result->hopAddress[i]);
-    }
     free(tracert_result->hopAddress);
     tracert_result->hopCount = 0;
     tracert_result->hopRtt = NULL;
@@ -56,18 +55,20 @@ TracertResult traceroute(const char *address)
     {
         uint rtt[3] = { 0, 0, 0 };
         char address[64] = NO_ADDRESS;
-		uint j, k = 0;
+        uint j, k = 0;
 
         if (strlen(line) == 1) break;
 
         for (j = 3; line[j] != 0 && k < 3; j++)
         {
-            if (line[j] == '*') {
+            if (line[j] == '*')
+            {
                 rtt[k] = NO_RTT;
                 k++;
                 continue;
             }
-            if (line[j] < '0' || line[j] > '9') {
+            if (line[j] < '0' || line[j] > '9')
+            {
                 continue;
             }
             rtt[k] *= 10;
@@ -78,12 +79,13 @@ TracertResult traceroute(const char *address)
 
         hopRtt_temp[i] = find_min(rtt, 3);
 
-        if (strstr(line, "Request timed out.") == NULL) {
+        if (strstr(line, "Request timed out.") == NULL)
+        {
             char *ms1, *ms2, *star1, *star2, *p, *newline;
             ms1 = line;
-            while (NULL != (ms2 = strstr(ms1, "ms"))) ms1 = ms2+2;
+            while (NULL != (ms2 = strstr(ms1, "ms"))) ms1 = ms2 + 2;
             star1 = line;
-            while (NULL != (star2 = strstr(star1, "*"))) star1 = star2+1;
+            while (NULL != (star2 = strstr(star1, "*"))) star1 = star2 + 1;
 
             p = ms1 > star1 ? ms1 : star1;
             while (*p == ' ') p++;
@@ -93,15 +95,16 @@ TracertResult traceroute(const char *address)
             c_text_copy(strlen(p) + 1, address, p);
         }
 
-        c_text_copy(strlen(address)+1, hopAddress_temp[i], address);
+        c_text_copy(strlen(address) + 1, hopAddress_temp[i], address);
     }
 
     result.hopCount = i;
     result.hopRtt = malloc(i * (sizeof *result.hopRtt));
     result.hopAddress = malloc(i * (sizeof *result.hopAddress));
-    for (i = 0; i < result.hopCount; i++) {
+    for (i = 0; i < result.hopCount; i++)
+    {
         result.hopRtt[i] = hopRtt_temp[i];
-		result.hopAddress[i] = c_text_copy_allocate(hopAddress_temp[i]);
+        result.hopAddress[i] = c_text_copy_allocate(hopAddress_temp[i]);
     }
 
     printf("%s %u hops to %s\n", TR_TAG, result.hopCount, address);
@@ -144,52 +147,61 @@ TracertResult traceroute(const char *address)
         char *p1, *p2;
         uint j, k = 0;
 
-        if ((p1 = strchr(line, '.')) == NULL) {
-			c_text_copy(strlen(address) + 1, hopAddress_temp[i], address);
-            hopRtt_temp[i] = NO_RTT;
-            continue;
-        }
-
-		p1 -= 3;
-		for (; *p1 < '0' || *p1 > '9'; p1++);
-        if ((p2 = strchr(p1, ' ')) == NULL) {
+        if ((p1 = strchr(line, '.')) == NULL)
+        {
             c_text_copy(strlen(address) + 1, hopAddress_temp[i], address);
             hopRtt_temp[i] = NO_RTT;
             continue;
         }
-		*p2 = '\0';
-		c_text_copy(strlen(p1) + 1, address, p1);
-		p2++;
+
+        p1 -= 3;
+        for (; *p1 < '0' || *p1 > '9'; p1++)
+            ;
+        if ((p2 = strchr(p1, ' ')) == NULL)
+        {
+            c_text_copy(strlen(address) + 1, hopAddress_temp[i], address);
+            hopRtt_temp[i] = NO_RTT;
+            continue;
+        }
+        *p2 = '\0';
+        c_text_copy(strlen(p1) + 1, address, p1);
+        p2++;
 
         for (j = 0; p2[j] != 0 && k < 3; j++)
         {
-            if (p2[j] == '*') {
+            if (p2[j] == '*')
+            {
                 rtt[k] = NO_RTT;
                 k++;
                 continue;
             }
-            if (p2[j] < '0' || p2[j] > '9') {
+            if (p2[j] < '0' || p2[j] > '9')
+            {
                 continue;
             }
             rtt[k] *= 10;
             rtt[k] += p2[j] - '0';
-            if (p2[j + 1] < '0' || p2[j + 1] > '9') {
+            if (p2[j + 1] < '0' || p2[j + 1] > '9')
+            {
                 j += 2;
                 if (p2[j] >= '5') rtt[k] += 1;
                 k++;
-                for (; p2[j] >= '0' && p2[j] <= '9'; j++);
+                for (; p2[j] >= '0' && p2[j] <= '9'; j++)
+                    ;
             }
         }
-        for (j = k; j < 3; j++) rtt[j] = NO_RTT;
+        for (j = k; j < 3; j++)
+            rtt[j] = NO_RTT;
 
         hopRtt_temp[i] = find_min(rtt, 3);
         c_text_copy(strlen(address) + 1, hopAddress_temp[i], address);
     }
 
     result.hopCount = i;
-    result.hopRtt = malloc(i * (sizeof * result.hopRtt));
-    result.hopAddress = malloc(i * (sizeof * result.hopAddress));
-    for (i = 0; i < result.hopCount; i++) {
+    result.hopRtt = malloc(i * (sizeof *result.hopRtt));
+    result.hopAddress = malloc(i * (sizeof *result.hopAddress));
+    for (i = 0; i < result.hopCount; i++)
+    {
         result.hopRtt[i] = hopRtt_temp[i];
         result.hopAddress[i] = c_text_copy_allocate(hopAddress_temp[i]);
     }

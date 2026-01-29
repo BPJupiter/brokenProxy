@@ -1,5 +1,6 @@
 #include <stdio.h>
 
+#include "Clay/clay.h"
 #include "Europa/europa.h"
 #include "shared_context/shared_context.h"
 
@@ -96,27 +97,27 @@ boolean sharedContext_callback_toggle_dnsResolve(ResolveType type)
     SharedContext tContext = { 0 };
     switch (type)
     {
-		case RT_NONE:
-			tContext.dnsResolve_cb = NULL;
+        case RT_NONE:
+            tContext.dnsResolve_cb = NULL;
         break;
         case RT_QUICK:
             tContext.dnsResolve_cb = dns_resolve_recursive_local;
-		break;
+        break;
         case RT_FULL:
             tContext.dnsResolve_cb = dns_resolve_iterative_root;
-		break;
+        break;
         case RT_LOCAL: /* UNIMPLEMENTED */
             tContext.dnsResolve_cb = dns_resolve_iterative_local;
-		break;
+        break;
         case RT_COUNT:
             tContext.dnsResolve_cb = NULL;
             success = FALSE;
-		break;
+        break;
     }
     lock(gContext.dnsResolve_lock);
     gContext.dnsResolve_cb = tContext.dnsResolve_cb;
     unlock(gContext.dnsResolve_lock);
-    
+
     return success;
 }
 
@@ -158,7 +159,8 @@ boolean sharedContext_callback_execute_dnsResolve(DnsResult *dns_result, const c
     tContext.dnsResolve_cb = gContext.dnsResolve_cb;
     unlock(gContext.dnsResolve_lock);
 
-    if (tContext.dnsResolve_cb != NULL) {
+    if (tContext.dnsResolve_cb != NULL)
+    {
         callback_result = tContext.dnsResolve_cb(hostname);
         if (dns_result != NULL)
             *dns_result = callback_result;
@@ -179,7 +181,8 @@ boolean sharedContext_callback_execute_traceroute(TracertResult *tracert_result,
     tContext.tracert_cb = gContext.tracert_cb;
     unlock(gContext.tracert_lock);
 
-    if (tContext.tracert_cb != NULL) {
+    if (tContext.tracert_cb != NULL)
+    {
         callback_result = tContext.tracert_cb(ip);
         if (tracert_result != NULL)
             *tracert_result = callback_result;
@@ -200,7 +203,8 @@ boolean sharedContext_callback_execute_ping(PingResult *ping_result, const char 
     tContext.ping_cb = gContext.ping_cb;
     unlock(gContext.ping_lock);
 
-    if (tContext.ping_cb != NULL) {
+    if (tContext.ping_cb != NULL)
+    {
         callback_result = tContext.ping_cb(ip);
         if (ping_result != NULL)
             *ping_result = callback_result;

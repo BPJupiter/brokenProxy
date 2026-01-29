@@ -30,33 +30,36 @@ typedef enum DnsStatus
     DNS_ERR_FAIL_SYSCALL
 } DnsStatus;
 
-typedef struct DnsResult {
+typedef struct DnsResult
+{
     DnsStatus status;
     uint nAns;
     char **answers;
 } DnsResult;
 
 /*
-typedef struct Hop {
+   typedef struct Hop {
     uint nAddr;
     uint *rtts;
     char *addresses;
-} Hop;
-*/
+   } Hop;
+ */
 
-typedef struct TracertResult {
+typedef struct TracertResult
+{
     uint hopCount;
     uint *hopRtt;
     char **hopAddress;
 } TracertResult;
 
-typedef struct PingResult {
+typedef struct PingResult
+{
     double rtt;
 } PingResult;
 
 extern void DnsResult_free(DnsResult *dns_result);
 extern void TracertResult_free(TracertResult *tracert_result);
-/*extern void PingResult_free(PingResult *ping_result);/
+/*extern void PingResult_free(PingResult *ping_result); */
 
 extern void sharedContext_init(void); /* Creates a shared context */
 extern void sharedContext_destroy(void); /* Destroys a shared context */

@@ -17,17 +17,17 @@ typedef struct
 {
     uint16 id;
     uint16 flags;
-	uint16 q_count;
+    uint16 q_count;
     uint16 ans_count;
     uint16 auth_count;
     uint16 add_count;
 } DNS_HEADER;
 
 /**   0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
-*   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-*   |QR|   Opcode  |AA|TC|RD|RA| Z|AD|CD|   RCODE   |
-*   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-*/
+ *   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+ *   |QR|   Opcode  |AA|TC|RD|RA| Z|AD|CD|   RCODE   |
+ *   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+ */
 
 #define DNS_FLAG_QR     0x8000
 #define DNS_FLAG_OPCODE 0x7800
@@ -90,15 +90,15 @@ static void read_answers(DNS_HEADER *dns, RES_RECORD *answers, uint8 **reader, u
 static void read_authorities(DNS_HEADER *dns, RES_RECORD *auth, uint8 **reader, uint8 *buf, int *stop);
 static void read_additional(DNS_HEADER *dns, RES_RECORD *addit, uint8 **reader, uint8 *buf, int *stop);
 static DnsResult handle_found_answers(DNS_HEADER *dns,
-                                  RES_RECORD *answers,
-                                  RES_RECORD *auth,
-                                  RES_RECORD *addit,
-                                  int query_type, uint depth);
+                                      RES_RECORD *answers,
+                                      RES_RECORD *auth,
+                                      RES_RECORD *addit,
+                                      int query_type, uint depth);
 static DnsResult process_auth_records(DNS_HEADER *dns,
-                                  RES_RECORD *answers,
-                                  RES_RECORD *auth,
-                                  RES_RECORD *addit,
-                                  const char *host, int query_type, uint depth);
+                                      RES_RECORD *answers,
+                                      RES_RECORD *auth,
+                                      RES_RECORD *addit,
+                                      const char *host, int query_type, uint depth);
 static DnsResult localhost();
 static void  change_to_dns_name_format(uint8 *, const char *);
 static uint8 *read_name(uint8 *, uint8 *, int *);
@@ -260,19 +260,21 @@ DnsResult dns_resolve_iterative_root(const char *host)
             double rtt_cutoff, rtt_current;
             PingResult ping_result;
             TracertResult tracert_result;
-            if (sharedContext_callback_execute_ping(&ping_result, RootServers[i])) {
-				sharedContext_getVariable(SCV_MAX_RTT, &rtt_cutoff);
-				rtt_current = ping_result.rtt;
-				if (rtt_current >= rtt_cutoff)
-				{
-					printf("%s exceeded %.2f ms! Changing root server\n", RootServers[i], rtt_cutoff);
-					continue;
-				}
-				break;
-				/* TODO: Query database to avoid excessive traceroute */
-				/* TODO: Determine cable and whether or not to foward packet */
-			}
-            if (sharedContext_callback_execute_traceroute(&tracert_result, RootServers[i])) {
+            if (sharedContext_callback_execute_ping(&ping_result, RootServers[i]))
+            {
+                sharedContext_getVariable(SCV_MAX_RTT, &rtt_cutoff);
+                rtt_current = ping_result.rtt;
+                if (rtt_current >= rtt_cutoff)
+                {
+                    printf("%s exceeded %.2f ms! Changing root server\n", RootServers[i], rtt_cutoff);
+                    continue;
+                }
+                break;
+                /* TODO: Query database to avoid excessive traceroute */
+                /* TODO: Determine cable and whether or not to foward packet */
+            }
+            if (sharedContext_callback_execute_traceroute(&tracert_result, RootServers[i]))
+            {
                 TracertResult_free(&tracert_result);
             }
         }
@@ -284,7 +286,7 @@ DnsResult dns_resolve_iterative_root(const char *host)
     {
         printf("Could not resolve!\n");
     }
-	return result;
+    return result;
 }
 
 /* --------- UNIMPLEMENTED ---------- */
@@ -387,11 +389,13 @@ static DnsResult dns_iterative_root_worker(const char *host, int query_type, cha
 
     if (bytes_recvd < 0)
     {
-        if (errno == EAGAIN) {
+        if (errno == EAGAIN)
+        {
             printf("\x1b[33m[Timeout]\x1b[0m Recvieve from %s timed out.\n", inet_ntoa(dest.Ipv4.sin_addr));
             result.status = DNS_ERR_TIMEOUT;
         }
-        else {
+        else
+        {
             talos_print_error("recvfrom failed");
             result.status = DNS_ERR_FAIL_SYSCALL;
         }
@@ -583,10 +587,10 @@ static void read_additional(DNS_HEADER *dns, RES_RECORD *addit, uint8 **reader, 
 }
 
 static DnsResult handle_found_answers(DNS_HEADER *dns,
-                                  RES_RECORD *answers,
-                                  RES_RECORD *auth,
-                                  RES_RECORD *addit,
-                                  int query_type, uint depth)
+                                      RES_RECORD *answers,
+                                      RES_RECORD *auth,
+                                      RES_RECORD *addit,
+                                      int query_type, uint depth)
 {
     DnsResult result = { 0 };
     StyxSockaddrInet a = {0};
@@ -665,10 +669,10 @@ static DnsResult handle_found_answers(DNS_HEADER *dns,
 }
 
 static DnsResult process_auth_records(DNS_HEADER *dns,
-                                  RES_RECORD *answers,
-                                  RES_RECORD *auth,
-                                  RES_RECORD *addit,
-                                  const char *host, int query_type, uint depth)
+                                      RES_RECORD *answers,
+                                      RES_RECORD *auth,
+                                      RES_RECORD *addit,
+                                      const char *host, int query_type, uint depth)
 {
     /* This function is disgusting. */
     DnsResult result = { 0 };
@@ -676,7 +680,7 @@ static DnsResult process_auth_records(DNS_HEADER *dns,
     char next_ns_ip[16] = {0};
     char next_ns_name[256] = "\0";
     int found_glue = 0, bad_latency = 0;
-    int i, j, k;
+    uint i, j, k;
 
     uint candidates_found = 0;
     uint rtt_rejections = 0;
@@ -734,8 +738,9 @@ static DnsResult process_auth_records(DNS_HEADER *dns,
 
                 candidates_found++;
 
-                if(sharedContext_callback_execute_ping(&ping_result, next_ns_ip)) {
-					sharedContext_getVariable(SCV_MAX_RTT, &rtt_cutoff);
+                if(sharedContext_callback_execute_ping(&ping_result, next_ns_ip))
+                {
+                    sharedContext_getVariable(SCV_MAX_RTT, &rtt_cutoff);
                     rtt_current = ping_result.rtt;
                     if (rtt_current > rtt_cutoff)
                     {
@@ -748,7 +753,8 @@ static DnsResult process_auth_records(DNS_HEADER *dns,
                 }
                 /* TODO: Query database to avoid excessive traceroute */
                 /* TODO: Determine cable and whether or not to foward packet */
-                if (sharedContext_callback_execute_traceroute(&tracert_result, next_ns_ip)) {
+                if (sharedContext_callback_execute_traceroute(&tracert_result, next_ns_ip))
+                {
                     TracertResult_free(&tracert_result);
                 }
             }
@@ -758,14 +764,14 @@ static DnsResult process_auth_records(DNS_HEADER *dns,
         if (found_glue)
         {
             /* Recursion */
-            result = dns_iterative_root_worker(host, query_type, next_ns_ip, depth+1);
+            result = dns_iterative_root_worker(host, query_type, next_ns_ip, depth + 1);
 
             if (result.nAns > 0)
             {
                 dns_free_mem(dns, answers, auth, addit);
                 return result;
             }
-            
+
             if (result.status == DNS_ERR_RTT_EXHAUSTED)
                 rtt_rejections++;
         }
@@ -796,7 +802,8 @@ static DnsResult process_auth_records(DNS_HEADER *dns,
 
                         candidates_found++;
 
-                        if (sharedContext_callback_execute_ping(&ping_result, next_ns_ip)) {
+                        if (sharedContext_callback_execute_ping(&ping_result, next_ns_ip))
+                        {
                             sharedContext_getVariable(SCV_MAX_RTT, &rtt_cutoff);
                             rtt_current = ping_result.rtt;
                             if (rtt_current > rtt_cutoff)
@@ -808,12 +815,13 @@ static DnsResult process_auth_records(DNS_HEADER *dns,
                             /* TODO: Query database to avoid excessive traceroute */
                             /* TODO: Determine cable and whether or not to foward packet */
                         }
-                        if (sharedContext_callback_execute_traceroute(&tracert_result, next_ns_ip)) {
+                        if (sharedContext_callback_execute_traceroute(&tracert_result, next_ns_ip))
+                        {
                             TracertResult_free(&tracert_result);
                         }
                     }
 
-                    result = dns_iterative_root_worker(host, query_type, next_ns_ip, depth+1);
+                    result = dns_iterative_root_worker(host, query_type, next_ns_ip, depth + 1);
                     if (result.nAns > 0)
                     {
                         DnsResult_free(&ns_result);
@@ -829,11 +837,13 @@ static DnsResult process_auth_records(DNS_HEADER *dns,
         }
     }
 
-    if (candidates_found > 0 && candidates_found == rtt_rejections) {
+    if (candidates_found > 0 && candidates_found == rtt_rejections)
+    {
         printf("\x1b[31m[DNS Rejected]\x1b[0m Failed to resolve %s: all %d nameservers exceed max RTT.\n", host, candidates_found);
         result.status = DNS_ERR_RTT_EXHAUSTED;
     }
-    else {
+    else
+    {
         result.status = DNS_ERR_GENERIC;
     }
     dns_free_mem(dns, answers, auth, addit);
@@ -1001,7 +1011,8 @@ static boolean external_dns_is_blocked(void)
     DnsResult result = { 0 };
     uint i;
     result = dns_iterative_root_worker("www.google.com", T_A, current_root_ip, 0);
-    if (result.nAns <= 0) {
+    if (result.nAns <= 0)
+    {
         DnsResult_free(&result);
         return TRUE;
     }

@@ -496,8 +496,9 @@ static void handle_client(void *arg)
     {
         PingResult ping_result;
         TracertResult tracert_result;
-		/* TODO: DB LOOKUP */
-        if (sharedContext_callback_execute_ping(&ping_result, destination_ip)) {
+        /* TODO: DB LOOKUP */
+        if (sharedContext_callback_execute_ping(&ping_result, destination_ip))
+        {
             rtt_current = ping_result.rtt;
             if (rtt_current > rtt_cutoff)
             {
@@ -506,7 +507,8 @@ static void handle_client(void *arg)
                 goto cleanup;
             }
         }
-        if (sharedContext_callback_execute_traceroute(&tracert_result, destination_ip)) {
+        if (sharedContext_callback_execute_traceroute(&tracert_result, destination_ip))
+        {
             TracertResult_free(&tracert_result);
         }
     }
