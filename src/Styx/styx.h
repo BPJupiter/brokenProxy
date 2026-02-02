@@ -42,7 +42,7 @@ extern void     styx_local_dns_server_get(char *dest, uint32 dest_buf_len);
 
 extern uint32   styx_string_to_ipv4(char *path);
 extern void     styx_ipv4_to_string(char *dest, StyxNetworkAddress *address);
-extern char *styx_ipv4_to_string_alloc(StyxNetworkAddress *address);
+extern char     *styx_ipv4_to_string_alloc(StyxNetworkAddress *address);
 
 
 #endif /* STYX_H */

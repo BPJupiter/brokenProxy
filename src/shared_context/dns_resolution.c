@@ -257,26 +257,22 @@ DnsResult dns_resolve_iterative_root(const char *host)
     {
         for (i = 0; i < RSI_COUNT; i++)
         {
-            double rtt_cutoff, rtt_current;
-            PingResult ping_result;
-            TracertResult tracert_result;
-            if (sharedContext_callback_execute_ping(&ping_result, RootServers[i]))
+            if (!sharedContext_latency_isgood(RootServers[i]))
             {
-                sharedContext_getVariable(SCV_MAX_RTT, &rtt_cutoff);
-                rtt_current = ping_result.rtt;
-                if (rtt_current >= rtt_cutoff)
-                {
-                    printf("%s exceeded %.2f ms! Changing root server\n", RootServers[i], rtt_cutoff);
-                    continue;
-                }
-                break;
-                /* TODO: Query database to avoid excessive traceroute */
-                /* TODO: Determine cable and whether or not to foward packet */
+				printf("%s exceeded max latency! Changing root server\n", RootServers[i]);
+				continue;
             }
-            if (sharedContext_callback_execute_traceroute(&tracert_result, RootServers[i]))
+            else if (!sharedContext_cable_isgood(RootServers[i]))
             {
-                TracertResult_free(&tracert_result);
+                printf("%s uses a disabled cable! Changing root server\n", RootServers[i]);
+                continue;
             }
+            /** Seems like UoA wifi only blocks some root DNS servers?
+            * i.e. Root server A is blocked. Root server M is not.
+            * Need more sophisticated way to see if local wifi will block DNS request packets to a given root server?
+            */
+            else
+				break;
         }
         strcpy(current_root_ip, RootServers[i]);
         root_server_found = 1;
@@ -732,30 +728,22 @@ static DnsResult process_auth_records(DNS_HEADER *dns,
             /* Is that nameserver reachable? */
             if (found_glue && strcmp(next_ns_ip, "127.0.0.1") != 0)
             {
-                double rtt_cutoff, rtt_current;
-                PingResult ping_result = {0};
-                TracertResult tracert_result = { 0 };
-
                 candidates_found++;
 
-                if(sharedContext_callback_execute_ping(&ping_result, next_ns_ip))
+                if (!sharedContext_latency_isgood(next_ns_ip))
                 {
-                    sharedContext_getVariable(SCV_MAX_RTT, &rtt_cutoff);
-                    rtt_current = ping_result.rtt;
-                    if (rtt_current > rtt_cutoff)
-                    {
-                        printf("%s exceeded %.2lf ms! Skipping.\n", next_ns_ip, rtt_cutoff);
-                        rtt_rejections++;
-                        found_glue = 0;
-                        bad_latency = 1;
-                        break;
-                    }
-                }
-                /* TODO: Query database to avoid excessive traceroute */
-                /* TODO: Determine cable and whether or not to foward packet */
-                if (sharedContext_callback_execute_traceroute(&tracert_result, next_ns_ip))
+					printf("%s exceeded max latency! Skipping.\n", next_ns_ip);
+					rtt_rejections++;
+					found_glue = 0;
+					bad_latency = 1;
+					break;
+				}
+                if (!sharedContext_cable_isgood(next_ns_ip))
                 {
-                    TracertResult_free(&tracert_result);
+                    /*rtt_rejections++;*/
+                    found_glue = 0;
+                    /*bad_latency = 1;*/
+                    break;
                 }
             }
             if (found_glue) break;
@@ -790,34 +778,23 @@ static DnsResult process_auth_records(DNS_HEADER *dns,
 
             if (ns_result.nAns > 0)
             {
-                double rtt_current, rtt_cutoff;
                 for (k = 0; k < ns_result.nAns; k++)
                 {
                     c_text_copy(strlen(ns_result.answers[k]) + 1, next_ns_ip, ns_result.answers[k]);
 
                     if (strcmp(next_ns_ip, "127.0.0.1") != 0)
                     {
-                        PingResult ping_result = {0};
-                        TracertResult tracert_result = { 0 };
-
                         candidates_found++;
 
-                        if (sharedContext_callback_execute_ping(&ping_result, next_ns_ip))
+                        if (!sharedContext_latency_isgood(next_ns_ip))
+						{
+							printf("%s exceeded max latency! Skipping.\n", next_ns_ip);
+							rtt_rejections++;
+							continue;
+						}
+                        if (!sharedContext_cable_isgood(next_ns_ip))
                         {
-                            sharedContext_getVariable(SCV_MAX_RTT, &rtt_cutoff);
-                            rtt_current = ping_result.rtt;
-                            if (rtt_current > rtt_cutoff)
-                            {
-                                printf("%s exceeded %.2lf ms! Skipping.\n", next_ns_ip, rtt_cutoff);
-                                rtt_rejections++;
-                                continue;
-                            }
-                            /* TODO: Query database to avoid excessive traceroute */
-                            /* TODO: Determine cable and whether or not to foward packet */
-                        }
-                        if (sharedContext_callback_execute_traceroute(&tracert_result, next_ns_ip))
-                        {
-                            TracertResult_free(&tracert_result);
+                            continue;
                         }
                     }
 

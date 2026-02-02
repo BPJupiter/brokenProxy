@@ -64,12 +64,18 @@ extern void TracertResult_free(TracertResult *tracert_result);
 extern void sharedContext_init(void); /* Creates a shared context */
 extern void sharedContext_destroy(void); /* Destroys a shared context */
 
+extern boolean sharedContext_latency_isgood(const char *ip);
+extern boolean sharedContext_cable_isgood(const char *ip);
+
 extern int sharedContext_getVariable(SharedContextVariable var, void *value);
 extern int sharedContext_setVariable(SharedContextVariable var, const void *value);
 
 extern boolean sharedContext_callback_toggle_dnsResolve(ResolveType type);
 extern boolean sharedContext_callback_toggle_traceroute(boolean enabled);
 extern boolean sharedContext_callback_toggle_ping(boolean enabled);
+
+extern boolean sharedContext_callback_isEnabled_traceroute();
+extern boolean sharedContext_callback_isEnabled_ping();
 
 extern boolean sharedContext_callback_execute_dnsResolve(DnsResult *dns_result, const char *hostname);
 extern boolean sharedContext_callback_execute_traceroute(TracertResult *tracert_result, const char *ip);

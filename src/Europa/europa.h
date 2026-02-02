@@ -33,13 +33,13 @@ typedef pthread_t EuropaThread;
 
 /* -------- Multi Threading -------- */
 
-extern void *europa_mutex_create(void);         /* Creates a mutex. Unlocked upon creation */
+extern void     *europa_mutex_create(void);         /* Creates a mutex. Unlocked upon creation */
 extern void     europa_mutex_lock(void *mutex);     /* Lock mutex. If mutex already locked, thread will wait until unlock so it can lock */
 extern boolean  europa_mutex_lock_try(void *mutex);     /* Thread will attempt to lock mutex. if mutex already locked, returns FALSE and fails. If mutex unlocked, it locks and returns TRUE */
 extern void     europa_mutex_unlock(void *mutex);     /* unlocks mutex */
 extern void     europa_mutex_destroy(void *mutex);     /* destroys mutex */
 
-extern void *europa_signal_create(void);         /* Creates a signal blocker */
+extern void     *europa_signal_create(void);         /* Creates a signal blocker */
 extern void     europa_signal_destroy(void *signal);     /* Destroys signal blocker */
 extern boolean  europa_signal_wait(void *signal, void *mutex);     /* Sets thread to wait on blocker for another thread to activate it */
 extern boolean  europa_signal_activate(void *signal);     /* Activates blocker so one or more threads waiting on the signal will be released */
@@ -65,6 +65,18 @@ extern boolean  europa_execute(const char *command);     /* Execute command on p
 /* -------- File Traversal -------- */
 
 extern void     europa_pwd(char *output, uint32 output_size);
+extern void     europa_goto_dir(char *dir, uint32 dir_len, char *pwd, uint32 pwd_len);
+
+/* -------- Database -------- */
+
+typedef void EDBHandle;
+
+extern EDBHandle *europa_database_open(const char *filename);
+extern void      europa_database_close(EDBHandle **database);
+
+extern boolean europa_database_store(EDBHandle *database, const void *key, int key_length, const void *data, uint64 data_length);
+extern boolean europa_database_fetch(EDBHandle *database, const void *key, int key_length, void *buffer, uint64 buffer_size);
+extern boolean europa_database_delete(EDBHandle *database, const void *key, int key_length);
 
 #if defined __cplusplus
 }

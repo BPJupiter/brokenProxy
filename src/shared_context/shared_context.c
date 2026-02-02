@@ -2,6 +2,7 @@
 
 #include "Clay/clay.h"
 #include "Europa/europa.h"
+#include "data/datastore.h"
 #include "shared_context/shared_context.h"
 
 extern TracertResult traceroute(const char *ip);
@@ -15,9 +16,11 @@ extern DnsResult dns_resolve_iterative_local(const char *host);
 
 typedef struct SharedContext
 {
+    /* variables */
     void *rttCutoff_lock;
     double rttCutoff;
 
+    /* callbacks */
     void *dnsResolve_lock;
     DnsResult (*dnsResolve_cb)(const char *hostname);
     void *tracert_lock;
@@ -42,6 +45,8 @@ void sharedContext_init(void)
     gContext.dnsResolve_cb = NULL;
     gContext.tracert_cb = NULL;
     gContext.ping_cb = NULL;
+
+    datastore_init();
 }
 
 void sharedContext_destroy(void)
@@ -50,6 +55,8 @@ void sharedContext_destroy(void)
     europa_mutex_destroy(gContext.dnsResolve_lock);
     europa_mutex_destroy(gContext.tracert_lock);
     europa_mutex_destroy(gContext.ping_lock);
+
+    datastore_destroy();
 }
 
 int sharedContext_getVariable(SharedContextVariable var, void *value)
@@ -147,6 +154,28 @@ boolean sharedContext_callback_toggle_ping(boolean enabled)
     unlock(gContext.ping_lock);
 
     return success;
+}
+
+boolean sharedContext_callback_isEnabled_traceroute()
+{
+    SharedContext tContext = { 0 };
+
+    lock(gContext.tracert_lock);
+    tContext.tracert_cb = gContext.tracert_cb;
+    unlock(gContext.tracert_lock);
+
+    return NULL != tContext.tracert_cb;
+}
+
+boolean sharedContext_callback_isEnabled_ping()
+{
+    SharedContext tContext = { 0 };
+
+    lock(gContext.ping_lock);
+    tContext.ping_cb = gContext.ping_cb;
+    unlock(gContext.ping_lock);
+
+    return NULL != tContext.ping_cb;
 }
 
 boolean sharedContext_callback_execute_dnsResolve(DnsResult *dns_result, const char *hostname)

@@ -428,7 +428,7 @@ static void handle_client(void *arg)
     int current_thread_count;
     int bytes_recvd;
     int port = 80;
-    double rtt_cutoff, rtt_current;
+    double rtt_cutoff;
 
     sharedContext_getVariable(SCV_MAX_RTT, &rtt_cutoff);
 
@@ -494,22 +494,17 @@ static void handle_client(void *arg)
 
     if (strcmp(destination_ip, "127.0.0.1") != 0)
     {
-        PingResult ping_result;
-        TracertResult tracert_result;
-        /* TODO: DB LOOKUP */
-        if (sharedContext_callback_execute_ping(&ping_result, destination_ip))
+        if (!sharedContext_latency_isgood(destination_ip))
+		{
+			printf("Request RTT Exceeded %.2lf ms! Packet dropped!\n", rtt_cutoff);
+			DnsResult_free(&dns_result);
+			goto cleanup;
+		}
+        if (!sharedContext_cable_isgood(destination_ip))
         {
-            rtt_current = ping_result.rtt;
-            if (rtt_current > rtt_cutoff)
-            {
-                printf("Request RTT Exceeded %.2lf ms! Packet dropped!\n", rtt_cutoff);
-                DnsResult_free(&dns_result);
-                goto cleanup;
-            }
-        }
-        if (sharedContext_callback_execute_traceroute(&tracert_result, destination_ip))
-        {
-            TracertResult_free(&tracert_result);
+            printf("Request uses disabled cable! Packet dropped!\n");
+            DnsResult_free(&dns_result);
+            goto cleanup;
         }
     }
 

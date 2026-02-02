@@ -18,6 +18,9 @@ add_executable (${PROJECT_NAME}
 	lib/cjson/cJSON.c
 	lib/cjson/cJSON.h
 
+	lib/vedis/vedis.c
+	lib/vedis/vedis.h
+
 	"src/Clay/clay.h"
 	"src/Clay/c_mem_debug.c"
 	"src/Clay/c_text.c"
@@ -45,7 +48,7 @@ add_executable (${PROJECT_NAME}
 	src/termcolor.h
 	
 	src/main.c
-)
+ "src/Europa/e_db_vedis.c" "src/shared_context/check_measurement.c"  "src/data/data.c" "src/data/datastore.h")
 
 target_include_directories(${PROJECT_NAME} PRIVATE src lib)
 

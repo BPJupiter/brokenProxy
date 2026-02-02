@@ -6,6 +6,11 @@
 #ifdef _WIN32
 #include <string.h>
 #include <windows.h>
+#else
+#include <unistd.h>
+#endif
+
+#ifdef _WIN32
 
 void europa_pwd(char *output, uint32 output_size)
 {
@@ -28,7 +33,6 @@ void europa_pwd(char *output, uint32 output_size)
 }
 
 #else
-#include <unistd.h>
 
 void europa_pwd(char *output, uint32 output_size)
 {
@@ -41,3 +45,14 @@ void europa_pwd(char *output, uint32 output_size)
 
 #endif
 
+#ifdef _WIN32
+void europa_goto_dir(char *dir, uint32 dir_len, char *pwd, uint32 *pwd_len)
+{
+
+}
+#else
+void europa_goto_dir(char *dir, uint32 dir_len, char *pwd, uint32 *pwd_len)
+{
+
+}
+#endif
