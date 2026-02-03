@@ -46,12 +46,12 @@ void europa_pwd(char *output, uint32 output_size)
 #endif
 
 #ifdef _WIN32
-void europa_goto_dir(char *dir, uint32 dir_len, char *pwd, uint32 *pwd_len)
+void europa_goto_dir(char *dir, uint32 dir_len, char *pwd, uint32 pwd_len)
 {
 
 }
 #else
-void europa_goto_dir(char *dir, uint32 dir_len, char *pwd, uint32 *pwd_len)
+void europa_goto_dir(char *dir, uint32 dir_len, char *pwd, uint32 pwd_len)
 {
 
 }

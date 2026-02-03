@@ -4,6 +4,7 @@
 #ifdef _WIN32
 #define DB_DIRECTORY "..\\..\\..\\db\\measurementinfo.vdb"
 #else
+#define DB_DIRECTORY "../db/measurementinfo.vdb"
 #endif
 
 void *gDatastore_lock; /* unused */
@@ -11,9 +12,9 @@ EDBHandle *gDatastore;
 
 void datastore_init()
 {
+	char pwd[256];
 	gDatastore_lock = europa_mutex_create();
 	gDatastore = europa_database_open(DB_DIRECTORY);
-	char pwd[256];
 	europa_pwd(pwd, sizeof pwd);
 	printf("PWD: %s\n", pwd);
 }

@@ -75,7 +75,7 @@ extern EDBHandle *europa_database_open(const char *filename);
 extern void      europa_database_close(EDBHandle **database);
 
 extern boolean europa_database_store(EDBHandle *database, const void *key, int key_length, const void *data, uint64 data_length);
-extern boolean europa_database_fetch(EDBHandle *database, const void *key, int key_length, void *buffer, uint64 buffer_size);
+extern boolean europa_database_fetch(EDBHandle *database, const void *key, int key_length, void *buffer, uint64 *buffer_size);
 extern boolean europa_database_delete(EDBHandle *database, const void *key, int key_length);
 
 #if defined __cplusplus
