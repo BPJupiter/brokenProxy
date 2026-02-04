@@ -4,7 +4,7 @@
 #ifdef _WIN32
 #define DB_DIRECTORY "..\\..\\..\\db\\measurementinfo.vdb"
 #else
-#define DB_DIRECTORY "../db/measurementinfo.vdb"
+#define DB_DIRECTORY "db/measurementinfo.vdb"
 #endif
 
 void *gDatastore_lock; /* unused */
@@ -21,8 +21,8 @@ void datastore_init()
 
 void datastore_destroy()
 {
-	europa_mutex_destroy(gDatastore_lock);
 	europa_database_close(gDatastore);
+	europa_mutex_destroy(gDatastore_lock);
 
 	gDatastore_lock = NULL;
 	gDatastore = NULL;

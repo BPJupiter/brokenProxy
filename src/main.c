@@ -6,6 +6,7 @@
 #include "Clay/clay.h"
 #include "Europa/europa.h"
 #include "shared_context/shared_context.h"
+#include "data/datastore.h"
 #include "proxy.h"
 
 #define PROXY_PORT 13406
@@ -13,7 +14,8 @@
 void signal_handler(int sig)
 {
     printf("\nCaught signal %d\n", sig);
-    c_debug_mem_print(1);
+    c_debug_mem_print(0);
+    datastore_destroy();
     exit(sig);
 }
 
