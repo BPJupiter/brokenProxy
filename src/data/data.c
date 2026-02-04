@@ -21,7 +21,7 @@ void datastore_init()
 
 void datastore_destroy()
 {
-	europa_database_close(gDatastore);
+	europa_database_close(&gDatastore);
 	europa_mutex_destroy(gDatastore_lock);
 
 	gDatastore_lock = NULL;
