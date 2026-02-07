@@ -7,8 +7,8 @@
 #define DB_DIRECTORY "db/measurementinfo.vdb"
 #endif
 
-void *gDatastore_lock; /* unused */
-EDBHandle *gDatastore;
+void *gDatastore_lock = NULL; /* unused */
+EDBHandle *gDatastore = NULL;
 
 void datastore_init()
 {
@@ -21,9 +21,12 @@ void datastore_init()
 
 void datastore_destroy()
 {
-	europa_database_close(&gDatastore);
-	europa_mutex_destroy(gDatastore_lock);
-
-	gDatastore_lock = NULL;
-	gDatastore = NULL;
+	if (NULL != gDatastore) {
+		europa_database_close(&gDatastore);
+		gDatastore = NULL;
+	}
+	if (NULL != gDatastore_lock) {
+		europa_mutex_destroy(gDatastore_lock);
+		gDatastore_lock = NULL;
+	}
 }

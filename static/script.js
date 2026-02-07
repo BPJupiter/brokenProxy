@@ -1,4 +1,5 @@
 const confirmBtn = document.getElementById("confirmSettings");
+const powerOffBtn = document.getElementById("powerOff");
 const latencyInput = document.getElementById("maxLatency");
 
 const pingToggle = document.getElementById("pingEnabled");
@@ -198,6 +199,27 @@ confirmBtn.onclick = function () {
                 confirmBtn.disabled = false;
                 confirmBtn.style.backgroundColor = "";
             }, 2000);
+        });
+};
+
+powerOffBtn.onclick = function () {
+    const originalText = powerOffBtn.innerText;
+    powerOffBtn.innerText = "...";
+    powerOffBtn.disabled = true;
+
+    fetch("http://127.0.0.1:13406/shutdown", {
+        method: "PUT"
+    })
+        .then(response => {
+            if (response.ok) {
+                console.error("Error:", error);
+                powerOffBtn.innerText = "Failed";
+                powerOffBtn.style.backgroundColor = "#dc3545";
+            }
+        })
+        .catch(error => {
+            powerOffBtn.innerText = "Proxy Off";
+            powerOffBtn.style.backgroundColor = "#555555";
         });
 };
 

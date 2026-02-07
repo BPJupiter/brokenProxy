@@ -11,8 +11,10 @@
 #include "Talos/talos.h"
 
 #include "shared_context/shared_context.h"
+#include "data/datastore.h"
 #include "cjson/cJSON.h"
 #include "memory_usage.h"
+#include "proxy.h"
 
 #define PROXY_HOST "127.0.0.1"
 #define BUFFER_SIZE 16384
@@ -55,6 +57,11 @@ static int active_thread_count = 0;
 
 static void *settings_mod_mutex = NULL;
 static int settings_modified = 1;
+
+static boolean shutdown_flag = FALSE;
+
+/* must be global such that shutdown can close() */
+VSocket server_handle;
 
 static int host_port_from_url(const char *url, char *host, int *port)
 {
@@ -518,7 +525,7 @@ static void handle_client(void *arg)
         goto cleanup;
     }
 
-    if (strstr(first_line, "POST") != NULL)
+    else if (strstr(first_line, "POST") != NULL)
     {
         europa_mutex_lock(settings_mod_mutex);
         set_json_settings(client_handle, buffer);
@@ -526,6 +533,12 @@ static void handle_client(void *arg)
         europa_mutex_unlock(settings_mod_mutex);
 
         DnsResult_free(&dns_result);
+        goto cleanup;
+    }
+    else if (strstr(first_line, "PUT") != NULL)
+    {
+        DnsResult_free(&dns_result);
+        proxy_shutdown();
         goto cleanup;
     }
 
@@ -601,9 +614,11 @@ cleanup:
         styx_socket_destroy(remote_handle);
     free(client_info);
 
-    europa_mutex_lock(thread_count_mutex);
-    active_thread_count--;
-    europa_mutex_unlock(thread_count_mutex);
+    if (NULL != thread_count_mutex) {
+        europa_mutex_lock(thread_count_mutex);
+        active_thread_count--;
+        europa_mutex_unlock(thread_count_mutex);
+    }
 
     return;
 }
@@ -683,7 +698,6 @@ static void update_proxy_settings(void)
 
 int proxy_start(int proxy_port)
 {
-    VSocket server_handle;
     struct sockaddr_in addr;
     int opt;
 
@@ -729,6 +743,11 @@ int proxy_start(int proxy_port)
         EuropaThread thread = 0;
         client_info_t *client_info = NULL;
         socklen_t client_len;
+
+        if (shutdown_flag) {
+            break;
+        }
+
         printf("Memory (KB): %s\n", get_memory_usage_str_kb());
 
         client_info = malloc(sizeof(*client_info));
@@ -746,6 +765,7 @@ int proxy_start(int proxy_port)
 
         client_info->client_handle = accept(server_handle, (struct sockaddr *)&client_info->client_addr.Ipv4, &client_len);
 
+        if (client_info->client_handle)
         if (!styx_socket_assert(client_info->client_handle, "Accept error"))
         {
             free(client_info);
@@ -765,8 +785,26 @@ int proxy_start(int proxy_port)
         }
     }
 
-    styx_socket_destroy(server_handle);
+    while (active_thread_count > 0)
+        ;
+
+    europa_mutex_destroy(thread_count_mutex);
+    thread_count_mutex = NULL;
+
     return 0;
+}
+
+void proxy_shutdown()
+{
+    shutdown_flag = TRUE;
+    styx_socket_destroy(server_handle);
+    /* wait for all threads to finish but this one and the main thread */
+    while (active_thread_count > 1)
+        ;
+    sharedContext_destroy();
+    datastore_destroy();
+    europa_mutex_destroy(settings_mod_mutex);
+    settings_mod_mutex = NULL;
 }
 
 static int proxy_printf(const char *format, ...)

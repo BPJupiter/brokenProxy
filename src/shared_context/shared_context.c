@@ -2,7 +2,6 @@
 
 #include "Clay/clay.h"
 #include "Europa/europa.h"
-#include "data/datastore.h"
 #include "shared_context/shared_context.h"
 
 extern TracertResult traceroute(const char *ip);
@@ -45,8 +44,6 @@ void sharedContext_init(void)
     gContext.dnsResolve_cb = NULL;
     gContext.tracert_cb = NULL;
     gContext.ping_cb = NULL;
-
-    datastore_init();
 }
 
 void sharedContext_destroy(void)
@@ -55,8 +52,6 @@ void sharedContext_destroy(void)
     europa_mutex_destroy(gContext.dnsResolve_lock);
     europa_mutex_destroy(gContext.tracert_lock);
     europa_mutex_destroy(gContext.ping_lock);
-
-    datastore_destroy();
 }
 
 int sharedContext_getVariable(SharedContextVariable var, void *value)

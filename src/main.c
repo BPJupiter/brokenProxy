@@ -15,6 +15,7 @@ void signal_handler(int sig)
 {
     printf("\nCaught signal %d\n", sig);
     c_debug_mem_print(0);
+    sharedContext_destroy();
     datastore_destroy();
     exit(sig);
 }
@@ -34,8 +35,9 @@ int main(int argc, char *argv[])
     signal(SIGINT, signal_handler);
 
     sharedContext_init();
+    datastore_init();
 
     proxy_start(proxy_port);
-    sharedContext_destroy();
+    c_debug_mem_print(0);
     return 0;
 }
