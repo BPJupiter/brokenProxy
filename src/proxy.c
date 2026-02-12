@@ -252,7 +252,7 @@ static void set_json_settings(VSocket client_handle, char *initial_buffer)
         return;
     }
 
-    fp = project_root_fopen("settings/settings.json", "r");
+    fp = project_root_fopen("settings/settings.json", "rb");
     if (fp == NULL)
     {
         talos_print_error("Error opening settings.json file!");
@@ -267,6 +267,7 @@ static void set_json_settings(VSocket client_handle, char *initial_buffer)
     bytes_read = fread(buffer, 1, BUFFER_SIZE, fp);
     buffer[bytes_read] = '\0';
     fclose(fp);
+    fp = NULL;
 
     file_json = cJSON_Parse(buffer);
     if (file_json == NULL)
@@ -321,7 +322,7 @@ static void set_json_settings(VSocket client_handle, char *initial_buffer)
 
     new_json = cJSON_Print(file_json);
     fp = project_root_fopen("settings/settings.json", "w");
-    if (fp)
+    if (NULL != fp)
     {
         fputs(new_json, fp);
         fclose(fp);

@@ -411,6 +411,7 @@ int europa_path_make_dir(char *path)
     return _wmkdir(wide_name);
 }
 
+/*
 FILE *europa_path_open(char *path, char *mode)
 {
     FILE *f = NULL;
@@ -425,6 +426,10 @@ FILE *europa_path_open(char *path, char *mode)
     if(0 == fopen_s(&f, path, encoding_mode))
         return f;
     return NULL;
+}*/
+FILE *europa_path_open(char *path, char *mode)
+{
+    return fopen(path, mode);
 }
 
 uint8 *europa_path_load(char *path, size_t *size)
