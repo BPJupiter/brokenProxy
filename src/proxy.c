@@ -15,6 +15,7 @@
 #include "cjson/cJSON.h"
 #include "memory_usage.h"
 #include "proxy.h"
+#include "termcolor.h"
 
 #define PROXY_HOST "127.0.0.1"
 #define BUFFER_SIZE 16384
@@ -45,9 +46,8 @@ struct settings
 };
 
 static int host_port_from_url(const char *url, char *host, int *port);
-static void send_local_file(char *filename, char *buffer, int buffer_len, int client_fd);
-static int get_content_length(const char *request);
-static void set_json_settings(int client_fd, char *initial_buffer);
+static void send_local_file(char *filename, char *buffer, int buffer_len, VSocket client_handle);
+static void set_json_settings(VSocket client_handle, char *initial_buffer);
 static void tunnel_data(void *arg);
 static void handle_client(void *arg);
 static void update_proxy_settings(void);
@@ -61,7 +61,7 @@ static int settings_modified = 1;
 static boolean shutdown_flag = FALSE;
 
 /* must be global such that shutdown can close() */
-VSocket server_handle;
+VSocket gServer_handle;
 
 static int host_port_from_url(const char *url, char *host, int *port)
 {
@@ -108,51 +108,43 @@ static int host_port_from_url(const char *url, char *host, int *port)
     }
 }
 
-static FILE *find_localfile_path(const char *filename, const char *perms)
+static FILE *project_root_fopen(const char *filename, char *perms)
 {
-    char *settings_paths[] = {
-        "",
-        "../",
-        "../../",
-        "../../../",
-        "../../../../",
-        "../../../../../",
-        "END",
-    };
-    char settings_dir[128] = "\0";
-    FILE *fp = NULL;
-    uint i = 0;
-    while (strcmp(settings_paths[i], "END") != 0)
-    {
-        strcat(settings_dir, settings_paths[i]);
-        strcat(settings_dir, filename);
-        fp = fopen(settings_dir, perms);
-        if (fp != NULL)
-            break;
-        i++;
-        settings_dir[0] = '\0';
-    }
-    c_text_copy(strlen(settings_paths[i]) + 1, settings_dir, settings_paths[i]);
-    return fp;
-    /*
-       strcat(settings_dir, filename);
-       printf("\n opening %s \n", settings_dir);
-       fp = fopen(settings_dir, perms);
-       c_text_copy(strlen(settings_paths[i]) + 1, settings_dir, settings_paths[i]);
-       return fp;*/
+    char root_dir[256] = "\0";
+    char *dir_ptr = NULL;
+    europa_pwd(root_dir, sizeof(root_dir));
+    dir_ptr = strstr(root_dir, "brokenProxy");
+    dir_ptr += strlen("brokenProxy/");
+    strcat(dir_ptr, filename);
+    return europa_path_open(dir_ptr, perms);
 }
 
-static void send_local_file(char *filename, char *buffer, int buffer_len, int client_fd)
+static int send_all(VSocket socket, const char *buf, uint len)
+{
+    uint total_sent = 0;
+    uint bytes_left = len;
+    int n;
+
+    while (total_sent < len)
+    {
+        n = send(socket, buf + total_sent, bytes_left, 0);
+        if (n == -1) { return -1; }
+        total_sent += n;
+        bytes_left -= n;
+    }
+    return 0;
+}
+
+static void send_local_file(char *filename, char *buffer, int buffer_len, VSocket client_handle)
 {
     FILE *fp;
 
     char path[256] = {0};
-    char extension[32] = {0};
+    char extension[64] = {0};
 
     long content_length;
+    int header_length;
     size_t bytes_read;
-
-    UNUSED(buffer_len);
 
     if (strcmp(filename, "/settings.json") == 0)
         strcpy(path, "settings/");
@@ -170,74 +162,44 @@ static void send_local_file(char *filename, char *buffer, int buffer_len, int cl
     else if (strstr(path, ".js") != NULL)     strcpy(extension, "text/javascript");
     else if (strstr(path, ".ico") != NULL)    strcpy(extension, "image/x-icon");
 
-    fp = find_localfile_path(path, "rb");
+    fp = project_root_fopen(path, "rb");
     if (!fp)
     {
-        printf("404 File not found: %s\n", path);
+        printf("%s 404 File not found: %s\n", ERR_TAG, path);
         return;
     }
     fseek(fp, 0L, SEEK_END);
     content_length = ftell(fp);
     rewind(fp);
 
-    sprintf(buffer,
-            "HTTP/1.1 200 OK\r\n"
-            "Content-Type: %s\r\n"
-            "Content-Length: %ld\r\n"
-            "Connection: close\r\n"
-            "\r\n",
-            extension, content_length);
-
-    send(client_fd, buffer, strlen(buffer), 0);
-    while ((bytes_read = fread(buffer, 1, sizeof(buffer), fp)) > 0)
+    header_length = sprintf(buffer,
+                            "HTTP/1.1 200 OK\r\n"
+                            "Content-Type: %s\r\n"
+                            "Content-Length: %ld\r\n"
+                            "Connection: close\r\n"
+                            "\r\n",
+                            extension, content_length);
+    if (send_all(client_handle, buffer, header_length) == -1)
     {
-        send(client_fd, buffer, bytes_read, 0);
+        printf("socket fd: %d", client_handle);
+        talos_print_error("Error sending header!\n");
+        fclose(fp);
+        return;
+    }
+    while ((bytes_read = fread(buffer, 1, buffer_len, fp)) > 0)
+    {
+        if (send_all(client_handle, buffer, bytes_read) == -1)
+        {
+            printf("socket fd: %d", client_handle);
+            talos_print_error("Error sending file data!\n");
+            break;
+        }
     }
 
     fclose(fp);
 }
 
-static int get_content_length(const char *request)
-{
-    const char *ptr = strstr(request, "Content-Length:");
-    if (ptr)
-    {
-        return atoi(ptr + 15);
-    }
-    return 0;
-}
-
-static FILE *find_settings_path(const char *perms)
-{
-    const char *settings_paths[] = {
-        "settings/settings.json",
-        "../settings/settings.json",
-        "../../settings/settings.json",
-        "../../../settings/settings.json",
-        "END",
-    };
-    static boolean FOUND = FALSE;
-    static char settings_dir[128] = "\0";
-    FILE *fp = NULL;
-    uint i = 0;
-    if (!FOUND)
-    {
-        while (strcmp(settings_paths[i], "END") != 0)
-        {
-            fp = fopen(settings_paths[i], perms);
-            if (fp != NULL)
-                break;
-            i++;
-        }
-        c_text_copy(strlen(settings_paths[i]) + 1, settings_dir, settings_paths[i]);
-        FOUND = TRUE;
-        return fp;
-    }
-    fp = fopen(settings_dir, perms);
-    return fp;
-}
-
-static void set_json_settings(int client_fd, char *initial_buffer)
+static void set_json_settings(VSocket client_handle, char *initial_buffer)
 {
     FILE *fp;
     char *buffer;
@@ -273,7 +235,7 @@ static void set_json_settings(int client_fd, char *initial_buffer)
     char *body_start = strstr(initial_buffer, "\r\n\r\n");
     if (!body_start)
     {
-        send(client_fd, HTTP_500, strlen(HTTP_500), 0);
+        send(client_handle, HTTP_500, strlen(HTTP_500), 0);
         return;
     }
     body_start += 4;
@@ -283,16 +245,16 @@ static void set_json_settings(int client_fd, char *initial_buffer)
     if (payload_json == NULL)
     {
         printf("Error: Failed to parse incoming POST JSON body.\n");
-        send(client_fd, HTTP_500, strlen(HTTP_500), 0);
+        send(client_handle, HTTP_500, strlen(HTTP_500), 0);
         return;
     }
 
-    fp = find_settings_path("r");
+    fp = project_root_fopen("settings/settings.json", "r");
     if (fp == NULL)
     {
         talos_print_error("Error opening settings.json file!");
         cJSON_Delete(payload_json);
-        send(client_fd, HTTP_500, strlen(HTTP_500), 0);
+        send(client_handle, HTTP_500, strlen(HTTP_500), 0);
         return;
     }
 
@@ -312,7 +274,7 @@ static void set_json_settings(int client_fd, char *initial_buffer)
             printf("CJSON Error: %s\n", error_ptr);
         }
         cJSON_Delete(payload_json);
-        send(client_fd, HTTP_500, strlen(HTTP_500), 0);
+        send(client_handle, HTTP_500, strlen(HTTP_500), 0);
         return;
     }
 
@@ -330,7 +292,7 @@ static void set_json_settings(int client_fd, char *initial_buffer)
         printf("Error: JSON structure invalid!\n");
         cJSON_Delete(file_json);
         cJSON_Delete(payload_json);
-        send(client_fd, HTTP_500, strlen(HTTP_500), 0);
+        send(client_handle, HTTP_500, strlen(HTTP_500), 0);
         return;
     }
 
@@ -355,15 +317,15 @@ static void set_json_settings(int client_fd, char *initial_buffer)
     }
 
     new_json = cJSON_Print(file_json);
-    fp = find_settings_path("w");
+    fp = project_root_fopen("settings/settings.json", "w");
     if (fp)
     {
         fputs(new_json, fp);
         fclose(fp);
-        send(client_fd, HTTP_200, strlen(HTTP_200), 0);
+        send(client_handle, HTTP_200, strlen(HTTP_200), 0);
     }
     else
-    {send(client_fd, HTTP_500, strlen(HTTP_500), 0);}
+    {send(client_handle, HTTP_500, strlen(HTTP_500), 0);}
 
     if (new_json)
     {
@@ -418,7 +380,7 @@ static void handle_client(void *arg)
 {
     client_info_t *client_info = (client_info_t *)arg;
     VSocket client_handle = client_info->client_handle;
-    VSocket remote_handle = 0;
+    VSocket remote_handle = -1;
 
     char buffer[BUFFER_SIZE] = {0};
     char host[512] = {0};
@@ -467,7 +429,7 @@ static void handle_client(void *arg)
     first_line[first_line_len] = '\0';
 
     /* Parse: METHOD URL VERSION */
-    if (sscanf(first_line, "%s %s %s", method, url_buf, version) != 3)
+    if (sscanf(first_line, "%15s %511s %15s", method, url_buf, version) != 3)
     {
         goto cleanup;
     }
@@ -502,11 +464,11 @@ static void handle_client(void *arg)
     if (strcmp(destination_ip, "127.0.0.1") != 0)
     {
         if (!sharedContext_latency_isgood(destination_ip))
-		{
-			printf("Request RTT Exceeded %.2lf ms! Packet dropped!\n", rtt_cutoff);
-			DnsResult_free(&dns_result);
-			goto cleanup;
-		}
+        {
+            printf("Request RTT Exceeded %.2lf ms! Packet dropped!\n", rtt_cutoff);
+            DnsResult_free(&dns_result);
+            goto cleanup;
+        }
         if (!sharedContext_cable_isgood(destination_ip))
         {
             printf("Request uses disabled cable! Packet dropped!\n");
@@ -614,7 +576,8 @@ cleanup:
         styx_socket_destroy(remote_handle);
     free(client_info);
 
-    if (NULL != thread_count_mutex) {
+    if (NULL != thread_count_mutex)
+    {
         europa_mutex_lock(thread_count_mutex);
         active_thread_count--;
         europa_mutex_unlock(thread_count_mutex);
@@ -641,7 +604,7 @@ static void update_proxy_settings(void)
 
     cJSON *locDNSEnabled;
 
-    fp = find_settings_path("r");
+    fp = project_root_fopen("settings/settings.json", "r");
     if (fp == NULL)
     {
         talos_print_error("Error opening settings.json file!");
@@ -706,26 +669,26 @@ int proxy_start(int proxy_port)
     signal(SIGPIPE, SIG_IGN);
 #endif
 
-    server_handle = styx_socket_create(TRUE, 0);
-    if (!styx_socket_assert(server_handle, "Server socket creation: "))
+    gServer_handle = styx_socket_create(TRUE, 0);
+    if (!styx_socket_assert(gServer_handle, "Server socket creation: "))
         exit(1);
 
     /* Set socket options */
     opt = 1;
-    setsockopt(server_handle, SOL_SOCKET, SO_REUSEADDR, (const char *)&opt, sizeof(opt));
+    setsockopt(gServer_handle, SOL_SOCKET, SO_REUSEADDR, (const char *)&opt, sizeof(opt));
 
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = inet_addr(PROXY_HOST);
     addr.sin_port = htons(proxy_port);
 
-    if (bind(server_handle, (struct sockaddr *)&addr, sizeof(addr)) < 0)
+    if (bind(gServer_handle, (struct sockaddr *)&addr, sizeof(addr)) < 0)
     {
         styx_print_error("Bind failed. ");
         exit(1);
     }
 
-    if (listen(server_handle, MAX_CLIENTS) < 0)
+    if (listen(gServer_handle, MAX_CLIENTS) < 0)
     {
         styx_print_error("Listen failed");
         exit(1);
@@ -744,7 +707,8 @@ int proxy_start(int proxy_port)
         client_info_t *client_info = NULL;
         socklen_t client_len;
 
-        if (shutdown_flag) {
+        if (shutdown_flag)
+        {
             break;
         }
 
@@ -763,18 +727,15 @@ int proxy_start(int proxy_port)
         }
         europa_mutex_unlock(settings_mod_mutex);
 
-        client_info->client_handle = accept(server_handle, (struct sockaddr *)&client_info->client_addr.Ipv4, &client_len);
+        client_info->client_handle = accept(gServer_handle, (struct sockaddr *)&client_info->client_addr.Ipv4, &client_len);
 
-        if (client_info->client_handle)
         if (!styx_socket_assert(client_info->client_handle, "Accept error"))
         {
             free(client_info);
             continue;
         }
 
-        printf("Accepted connection from %s:%d\n",
-               inet_ntoa(client_info->client_addr.Ipv4.sin_addr),
-               ntohs(client_info->client_addr.Ipv4.sin_port));
+        printf("Accepted connection from %s:%d\n", inet_ntoa(client_info->client_addr.Ipv4.sin_addr), ntohs(client_info->client_addr.Ipv4.sin_port));
 
         thread = europa_thread(handle_client, client_info, NULL);
         if (thread == 0)
@@ -786,7 +747,7 @@ int proxy_start(int proxy_port)
     }
 
     while (active_thread_count > 0)
-        ;
+        europa_sleepi(0, 10000000);
 
     europa_mutex_destroy(thread_count_mutex);
     thread_count_mutex = NULL;
@@ -797,10 +758,11 @@ int proxy_start(int proxy_port)
 void proxy_shutdown()
 {
     shutdown_flag = TRUE;
-    styx_socket_destroy(server_handle);
+    shutdown(gServer_handle, 2);
+    styx_socket_destroy(gServer_handle);
     /* wait for all threads to finish but this one and the main thread */
     while (active_thread_count > 1)
-        ;
+        europa_sleepi(0, 10000000);
     sharedContext_destroy();
     datastore_destroy();
     europa_mutex_destroy(settings_mod_mutex);

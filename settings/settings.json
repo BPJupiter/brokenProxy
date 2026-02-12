@@ -2,13 +2,13 @@
 	"settings":	{
 		"ping":	{
 			"pingEnabled":	true,
-			"maxLatency":	200
+			"maxLatency":	180
 		},
 		"traceroute":	{
 			"trEnabled":	false
 		},
 		"localDNS":	{
-			"locDNSEnabled":	true
+			"locDNSEnabled":	false
 		},
 		"disabledCables":	[]
 	}

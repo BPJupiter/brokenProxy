@@ -26,7 +26,7 @@ add_executable (${PROJECT_NAME}
 	"src/Clay/c_text.c"
 
 	"src/Europa/europa.h"
-	"src/Europa/e_file.c"
+	"src/Europa/e_dir.c"
 	"src/Europa/e_threads.c"
 	"src/Europa/e_time.c"
 

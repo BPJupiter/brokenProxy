@@ -1,25 +1,28 @@
-#if defined __cplusplus
-extern "C" {
-#endif
-
 #ifndef EUROPA_H
 #define EUROPA_H
-#include <stdint.h>
-#ifndef uint
-typedef unsigned int uint;
-#endif
-#ifndef boolean
-typedef unsigned char boolean;
-#endif
-#ifndef uint64
-typedef uint64_t uint64;
-#endif
-#ifndef int64
-typedef int64_t int64;
-#endif
-#ifndef uint32
-typedef unsigned int uint32;
-#endif
+#include <stdlib.h>
+#include <stdio.h>
+#include "Clay/clay.h"
+/*
+ #ifndef uint
+   typedef unsigned int uint;
+ #endif
+ #ifndef boolean
+   typedef unsigned char boolean;
+ #endif
+ #ifndef uint64
+   typedef unsigned long long uint64;
+ #endif
+ #ifndef int64
+   typedef long long int64;
+ #endif
+ #ifndef uint32
+   typedef unsigned int uint32;
+ #endif
+ #ifndef uint8
+   typedef unsigned char uint8;
+ #endif
+ */
 
 #ifdef _WIN32
     #define WIN32_LEAN_AND_MEAN
@@ -33,13 +36,13 @@ typedef pthread_t EuropaThread;
 
 /* -------- Multi Threading -------- */
 
-extern void     *europa_mutex_create(void);         /* Creates a mutex. Unlocked upon creation */
+extern void *europa_mutex_create(void);                 /* Creates a mutex. Unlocked upon creation */
 extern void     europa_mutex_lock(void *mutex);     /* Lock mutex. If mutex already locked, thread will wait until unlock so it can lock */
 extern boolean  europa_mutex_lock_try(void *mutex);     /* Thread will attempt to lock mutex. if mutex already locked, returns FALSE and fails. If mutex unlocked, it locks and returns TRUE */
 extern void     europa_mutex_unlock(void *mutex);     /* unlocks mutex */
 extern void     europa_mutex_destroy(void *mutex);     /* destroys mutex */
 
-extern void     *europa_signal_create(void);         /* Creates a signal blocker */
+extern void *europa_signal_create(void);             /* Creates a signal blocker */
 extern void     europa_signal_destroy(void *signal);     /* Destroys signal blocker */
 extern boolean  europa_signal_wait(void *signal, void *mutex);     /* Sets thread to wait on blocker for another thread to activate it */
 extern boolean  europa_signal_activate(void *signal);     /* Activates blocker so one or more threads waiting on the signal will be released */
@@ -64,8 +67,38 @@ extern boolean  europa_execute(const char *command);     /* Execute command on p
 
 /* -------- File Traversal -------- */
 
+#ifdef __WIN32
+    #define EUROPA_DIR_ROOT_PATH "/"
+    #define EUROPA_LIBRARY_EXTENSION "dll"
+    #define EUROPA_DIR_SLASH '\\'
+#else
+    #define EUROPA_DIR_ROOT_PATH "/"
+    #define EUROPA_LIBRARY_EXTENSION "lib"
+    #define EUROPA_DIR_SLASH '/'
+#endif
+#define EUROPA_DIR_HOME_PATH "."
+
 extern void     europa_pwd(char *output, uint32 output_size);
-extern void     europa_goto_dir(char *dir, uint32 dir_len, char *pwd, uint32 pwd_len);
+extern boolean  europa_path_search(char *file, boolean partial, char *path, boolean folders, uint number, char *out_buffer, uint out_buffer_size); /* Searches for a file recursively in a path, and writes its location to the out_buffer. If "partial" is set the search will also yeild results where the search string only makes up part of the file name.*/
+
+typedef void EDir;
+
+extern EDir *europa_path_dir_open(char *path);         /* Opens a path for traversal. If the path is not legal or not a directory the function will return NULL. */
+extern boolean  europa_path_dir_next(EDir *d, char *file_name_buffer, uint buffer_size); /* Writes the name of the next member of the directory to file_name_buffer. Returns FALSE if there are no files left in the directory to write out. */
+extern void     europa_path_dir_close(EDir *d); /* Closes a directory */
+
+extern boolean  europa_path_is_dir(char *path); /* Returns True if the path is a valid directory. */
+
+extern boolean  europa_path_file_stats(char *path, size_t *size, uint64 *create_time, uint64 *modify_time); /* Outputs stats about a file */
+extern boolean  europa_path_volume_stats(char *path, size_t *block_size, size_t *free_size, size_t *used_size, size_t *total_size); /* Outputs information about a volume, its block size, and how many blocks are used and free. */
+
+extern int      europa_path_rename(char *old_name, char *new_name); /* Rename a path */
+extern int      europa_path_remove(char *path); /* Remove a file */
+extern int      europa_path_make_dir(char *path); /* Creates a directory */
+extern FILE *europa_path_open(char *path, char *mode);     /* Same as fopen but UTF-8 */
+extern uint8 *europa_path_load(char *path, size_t *size);    /* Loads a file into a buffer. Writes the size of the buffer to "size" (optional). */
+
+
 
 /* -------- Database -------- */
 
@@ -77,9 +110,5 @@ extern void      europa_database_close(EDBHandle **database);
 extern boolean europa_database_store(EDBHandle *database, const void *key, int key_length, const void *data, uint64 data_length);
 extern boolean europa_database_fetch(EDBHandle *database, const void *key, int key_length, void *buffer, uint64 *buffer_size);
 extern boolean europa_database_delete(EDBHandle *database, const void *key, int key_length);
-
-#if defined __cplusplus
-}
-#endif
 
 #endif /* EUROPA_H */

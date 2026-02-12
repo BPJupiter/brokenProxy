@@ -251,7 +251,7 @@ void europa_sleepi(uint seconds, uint nano_seconds)
 {
     struct timespec times;
     times.tv_sec = seconds;
-    times.tv_sec = nano_seconds;
+    times.tv_nsec = nano_seconds;
     nanosleep(&times, NULL);
 }
 

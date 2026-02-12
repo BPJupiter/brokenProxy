@@ -52,6 +52,7 @@ void sharedContext_destroy(void)
     europa_mutex_destroy(gContext.dnsResolve_lock);
     europa_mutex_destroy(gContext.tracert_lock);
     europa_mutex_destroy(gContext.ping_lock);
+    printf("Destroyed sharedcontext.\n");
 }
 
 int sharedContext_getVariable(SharedContextVariable var, void *value)

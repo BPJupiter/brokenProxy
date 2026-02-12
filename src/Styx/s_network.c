@@ -254,7 +254,8 @@ boolean styx_socket_assert(VSocket sock, const char *msg)
 {
     if (sock == INVALID_SOCKET)
     {
-        styx_print_error(msg);
+        if (NULL != msg)
+            styx_print_error(msg);
         return FALSE;
     }
     return TRUE;
@@ -266,7 +267,8 @@ boolean styx_socket_assert(VSocket sock, const char *msg)
 {
     if (sock < 0)
     {
-        styx_print_error(msg);
+        if (NULL != msg)
+            styx_print_error(msg);
         return FALSE;
     }
     return TRUE;

@@ -12,21 +12,24 @@ EDBHandle *gDatastore = NULL;
 
 void datastore_init()
 {
-	char pwd[256];
-	gDatastore_lock = europa_mutex_create();
-	gDatastore = europa_database_open(DB_DIRECTORY);
-	europa_pwd(pwd, sizeof pwd);
-	printf("PWD: %s\n", pwd);
+    char pwd[256];
+    gDatastore_lock = europa_mutex_create();
+    gDatastore = europa_database_open(DB_DIRECTORY);
+    europa_pwd(pwd, sizeof pwd);
+    printf("PWD: %s\n", pwd);
 }
 
 void datastore_destroy()
 {
-	if (NULL != gDatastore) {
-		europa_database_close(&gDatastore);
-		gDatastore = NULL;
-	}
-	if (NULL != gDatastore_lock) {
-		europa_mutex_destroy(gDatastore_lock);
-		gDatastore_lock = NULL;
-	}
+    if (NULL != gDatastore)
+    {
+        europa_database_close(&gDatastore);
+        gDatastore = NULL;
+    }
+    if (NULL != gDatastore_lock)
+    {
+        europa_mutex_destroy(gDatastore_lock);
+        gDatastore_lock = NULL;
+    }
+    printf("Destroyed datastore\n");
 }
