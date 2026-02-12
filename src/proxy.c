@@ -114,9 +114,12 @@ static FILE *project_root_fopen(const char *filename, char *perms)
     char *dir_ptr = NULL;
     europa_pwd(root_dir, sizeof(root_dir));
     dir_ptr = strstr(root_dir, "brokenProxy");
+    if (NULL == dir_ptr)
+        return NULL;
     dir_ptr += strlen("brokenProxy/");
-    strcat(dir_ptr, filename);
-    return europa_path_open(dir_ptr, perms);
+    *dir_ptr = '\0';
+    strcat(root_dir, filename);
+    return europa_path_open(root_dir, perms);
 }
 
 static int send_all(VSocket socket, const char *buf, uint len)
@@ -271,7 +274,7 @@ static void set_json_settings(VSocket client_handle, char *initial_buffer)
         const char *error_ptr = cJSON_GetErrorPtr();
         if (error_ptr != NULL)
         {
-            printf("CJSON Error: %s\n", error_ptr);
+            printf("CJSON Error: %s: line %d file %s\n", error_ptr, __LINE__, __FILE__);
         }
         cJSON_Delete(payload_json);
         send(client_handle, HTTP_500, strlen(HTTP_500), 0);
@@ -604,7 +607,7 @@ static void update_proxy_settings(void)
 
     cJSON *locDNSEnabled;
 
-    fp = project_root_fopen("settings/settings.json", "r");
+    fp = project_root_fopen("settings/settings.json", "rb");
     if (fp == NULL)
     {
         talos_print_error("Error opening settings.json file!");
@@ -620,7 +623,7 @@ static void update_proxy_settings(void)
         const char *error_ptr = cJSON_GetErrorPtr();
         if (error_ptr != NULL)
         {
-            printf("CJSON Error: %s\n", error_ptr);
+            printf("CJSON Error: %s: line %d file %s\n", error_ptr, __LINE__, __FILE__);
         }
         cJSON_Delete(json);
         return;
