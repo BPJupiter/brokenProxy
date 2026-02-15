@@ -116,7 +116,9 @@ static FILE *project_root_fopen(const char *filename, char *perms)
     dir_ptr = strstr(root_dir, "brokenProxy");
     if (NULL == dir_ptr)
         return NULL;
-    dir_ptr += strlen("brokenProxy/");
+    dir_ptr += strlen("brokenProxy");
+    if (*dir_ptr != '/')
+        *(dir_ptr++) = '/';
     *dir_ptr = '\0';
     strcat(root_dir, filename);
     return europa_path_open(root_dir, perms);
