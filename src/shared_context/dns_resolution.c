@@ -72,7 +72,7 @@ typedef struct
 /* Pointers to resource record contents */
 typedef struct
 {
-    uint8 *name;
+    uint8 name[256]; /* domain names have a max length of 255 octets, as per rfc 1035 */
     R_DATA *resource;
     uint8 *rdata;
 } RES_RECORD;
@@ -101,7 +101,7 @@ static DnsResult process_auth_records(DNS_HEADER *dns,
                                       const char *host, int query_type, uint depth);
 static DnsResult localhost();
 static void  change_to_dns_name_format(uint8 *, const char *);
-static uint8 *read_name(uint8 *, uint8 *, int *);
+static void read_name(uint8 name[256], uint8 *, uint8 *, int *);
 static void  dns_free_mem(DNS_HEADER *dns, RES_RECORD *answers, RES_RECORD *auth, RES_RECORD *addit);
 static boolean external_dns_is_blocked(void);
 static void  set_to_local_dns(void);
@@ -153,6 +153,8 @@ typedef enum RootServerIndex
 #define T_AAAA 28 /* IPv6 address */
 
 #endif
+
+#define MAX_RECORDS 20
 
 int dns_server_count = 16;
 
@@ -323,9 +325,9 @@ static DnsResult dns_iterative_root_worker(const char *host, int query_type, cha
     DnsResult result;
     uint8 buf[65536] = {0};
     uint8 *qname, *reader;
-    RES_RECORD answers[20] = {0};
-    RES_RECORD auth[20] = {0};
-    RES_RECORD addit[20] = {0};
+    RES_RECORD answers[MAX_RECORDS] = {0};
+    RES_RECORD auth[MAX_RECORDS] = {0};
+    RES_RECORD addit[MAX_RECORDS] = {0};
     DNS_HEADER *dns = NULL;
     VSocket s;
 
@@ -403,9 +405,9 @@ static DnsResult dns_iterative_root_worker(const char *host, int query_type, cha
         return result;
     }
 
-    if (ntohs(dns->ans_count) > 20)  dns->ans_count = htons(20);
-    if (ntohs(dns->auth_count) > 20) dns->auth_count = htons(20);
-    if (ntohs(dns->add_count) > 20)  dns->add_count = htons(20);
+    if (ntohs(dns->ans_count) > MAX_RECORDS)  dns->ans_count = htons(MAX_RECORDS);
+    if (ntohs(dns->auth_count) > MAX_RECORDS) dns->auth_count = htons(MAX_RECORDS);
+    if (ntohs(dns->add_count) > MAX_RECORDS)  dns->add_count = htons(MAX_RECORDS);
 
 #ifdef DNS_DEBUG
     print_response_info((void *)dns);
@@ -471,7 +473,7 @@ static void read_answers(DNS_HEADER *dns, RES_RECORD *answers, uint8 **reader, u
     int i, j;
     for (i = 0; i < ntohs(dns->ans_count); i++)
     {
-        answers[i].name = read_name(*reader, buf, stop);
+        read_name(answers[i].name, *reader, buf, stop);
         *reader = *reader + *stop;
 
         answers[i].resource = (R_DATA *)*reader;
@@ -496,8 +498,8 @@ static void read_answers(DNS_HEADER *dns, RES_RECORD *answers, uint8 **reader, u
                 *reader = *reader + ntohs(answers[i].resource->data_len);
             break;
             default:
-                answers[i].rdata = read_name(*reader, buf, stop);
-                *reader = *reader + *stop;
+                answers[i].rdata = NULL;
+                *reader += answers[i].resource->data_len;
             break;
         }
     }
@@ -508,7 +510,7 @@ static void read_authorities(DNS_HEADER *dns, RES_RECORD *auth, uint8 **reader, 
     int i;
     for (i = 0; i < ntohs(dns->auth_count); i++)
     {
-        auth[i].name = read_name(*reader, buf, stop);
+        read_name(auth[i].name, *reader, buf, stop);
         *reader += *stop;
 
         auth[i].resource = (R_DATA *)*reader;
@@ -516,26 +518,29 @@ static void read_authorities(DNS_HEADER *dns, RES_RECORD *auth, uint8 **reader, 
 
         switch (ntohs(auth[i].resource->type))
         {
-        uint8 *rname;
+        uint8 rname[256];
             case T_NS:
-                auth[i].rdata = read_name(*reader, buf, stop);
+                auth[i].rdata = malloc(256 * sizeof(*(auth[i].rdata)));
+                talos_malloc_assert(auth[i].rdata);
+                read_name(auth[i].rdata, *reader, buf, stop);
                 *reader += *stop;
             break;
             case T_SOA:
                 /* Read MNAME */
-                auth[i].rdata = read_name(*reader, buf, stop);
+                auth[i].rdata = malloc(256 * sizeof(*(auth[i].rdata)));
+                talos_malloc_assert(auth[i].rdata);
+                read_name(auth[i].rdata, *reader, buf, stop);
                 *reader += *stop;
                 /* Read RNAME */
-                rname = read_name(*reader, buf, stop);
-                free(rname);
+                read_name(rname, *reader, buf, stop);
                 *reader += *stop;
                 /* Adv 20 bytes */
                 *reader += (5 * sizeof(uint));
                 /* NOTE: May need to access SOA fields later? */
             break;
             default:
-                auth[i].rdata = read_name(*reader, buf, stop);
-                *reader = *reader + *stop;
+                auth[i].rdata = NULL;
+                *reader += auth[i].resource->data_len;
             break;
         }
     }
@@ -546,7 +551,7 @@ static void read_additional(DNS_HEADER *dns, RES_RECORD *addit, uint8 **reader, 
     int i, j;
     for (i = 0; i < ntohs(dns->add_count); i++)
     {
-        addit[i].name = read_name(*reader, buf, stop);
+        read_name(addit[i].name, *reader, buf, stop);
         *reader += *stop;
 
         addit[i].resource = (R_DATA *)*reader;
@@ -575,8 +580,8 @@ static void read_additional(DNS_HEADER *dns, RES_RECORD *addit, uint8 **reader, 
                 *reader += ntohs(addit[i].resource->data_len);
             break;
             default:
-                addit[i].rdata = read_name(*reader, buf, stop);
-                *reader = *reader + *stop;
+                addit[i].rdata = NULL;
+                *reader += addit[i].resource->data_len;
             break;
         }
     }
@@ -829,15 +834,12 @@ static DnsResult process_auth_records(DNS_HEADER *dns,
     return result;
 }
 
-static uint8 *read_name(uint8 *reader, uint8 *buffer, int *count)
+static void read_name(uint8 name[256], uint8 *reader, uint8 *buffer, int *count)
 {
-    uint8 *name;
     uint p = 0, jumped = 0, offset;
     int i, j;
 
     *count = 1;
-    name = malloc(256);
-    talos_malloc_assert(name);
 
     name[0] = '\0';
 
@@ -888,7 +890,6 @@ static uint8 *read_name(uint8 *reader, uint8 *buffer, int *count)
         name[i] = '.';
     }
     name[i - 1] = '\0'; /* remove the last dot */
-    return name;
 }
 
 static void change_to_dns_name_format(uint8 *dns, const char *hostname)
@@ -939,15 +940,10 @@ static void dns_free_mem(DNS_HEADER *dns, RES_RECORD *answers, RES_RECORD *auth,
 
     int i;
 
-    for (i = 0; i < 20; i++)
+    for (i = 0; i < MAX_RECORDS; i++)
     {
         if (i < ans_count)
         {
-            if (answers[i].name != NULL)
-            {
-                free(answers[i].name);
-                answers[i].name = NULL;
-            }
             if (answers[i].rdata != NULL)
             {
                 free(answers[i].rdata);
@@ -956,11 +952,6 @@ static void dns_free_mem(DNS_HEADER *dns, RES_RECORD *answers, RES_RECORD *auth,
         }
         if (i < auth_count)
         {
-            if (auth[i].name != NULL)
-            {
-                free(auth[i].name);
-                auth[i].name = NULL;
-            }
             if (auth[i].rdata != NULL)
             {
                 free(auth[i].rdata);
@@ -969,11 +960,6 @@ static void dns_free_mem(DNS_HEADER *dns, RES_RECORD *answers, RES_RECORD *auth,
         }
         if (i < add_count)
         {
-            if (addit[i].name != NULL)
-            {
-                free(addit[i].name);
-                addit[i].name = NULL;
-            }
             if (addit[i].rdata != NULL)
             {
                 free(addit[i].rdata);
