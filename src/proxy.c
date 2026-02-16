@@ -11,7 +11,6 @@
 #include "Talos/talos.h"
 
 #include "shared_context/shared_context.h"
-#include "data/datastore.h"
 #include "cjson/cJSON.h"
 #include "memory_usage.h"
 #include "proxy.h"
@@ -770,7 +769,6 @@ void proxy_shutdown()
     while (active_thread_count > 1)
         europa_sleepi(0, 10000000);
     sharedContext_destroy();
-    datastore_destroy();
     europa_mutex_destroy(settings_mod_mutex);
     settings_mod_mutex = NULL;
 }

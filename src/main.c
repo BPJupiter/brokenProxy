@@ -38,6 +38,8 @@ int main(int argc, char *argv[])
     datastore_init();
 
     proxy_start(proxy_port);
+
+    datastore_destroy();
     c_debug_mem_print(0);
     return 0;
 }
