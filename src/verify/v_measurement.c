@@ -3,8 +3,10 @@
 #include "shared_context/shared_context.h"
 #include "data/datastore.h"
 
+#include "verify/verify.h"
+
 typedef struct MeasurementInfo {
-    char results;
+    char resultFlags;
     PingResult pingResult;
     TracertResult tracertResult;
 } MeasurementInfo;
@@ -16,7 +18,7 @@ typedef struct MeasurementInfo {
 static char current_ip[32] = "\0";
 static MeasurementInfo current_measurement = {0};
 
-boolean sharedContext_latency_isgood(const char *ip)
+boolean verify_latency(const char *ip)
 {
     double rtt_cutoff, rtt_current;
 
@@ -24,7 +26,7 @@ boolean sharedContext_latency_isgood(const char *ip)
         return TRUE;
 
     sharedContext_getVariable(SCV_MAX_RTT, &rtt_cutoff);
-    if (strcmp(current_ip, ip) == 0 && current_measurement.results & PING_RESULT == PING_RESULT)
+    if (strcmp(current_ip, ip) == 0 && (current_measurement.resultFlags & PING_RESULT) == PING_RESULT)
     {
         rtt_current = current_measurement.pingResult.rtt;
         return rtt_current < rtt_cutoff;
@@ -33,10 +35,10 @@ boolean sharedContext_latency_isgood(const char *ip)
 	c_text_copy(32, current_ip, ip);
     uint64 cm_size;
 	if (!europa_database_fetch(gDatastore, ip, strlen(ip), &current_measurement, &cm_size)
-		|| current_measurement.results & PING_RESULT != PING_RESULT)
+		|| (current_measurement.resultFlags & PING_RESULT) != PING_RESULT)
 	{
 		sharedContext_callback_execute_ping(&current_measurement.pingResult, ip);
-		current_measurement.results |= PING_RESULT;
+		current_measurement.resultFlags |= PING_RESULT;
         europa_database_store(gDatastore, ip, strlen(ip), &current_measurement, sizeof current_measurement);
 	}
 
@@ -44,11 +46,26 @@ boolean sharedContext_latency_isgood(const char *ip)
 	return rtt_current < rtt_cutoff;
 }
 
-boolean sharedContext_cable_isgood(const char *ip)
+boolean verify_cable(const char *ip)
 {
-    if (sharedContext_callback_execute_traceroute(&current_measurement.tracertResult, ip))
+    /* TODO: Map traceroute to cable */
+
+    if (!sharedContext_callback_isEnabled_traceroute())
+        return TRUE;
+
+    if (strcmp(current_ip, ip) == 0 && (current_measurement.resultFlags & TRACERT_RESULT) == TRACERT_RESULT)
     {
-        TracertResult_free(&current_measurement.tracertResult);
+        return TRUE;
     }
+
+    uint64 cm_size;
+    if (!europa_database_fetch(gDatastore, ip, strlen(ip), &current_measurement, &cm_size)
+        || (current_measurement.resultFlags & TRACERT_RESULT) != TRACERT_RESULT)
+    {
+        sharedContext_callback_execute_traceroute(&current_measurement.tracertResult, ip);
+        current_measurement.resultFlags |= TRACERT_RESULT;
+        europa_database_store(gDatastore, ip, strlen(ip), &current_measurement, sizeof current_measurement);
+    }
+
     return TRUE;
 }

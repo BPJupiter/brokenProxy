@@ -259,12 +259,12 @@ DnsResult dns_resolve_iterative_root(const char *host)
     {
         for (i = 0; i < RSI_COUNT; i++)
         {
-            if (!sharedContext_latency_isgood(RootServers[i]))
+            if (!verify_latency(RootServers[i]))
             {
 				printf("%s exceeded max latency! Changing root server\n", RootServers[i]);
 				continue;
             }
-            else if (!sharedContext_cable_isgood(RootServers[i]))
+            else if (!verify_cable(RootServers[i]))
             {
                 printf("%s uses a disabled cable! Changing root server\n", RootServers[i]);
                 continue;
@@ -735,7 +735,7 @@ static DnsResult process_auth_records(DNS_HEADER *dns,
             {
                 candidates_found++;
 
-                if (!sharedContext_latency_isgood(next_ns_ip))
+                if (!verify_latency(next_ns_ip))
                 {
 					printf("%s exceeded max latency! Skipping.\n", next_ns_ip);
 					rtt_rejections++;
@@ -743,7 +743,7 @@ static DnsResult process_auth_records(DNS_HEADER *dns,
 					bad_latency = 1;
 					break;
 				}
-                if (!sharedContext_cable_isgood(next_ns_ip))
+                if (!verify_cable(next_ns_ip))
                 {
                     /*rtt_rejections++;*/
                     found_glue = 0;
@@ -791,13 +791,13 @@ static DnsResult process_auth_records(DNS_HEADER *dns,
                     {
                         candidates_found++;
 
-                        if (!sharedContext_latency_isgood(next_ns_ip))
+                        if (!verify_latency(next_ns_ip))
 						{
 							printf("%s exceeded max latency! Skipping.\n", next_ns_ip);
 							rtt_rejections++;
 							continue;
 						}
-                        if (!sharedContext_cable_isgood(next_ns_ip))
+                        if (!verify_cable(next_ns_ip))
                         {
                             continue;
                         }

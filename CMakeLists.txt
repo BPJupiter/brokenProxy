@@ -29,6 +29,7 @@ add_executable (${PROJECT_NAME}
 	"src/Europa/e_dir.c"
 	"src/Europa/e_threads.c"
 	"src/Europa/e_time.c"
+	"src/Europa/e_db_vedis.c"
 
 	"src/Styx/styx.h"
 	"src/Styx/s_network.c"
@@ -48,7 +49,12 @@ add_executable (${PROJECT_NAME}
 	src/termcolor.h
 	
 	src/main.c
- "src/Europa/e_db_vedis.c" "src/shared_context/check_measurement.c"  "src/data/data.c" "src/data/datastore.h")
+
+	"src/verify/v_measurement.c"  
+	"src/verify/verify.h"
+
+	"src/data/data.c"
+	"src/data/datastore.h"  )
 
 target_include_directories(${PROJECT_NAME} PRIVATE src lib)
 

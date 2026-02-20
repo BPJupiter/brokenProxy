@@ -64,9 +64,6 @@ extern void TracertResult_free(TracertResult *tracert_result);
 extern void sharedContext_init(void); /* Creates a shared context */
 extern void sharedContext_destroy(void); /* Destroys a shared context */
 
-extern boolean sharedContext_latency_isgood(const char *ip);
-extern boolean sharedContext_cable_isgood(const char *ip);
-
 extern int sharedContext_getVariable(SharedContextVariable var, void *value);
 extern int sharedContext_setVariable(SharedContextVariable var, const void *value);
 

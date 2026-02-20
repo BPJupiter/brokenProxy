@@ -468,13 +468,13 @@ static void handle_client(void *arg)
 
     if (strcmp(destination_ip, "127.0.0.1") != 0)
     {
-        if (!sharedContext_latency_isgood(destination_ip))
+        if (!verify_latency(destination_ip))
         {
             printf("Request RTT Exceeded %.2lf ms! Packet dropped!\n", rtt_cutoff);
             DnsResult_free(&dns_result);
             goto cleanup;
         }
-        if (!sharedContext_cable_isgood(destination_ip))
+        if (!verify_cable(destination_ip))
         {
             printf("Request uses disabled cable! Packet dropped!\n");
             DnsResult_free(&dns_result);
