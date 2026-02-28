@@ -18,6 +18,8 @@ EDBHandle *europa_database_open(const char *filename)
 		{
 			initialised = TRUE;
 			printf("Created DB at %s\n", filename);
+			printf("Is threadsafe: %d\n", vedis_lib_is_threadsafe());
+			vedis_lib_config(VEDIS_LIB_CONFIG_THREAD_LEVEL_MULTI);
 			return database;
 		}
 
@@ -58,6 +60,8 @@ boolean europa_database_store(EDBHandle *database, const void *key, int key_leng
 	if (rv == VEDIS_OK)
 		return TRUE;
 
+	printf("Storage failed! Vedis returned code: %d\n", rv);
+
 	vedis_config(database, VEDIS_CONFIG_ERR_LOG, &err_buf, &err_len);
 	if (err_len > 0)
 		printf(err_buf);
@@ -72,6 +76,8 @@ boolean europa_database_fetch(EDBHandle *database, const void *key, int key_leng
 	rv = vedis_kv_fetch(database, key, key_length, buffer, buffer_size);
 	if (rv == VEDIS_OK)
 		return TRUE;
+
+	printf("Fetch failed! Vedis returned code: %d\n", rv);
 
 	vedis_config(database, VEDIS_CONFIG_ERR_LOG, &err_buf, &err_len);
 	if (err_len > 0)

@@ -11,6 +11,7 @@
 #include "Talos/talos.h"
 
 #include "shared_context/shared_context.h"
+#include "verify/verify.h"
 #include "cjson/cJSON.h"
 #include "memory_usage.h"
 #include "proxy.h"
@@ -19,6 +20,7 @@
 #define PROXY_HOST "127.0.0.1"
 #define BUFFER_SIZE 16384
 #define MAX_CLIENTS 8
+#define PROJECT_ROOT_FOLDER_NAME "brokenProxy"
 
 
 static int proxy_printf(const char *format, ...);
@@ -107,22 +109,6 @@ static int host_port_from_url(const char *url, char *host, int *port)
     }
 }
 
-static FILE *project_root_fopen(const char *filename, char *perms)
-{
-    char root_dir[256] = "\0";
-    char *dir_ptr = NULL;
-    europa_pwd(root_dir, sizeof(root_dir));
-    dir_ptr = strstr(root_dir, "brokenProxy");
-    if (NULL == dir_ptr)
-        return NULL;
-    dir_ptr += strlen("brokenProxy");
-    if (*dir_ptr != '/')
-        *(dir_ptr++) = '/';
-    *dir_ptr = '\0';
-    strcat(root_dir, filename);
-    return europa_path_open(root_dir, perms);
-}
-
 static int send_all(VSocket socket, const char *buf, uint len)
 {
     uint total_sent = 0;
@@ -166,7 +152,7 @@ static void send_local_file(char *filename, char *buffer, int buffer_len, VSocke
     else if (strstr(path, ".js") != NULL)     strcpy(extension, "text/javascript");
     else if (strstr(path, ".ico") != NULL)    strcpy(extension, "image/x-icon");
 
-    fp = project_root_fopen(path, "rb");
+    fp = europa_project_root_fopen(PROJECT_ROOT_FOLDER_NAME, path, "rb");
     if (!fp)
     {
         printf("%s 404 File not found: %s\n", ERR_TAG, path);
@@ -253,7 +239,7 @@ static void set_json_settings(VSocket client_handle, char *initial_buffer)
         return;
     }
 
-    fp = project_root_fopen("settings/settings.json", "rb");
+    fp = europa_project_root_fopen(PROJECT_ROOT_FOLDER_NAME, "settings/settings.json", "rb");
     if (fp == NULL)
     {
         talos_print_error("Error opening settings.json file!");
@@ -322,7 +308,7 @@ static void set_json_settings(VSocket client_handle, char *initial_buffer)
     }
 
     new_json = cJSON_Print(file_json);
-    fp = project_root_fopen("settings/settings.json", "w");
+    fp = europa_project_root_fopen(PROJECT_ROOT_FOLDER_NAME, "settings/settings.json", "w");
     if (NULL != fp)
     {
         fputs(new_json, fp);
@@ -609,7 +595,7 @@ static void update_proxy_settings(void)
 
     cJSON *locDNSEnabled;
 
-    fp = project_root_fopen("settings/settings.json", "rb");
+    fp = europa_project_root_fopen(PROJECT_ROOT_FOLDER_NAME, "settings/settings.json", "rb");
     if (fp == NULL)
     {
         talos_print_error("Error opening settings.json file!");

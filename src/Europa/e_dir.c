@@ -118,6 +118,7 @@ void *europa_path_watch(char *path, boolean subfolders)
     #include <dirent.h>
     #include <sys/statvfs.h>
     #include <unistd.h>
+    #include <string.h>
 
     #define DIR_ROOT_PATH "/"
     #define DIR_HOME_PATH "."
@@ -412,21 +413,21 @@ int europa_path_make_dir(char *path)
 }
 
 /*
-FILE *europa_path_open(char *path, char *mode)
-{
+   FILE *europa_path_open(char *path, char *mode)
+   {
     FILE *f = NULL;
     uint i;
     char encoding_mode[32], *p, *encoding = ", ccs=UTF-8";
     p = encoding_mode;
     for(i = 0; i < 3 && mode[i] > ' '; i++)
-        *p++ = mode[i];
+ * p++ = mode[i];
     for(i = 0; encoding[i] != 0; i++)
-        *p++ = encoding[i];
-    *p++ = 0;
+ * p++ = encoding[i];
+ * p++ = 0;
     if(0 == fopen_s(&f, path, encoding_mode))
         return f;
     return NULL;
-}*/
+   }*/
 FILE *europa_path_open(char *path, char *mode)
 {
     return fopen(path, mode);
@@ -482,3 +483,23 @@ FILE *europa_path_open(char *path, char *mode)
 }
 
 #endif
+
+FILE *europa_project_root_fopen(const char *root_folder_name, const char *filename, char *perms)
+{
+    char root_dir[256] = "\0";
+    char *dir_ptr = NULL;
+
+    if (strlen(root_folder_name) > 32) return NULL;
+    if (strlen(filename) > 128) return NULL;
+
+    europa_pwd(root_dir, sizeof(root_dir));
+    dir_ptr = strstr(root_dir, root_folder_name);
+    if (NULL == dir_ptr)
+        return NULL;
+    dir_ptr += strlen(root_folder_name);
+    if (*dir_ptr != '/')
+        *(dir_ptr++) = '/';
+    *dir_ptr = '\0';
+    strcat(root_dir, filename);
+    return europa_path_open(root_dir, perms);
+}

@@ -98,7 +98,7 @@ extern int      europa_path_make_dir(char *path); /* Creates a directory */
 extern FILE *europa_path_open(char *path, char *mode);     /* Same as fopen but UTF-8 */
 extern uint8 *europa_path_load(char *path, size_t *size);    /* Loads a file into a buffer. Writes the size of the buffer to "size" (optional). */
 
-
+extern FILE *europa_project_root_fopen(const char *root_folder_name, const char *filename, char *perms);
 
 /* -------- Database -------- */
 

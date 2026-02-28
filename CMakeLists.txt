@@ -60,6 +60,8 @@ target_include_directories(${PROJECT_NAME} PRIVATE src lib)
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE PING)
 
+target_compile_definitions(${PROJECT_NAME} PRIVATE VEDIS_ENABLE_THREADS)
+
 if(MSVC)
 	target_compile_definitions(${PROJECT_NAME} PRIVATE _CRT_SECURE_NO_WARNINGS)
 	target_link_libraries(${PROJECT_NAME} PRIVATE Ws2_32)
