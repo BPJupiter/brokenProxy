@@ -8,7 +8,7 @@
 #include "Styx/styx.h"
 #include "Talos/talos.h"
 
-#include "shared_context/shared_context.h"
+#include "context.h"
 
 static int dns_printf(const char *format, ...);
 #define printf dns_printf

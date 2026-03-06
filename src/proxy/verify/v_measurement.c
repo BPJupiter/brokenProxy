@@ -1,10 +1,10 @@
 #include "Clay/clay.h"
 #include "Europa/europa.h"
-#include "shared_context/shared_context.h"
+#include "context/context.h"
 #include "data/datastore.h"
 #include <string.h>
 
-#include "verify/verify.h"
+#include "verify.h"
 
 typedef struct MeasurementInfo
 {

@@ -2,7 +2,7 @@
 
 #include "Clay/clay.h"
 #include "Europa/europa.h"
-#include "shared_context/shared_context.h"
+#include "context.h"
 
 extern TracertResult traceroute(const char *ip);
 extern PingResult ping(const char *ip);

@@ -1,5 +1,5 @@
 #include "Europa/europa.h"
-#include "data/datastore.h"
+#include "datastore.h"
 
 #ifdef _WIN32
 #define DB_DIRECTORY "..\\..\\..\\db\\measurementinfo.vdb"

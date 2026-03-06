@@ -1,6 +1,5 @@
 #include "Clay/clay.h"
 #include "Europa/europa.h"
-#include "shared_context/shared_context.h"
 
 #include "vedis/vedis.h"
 

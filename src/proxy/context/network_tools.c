@@ -3,7 +3,7 @@
 #include <string.h>
 
 #include "Clay/clay.h"
-#include "shared_context/shared_context.h"
+#include "context.h"
 #include "termcolor.h"
 
 #define NO_RTT 0xDEAD

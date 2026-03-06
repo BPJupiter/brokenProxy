@@ -92,16 +92,18 @@ VSocket styx_socket_create(boolean stream, uint16 port)
             styx_socket_destroy(s);
             return -1;
         }
-
-        if (setsockopt(s, SOL_SOCKET, SO_BROADCAST, &option, sizeof option) != 0)
-            fprintf(stderr, "Medciean: Couldn't set broadcast option of socket to %d\n", option);
-        if (setsockopt(s, SOL_SOCKET, SO_SNDBUF, &buffer_size, sizeof buffer_size) != 0)
-            fprintf(stderr, "Styx: Couldn't set send buffer size of socket to %d\n", buffer_size);
-        if (setsockopt(s, SOL_SOCKET, SO_RCVBUF, &buffer_size, sizeof buffer_size) != 0)
-            fprintf(stderr, "Medciean: Couldn't set recieve buffer size of socket to %d\n", buffer_size);
-        return s;
+        if (stream)
+            if (listen(s, 8) < 0)
+                fprintf(stderr, "Styx Error: Failed to listen(), code %d (%s)\n", errno, strerror(errno));
     }
-    return s;
+
+	if (setsockopt(s, SOL_SOCKET, SO_BROADCAST, &option, sizeof option) != 0)
+		fprintf(stderr, "Styx: Couldn't set broadcast option of socket to %d\n", option);
+	if (setsockopt(s, SOL_SOCKET, SO_SNDBUF, &buffer_size, sizeof buffer_size) != 0)
+		fprintf(stderr, "Styx: Couldn't set send buffer size of socket to %d\n", buffer_size);
+	if (setsockopt(s, SOL_SOCKET, SO_RCVBUF, &buffer_size, sizeof buffer_size) != 0)
+		fprintf(stderr, "Styx: Couldn't set recieve buffer size of socket to %d\n", buffer_size);
+	return s;
 }
 
 void styx_socket_set_timeout(VSocket sock, uint32 seconds)

@@ -174,7 +174,7 @@ confirmBtn.onclick = function () {
     confirmBtn.disabled = true;
 
     fetch("http://127.0.0.1:13406/settings", {
-        method: "POST",
+        method: "PUT",
         headers: {
             "Content-Type": "application/json"
         },
@@ -208,7 +208,7 @@ powerOffBtn.onclick = function () {
     powerOffBtn.disabled = true;
 
     fetch("http://127.0.0.1:13406/shutdown", {
-        method: "PUT"
+        method: "POST"
     })
         .then(response => {
             if (response.ok) {

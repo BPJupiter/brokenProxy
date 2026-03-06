@@ -5,11 +5,11 @@
 
 #include "Clay/clay.h"
 #include "Europa/europa.h"
-#include "shared_context/shared_context.h"
+#include "context/context.h"
 #include "data/datastore.h"
 #include "proxy.h"
 
-#define PROXY_PORT 13406
+#define PROXY_PORT 13407
 
 void signal_handler(int sig)
 {
@@ -20,15 +20,13 @@ void signal_handler(int sig)
     exit(sig);
 }
 
-int main(int argc, char *argv[])
+int main(int argc, char **argv)
 {
     int proxy_port = PROXY_PORT;
-    double rtt_cutoff;
 
     if (argc > 1)
     {
-        rtt_cutoff = atof(argv[1]);
-        sharedContext_setVariable(SCV_MAX_RTT, &rtt_cutoff);
+        proxy_port = atoi(argv[1]);
     }
 
     c_debug_memory_init(europa_mutex_lock, europa_mutex_unlock, europa_mutex_create());

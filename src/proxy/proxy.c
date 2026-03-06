@@ -10,7 +10,7 @@
 #include "Styx/styx.h"
 #include "Talos/talos.h"
 
-#include "shared_context/shared_context.h"
+#include "context/context.h"
 #include "verify/verify.h"
 #include "cjson/cJSON.h"
 #include "memory_usage.h"
@@ -47,8 +47,6 @@ struct settings
 };
 
 static int host_port_from_url(const char *url, char *host, int *port);
-static void send_local_file(char *filename, char *buffer, int buffer_len, VSocket client_handle);
-static void set_json_settings(VSocket client_handle, char *initial_buffer);
 static void tunnel_data(void *arg);
 static void handle_client(void *arg);
 static void update_proxy_settings(void);
@@ -123,212 +121,6 @@ static int send_all(VSocket socket, const char *buf, uint len)
         bytes_left -= n;
     }
     return 0;
-}
-
-static void send_local_file(char *filename, char *buffer, int buffer_len, VSocket client_handle)
-{
-    FILE *fp;
-
-    char path[256] = {0};
-    char extension[64] = {0};
-
-    long content_length;
-    int header_length;
-    size_t bytes_read;
-
-    if (strcmp(filename, "/settings.json") == 0)
-        strcpy(path, "settings/");
-    else strcpy(path, "static/");
-
-    strcat(path, filename + 1);
-    if (strcmp(filename, "/") == 0)
-        strcat(path, "index.html");
-
-    strcpy(extension, "text/plain"); /* Default */
-    if (strstr(path, ".html") != NULL)        strcpy(extension, "text/html");
-    else if (strstr(path, ".css") != NULL)    strcpy(extension, "text/css");
-    else if (strstr(path, ".json") != NULL)   strcpy(extension, "application/json");
-    else if (strstr(path, ".js.map") != NULL) strcpy(extension, "application/json");
-    else if (strstr(path, ".js") != NULL)     strcpy(extension, "text/javascript");
-    else if (strstr(path, ".ico") != NULL)    strcpy(extension, "image/x-icon");
-
-    fp = europa_project_root_fopen(PROJECT_ROOT_FOLDER_NAME, path, "rb");
-    if (!fp)
-    {
-        printf("%s 404 File not found: %s\n", ERR_TAG, path);
-        return;
-    }
-    fseek(fp, 0L, SEEK_END);
-    content_length = ftell(fp);
-    rewind(fp);
-
-    header_length = sprintf(buffer,
-                            "HTTP/1.1 200 OK\r\n"
-                            "Content-Type: %s\r\n"
-                            "Content-Length: %ld\r\n"
-                            "Connection: close\r\n"
-                            "\r\n",
-                            extension, content_length);
-    if (send_all(client_handle, buffer, header_length) == -1)
-    {
-        printf("socket fd: %d", client_handle);
-        talos_print_error("Error sending header!\n");
-        fclose(fp);
-        return;
-    }
-    while ((bytes_read = fread(buffer, 1, buffer_len, fp)) > 0)
-    {
-        if (send_all(client_handle, buffer, bytes_read) == -1)
-        {
-            printf("socket fd: %d", client_handle);
-            talos_print_error("Error sending file data!\n");
-            break;
-        }
-    }
-
-    fclose(fp);
-}
-
-static void set_json_settings(VSocket client_handle, char *initial_buffer)
-{
-    FILE *fp;
-    char *buffer;
-    char *new_json;
-
-    cJSON *file_json;
-    cJSON *payload_json;
-
-    cJSON *settings;
-    cJSON *pingObj;
-    cJSON *tracertObj;
-    cJSON *localDNSObj;
-
-    cJSON *incomingCables;
-
-    const char *HTTP_200 =
-        "HTTP/1.1 200 OK\r\n"
-        "Access-Control-Allow-Origin: *\r\n"
-        "Content-Type: text/plain\r\n"
-        "Content-Length: 2\r\n"
-        "Connection: close\r\n"
-        "\r\n"
-        "OK";
-
-    const char *HTTP_500 =
-        "HTTP/1.1 500 Internal Server Error\r\n"
-        "Access-Control-Allow-Origin: *\r\n"
-        "Connection: close\r\n"
-        "\r\n";
-
-    size_t bytes_read;
-
-    char *body_start = strstr(initial_buffer, "\r\n\r\n");
-    if (!body_start)
-    {
-        send(client_handle, HTTP_500, strlen(HTTP_500), 0);
-        return;
-    }
-    body_start += 4;
-
-
-    payload_json = cJSON_Parse(body_start);
-    if (payload_json == NULL)
-    {
-        printf("Error: Failed to parse incoming POST JSON body.\n");
-        send(client_handle, HTTP_500, strlen(HTTP_500), 0);
-        return;
-    }
-
-    fp = europa_project_root_fopen(PROJECT_ROOT_FOLDER_NAME, "settings/settings.json", "rb");
-    if (fp == NULL)
-    {
-        talos_print_error("Error opening settings.json file!");
-        cJSON_Delete(payload_json);
-        send(client_handle, HTTP_500, strlen(HTTP_500), 0);
-        return;
-    }
-
-    buffer = malloc((sizeof *buffer) * BUFFER_SIZE);
-    talos_malloc_assert(buffer);
-
-    bytes_read = fread(buffer, 1, BUFFER_SIZE, fp);
-    buffer[bytes_read] = '\0';
-    fclose(fp);
-    fp = NULL;
-
-    file_json = cJSON_Parse(buffer);
-    if (file_json == NULL)
-    {
-        const char *error_ptr = cJSON_GetErrorPtr();
-        if (error_ptr != NULL)
-        {
-            printf("CJSON Error: %s: line %d file %s\n", error_ptr, __LINE__, __FILE__);
-        }
-        cJSON_Delete(payload_json);
-        send(client_handle, HTTP_500, strlen(HTTP_500), 0);
-        return;
-    }
-
-    settings = cJSON_GetObjectItemCaseSensitive(file_json, "settings");
-    pingObj = cJSON_GetObjectItemCaseSensitive(settings, "ping");
-    tracertObj = cJSON_GetObjectItemCaseSensitive(settings, "traceroute");
-    localDNSObj = cJSON_GetObjectItemCaseSensitive(settings, "localDNS");
-
-    if (!cJSON_IsObject(settings)
-        || !cJSON_IsObject(pingObj)
-        || !cJSON_IsObject(tracertObj)
-        || !cJSON_IsObject(localDNSObj)
-        )
-    {
-        printf("Error: JSON structure invalid!\n");
-        cJSON_Delete(file_json);
-        cJSON_Delete(payload_json);
-        send(client_handle, HTTP_500, strlen(HTTP_500), 0);
-        return;
-    }
-
-    cJSON_ReplaceItemInObject(pingObj, "maxLatency",
-                              cJSON_CreateNumber(cJSON_GetObjectItem(payload_json, "maxLatency")->valuedouble));
-    cJSON_ReplaceItemInObject(pingObj, "pingEnabled",
-                              cJSON_CreateBool(cJSON_GetObjectItem(payload_json, "pingEnabled")->valueint));
-    cJSON_ReplaceItemInObject(tracertObj, "trEnabled",
-                              cJSON_CreateBool(cJSON_GetObjectItem(payload_json, "trEnabled")->valueint));
-    cJSON_ReplaceItemInObject(localDNSObj, "locDNSEnabled",
-                              cJSON_CreateBool(cJSON_GetObjectItem(payload_json, "locDNSEnabled")->valueint));
-
-    incomingCables = cJSON_GetObjectItem(payload_json, "disabledCables");
-
-    if (incomingCables != NULL && cJSON_IsArray(incomingCables))
-    {
-        if (cJSON_HasObjectItem(settings, "disabledCables"))
-        {
-            cJSON_DeleteItemFromObject(settings, "disabledCables");
-        }
-        cJSON_AddItemToObject(settings, "disabledCables", cJSON_Duplicate(incomingCables, 1));
-    }
-
-    new_json = cJSON_Print(file_json);
-    fp = europa_project_root_fopen(PROJECT_ROOT_FOLDER_NAME, "settings/settings.json", "w");
-    if (NULL != fp)
-    {
-        fputs(new_json, fp);
-        fclose(fp);
-        send(client_handle, HTTP_200, strlen(HTTP_200), 0);
-    }
-    else
-    {send(client_handle, HTTP_500, strlen(HTTP_500), 0);}
-
-    if (new_json)
-    {
-    #ifdef C_MEMORY_DEBUG
-        c_no_debug_free(new_json);
-    #else
-        free(new_json);
-    #endif
-    }
-    cJSON_Delete(file_json);
-    cJSON_Delete(payload_json);
-    free(buffer);
 }
 
 /* Tunnel data from source to destination */
@@ -407,6 +199,10 @@ static void handle_client(void *arg)
         goto cleanup;
     }
     buffer[bytes_recvd] = '\0';
+    
+    /* ----------------------------------------------------- */
+    printf("\nBUFFER:\n%s...\n", buffer);
+    return;
 
     /* Parse first line - split by newline */
     first_line_end = strchr(buffer, '\n');
@@ -452,48 +248,19 @@ static void handle_client(void *arg)
     destination_ip = dns_result.answers[0];
     printf("%s resolved to %s\n", host, destination_ip);
 
-    if (strcmp(destination_ip, "127.0.0.1") != 0)
-    {
-        if (!verify_latency(destination_ip))
-        {
-            printf("Request RTT Exceeded %.2lf ms! Packet dropped!\n", rtt_cutoff);
-            DnsResult_free(&dns_result);
-            goto cleanup;
-        }
-        if (!verify_cable(destination_ip))
-        {
-            printf("Request uses disabled cable! Packet dropped!\n");
-            DnsResult_free(&dns_result);
-            goto cleanup;
-        }
-    }
-
-    /* Load proxy settings page if requested */
-    /* This code sucks. But its short enough that i dont care. */
-    if (strstr(first_line, "GET") != NULL)
-    {
-        send_local_file(host, buffer, sizeof(buffer), client_handle);
-
-        DnsResult_free(&dns_result);
-        goto cleanup;
-    }
-
-    else if (strstr(first_line, "POST") != NULL)
-    {
-        europa_mutex_lock(settings_mod_mutex);
-        set_json_settings(client_handle, buffer);
-        settings_modified = 1;
-        europa_mutex_unlock(settings_mod_mutex);
-
-        DnsResult_free(&dns_result);
-        goto cleanup;
-    }
-    else if (strstr(first_line, "PUT") != NULL)
-    {
-        DnsResult_free(&dns_result);
-        proxy_shutdown();
-        goto cleanup;
-    }
+    /* VERIFICATION STEP */
+	if (!verify_latency(destination_ip))
+	{
+		printf("Request RTT Exceeded %.2lf ms! Packet dropped!\n", rtt_cutoff);
+		DnsResult_free(&dns_result);
+		goto cleanup;
+	}
+	if (!verify_cable(destination_ip))
+	{
+		printf("Request uses disabled cable! Packet dropped!\n");
+		DnsResult_free(&dns_result);
+		goto cleanup;
+	}
 
     /* Connect to remote server */
     remote_handle = styx_socket_create(1, 0);

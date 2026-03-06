@@ -114,6 +114,14 @@ uint c_uint32_to_utf8(uint32 character, char *out)
     }
 }
 
+boolean c_check_null_termination(char *text, uint length)
+{
+    uint i;
+    for (i = 0; i < length && text[i] != 0; i++)
+        ;
+    return i == length;
+}
+
 uint c_find_next_word(char *text)
 {
     uint i;

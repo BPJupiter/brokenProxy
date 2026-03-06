@@ -125,6 +125,8 @@ extern void exit_crash(uint i);
 uint32          c_utf8_to_uint32(char *c, uint *pos); /* converts a string c at position pos to a uint32. pos will be modified to jump forward the number of bytes the character takes up */
 uint            c_uint32_to_utf8(uint32 character, char *out); /* converts a 32 bit unicode character to utf8. out param needs space for at least 6 8bit characters. returns number of bytes used */
 
+extern boolean	c_check_null_termination(char *text, uint len);
+
 extern uint     c_find_next_word(char *text);
 extern boolean  c_find_word_compare(char *text_a, char *text_b);
 extern uint     c_text_copy(uint length, char *dest, const char *source);

@@ -1,81 +1,20 @@
-﻿# CMakeList.txt : CMake project for brokenProxy, include source and define
-# project specific logic here.
-#
-cmake_minimum_required (VERSION 3.8)
+cmake_minimum_required(VERSION 3.8)
 
-# Enable Hot Reload for MSVC compilers if supported.
 if (POLICY CMP0141)
   cmake_policy(SET CMP0141 NEW)
   set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<IF:$<AND:$<C_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:MSVC>>,$<$<CONFIG:Debug,RelWithDebInfo>:EditAndContinue>,$<$<CONFIG:Debug,RelWithDebInfo>:ProgramDatabase>>")
 endif()
 
-project ("brokenProxy")
+project ("brokenProxy" C)
 
 set(CMAKE_C_STANDARD 90)
-
-# Add source to this project's executable.
-add_executable (${PROJECT_NAME}
-	lib/cjson/cJSON.c
-	lib/cjson/cJSON.h
-
-	lib/vedis/vedis.c
-	lib/vedis/vedis.h
-
-	"src/Clay/clay.h"
-	"src/Clay/c_mem_debug.c"
-	"src/Clay/c_text.c"
-
-	"src/Europa/europa.h"
-	"src/Europa/e_dir.c"
-	"src/Europa/e_threads.c"
-	"src/Europa/e_time.c"
-	"src/Europa/e_db_vedis.c"
-
-	"src/Styx/styx.h"
-	"src/Styx/s_network.c"
-
-	"src/Talos/talos.h"
-	"src/Talos/t_error.c"
-
-	
-	"src/shared_context/shared_context.h"
-	"src/shared_context/shared_context.c"
-	"src/shared_context/network_tools.c"
-	"src/shared_context/dns_resolution.c"
-	
-	src/memory_usage.h
-	src/proxy.c
-	src/proxy.h
-	src/termcolor.h
-	
-	src/main.c
-
-	"src/verify/v_measurement.c"  
-	"src/verify/verify.h"
-
-	"src/data/data.c"
-	"src/data/datastore.h"  )
-
-target_include_directories(${PROJECT_NAME} PRIVATE src lib)
-
-target_compile_definitions(${PROJECT_NAME} PRIVATE PING)
-
-target_compile_definitions(${PROJECT_NAME} PRIVATE VEDIS_ENABLE_THREADS)
-
-if(MSVC)
-	target_compile_definitions(${PROJECT_NAME} PRIVATE _CRT_SECURE_NO_WARNINGS)
-	target_link_libraries(${PROJECT_NAME} PRIVATE Ws2_32)
-else()
-	target_compile_options(${PROJECT_NAME} PRIVATE -pedantic -Wall -Wextra)
-	target_link_libraries(${PROJECT_NAME} PRIVATE m)
-
-    target_compile_options(${PROJECT_NAME} PRIVATE $<$<CONFIG:Debug>:-g> $<$<CONFIG:Debug>:-static>)
-    target_link_options(${PROJECT_NAME} PRIVATE $<$<CONFIG:Debug>:-static>)
-endif()
-
-find_package(Threads REQUIRED)
-target_link_libraries(${PROJECT_NAME} PRIVATE Threads::Threads)
-
-target_compile_definitions(${PROJECT_NAME} PRIVATE $<$<CONFIG:Release>:NDEBUG>)
+set(CMAKE_C_STANDARD_REQUIRED ON)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin")
+
+find_package(Threads REQUIRED)
+
+add_subdirectory(lib)
+add_subdirectory(src/shared)
+add_subdirectory(src/proxy)
+add_subdirectory(src/settings_webserver)
