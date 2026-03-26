@@ -8,6 +8,7 @@
 #include "Styx/styx.h"
 #include "Talos/talos.h"
 
+#include "verify/verify.h"
 #include "context.h"
 
 static int dns_printf(const char *format, ...);
@@ -28,6 +29,21 @@ typedef struct
  *   |QR|   Opcode  |AA|TC|RD|RA| Z|AD|CD|   RCODE   |
  *   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
  */
+
+/*
+typedef enum {
+    DNS_FLAG_QR = (1 << 15),
+    DNS_FLAG_OPCODE = (1 << 14),
+    DNS_FlAG_AA = (1 << 10),
+    DNS_FLAG_TC = (1 << 9),
+    DNS_FLAG_RD = (1 << 8),
+    DNS_FLAG_RA = (1 << 7),
+    DNS_FLAG_Z = (1 << 6),
+    DNS_FLAG_AD = (1 << 5),
+    DNS_FLAG_CD = (1 << 4),
+    DNS_FLAG_RCODE = (1 << 3)
+}DNS_HEADER_FLAGS;
+*/
 
 #define DNS_FLAG_QR     0x8000
 #define DNS_FLAG_OPCODE 0x7800
@@ -99,6 +115,8 @@ static DnsResult process_auth_records(DNS_HEADER *dns,
                                       RES_RECORD *auth,
                                       RES_RECORD *addit,
                                       const char *host, int query_type, uint depth);
+static boolean find_ipv4_glue(RES_RECORD *addit, int add_count, const char *ns_name, char *out_ip);
+static boolean try_ns_ip(const char *ns_ip, const char *host, int query_type, uint depth, DnsResult *out_result, uint *rtt_rejections);
 static DnsResult localhost();
 static void  change_to_dns_name_format(uint8 *, const char *);
 static void read_name(uint8 name[256], uint8 *, uint8 *, int *);
@@ -497,9 +515,15 @@ static void read_answers(DNS_HEADER *dns, RES_RECORD *answers, uint8 **reader, u
                 answers[i].rdata[ntohs(answers[i].resource->data_len)] = '\0';
                 *reader = *reader + ntohs(answers[i].resource->data_len);
             break;
+            case T_CNAME:
+                answers[i].rdata = (uint8 *)malloc(256 * sizeof(*(answers[i].rdata)));
+                talos_malloc_assert(answers[i].rdata);
+                read_name(answers[i].rdata, *reader, buf, stop);
+                *reader += *stop;
+			break;
             default:
                 answers[i].rdata = NULL;
-                *reader += answers[i].resource->data_len;
+                *reader += ntohs(answers[i].resource->data_len);
             break;
         }
     }
@@ -540,7 +564,7 @@ static void read_authorities(DNS_HEADER *dns, RES_RECORD *auth, uint8 **reader, 
             break;
             default:
                 auth[i].rdata = NULL;
-                *reader += auth[i].resource->data_len;
+                *reader += ntohs(auth[i].resource->data_len);
             break;
         }
     }
@@ -581,7 +605,7 @@ static void read_additional(DNS_HEADER *dns, RES_RECORD *addit, uint8 **reader, 
             break;
             default:
                 addit[i].rdata = NULL;
-                *reader += addit[i].resource->data_len;
+                *reader += ntohs(addit[i].resource->data_len);
             break;
         }
     }
@@ -675,163 +699,119 @@ static DnsResult process_auth_records(DNS_HEADER *dns,
                                       RES_RECORD *addit,
                                       const char *host, int query_type, uint depth)
 {
-    /* This function is disgusting. */
     DnsResult result = { 0 };
-    StyxSockaddrInet a = {0};
-    char next_ns_ip[16] = {0};
     char next_ns_name[256] = "\0";
-    int found_glue = 0, bad_latency = 0;
-    uint i, j, k;
+    char next_ns_ip[16] = "\0";
 
+    uint i, j;
     uint candidates_found = 0;
     uint rtt_rejections = 0;
 
-    for (i = 0; i < ntohs(dns->auth_count); i++)
-    {
-        bad_latency = 0;
-        /* currently finds first matching nammeserver that is ipv4 and has a glue record */
-        if (ntohs(auth[i].resource->type) == T_SOA)
-        {
+    for (i = 0; i < ntohs(dns->auth_count); i++) {
+        if (ntohs(auth[i].resource->type) == T_SOA) {
             printf("SOA Record: %s does not exist.\n", host);
-            dns_free_mem(dns, answers, auth, addit);
-            result.status = DNS_ERR_GENERIC;
-            result.nAns = 0;
-            result.answers = NULL;
-            return result;
+            goto cleanup_and_fail;
         }
-        if (ntohs(auth[i].resource->type) != T_NS) continue;
+
+        if (ntohs(auth[i].resource->type) != T_NS) {
+            continue;
+        }
 
         c_text_copy(strlen((char *)auth[i].rdata) + 1, next_ns_name, (char *)auth[i].rdata);
 
-        found_glue = 0;
-        for (j = 0; j < ntohs(dns->add_count); j++)
-        {
-            if (strcmp((char *)addit[j].name, next_ns_name) != 0)
-                continue;
-
-            switch (ntohs(addit[j].resource->type))
-            {
-            long *p;
-                case T_A:
-                    p = (long *)addit[j].rdata;
-                    a.Ipv4.sin_addr.s_addr = (*p);
-                    strcpy(next_ns_ip, inet_ntoa(a.Ipv4.sin_addr));
-                    printf("Found IPv4 glue record: %s\n", next_ns_ip);
-                    found_glue = 1;
-                break;
-                case T_AAAA:
-                    /*
-                       uchar *p;
-                       p = (uchar *)addit[j].rdata;
-                       memcpy(&a.ipv6.sin6_addr, p, sizeof(struct in6_addr));
-                       const char *r = inet_ntop(AF_INET6, &a.ipv6.sin6_addr, next_ns_ip, INET6_ADDRSTRLEN);
-                       printf("Found IPv6 glue record: %s\n", next_ns_ip);
-                       found_glue = 1;
-                     */
-                break;
-            }
-            /* Is that nameserver reachable? */
-            if (found_glue && strcmp(next_ns_ip, "127.0.0.1") != 0)
-            {
-                candidates_found++;
-
-                if (!verify_latency(next_ns_ip))
-                {
-					printf("%s exceeded max latency! Skipping.\n", next_ns_ip);
-					rtt_rejections++;
-					found_glue = 0;
-					bad_latency = 1;
-					break;
-				}
-                if (!verify_cable(next_ns_ip))
-                {
-                    /*rtt_rejections++;*/
-                    found_glue = 0;
-                    /*bad_latency = 1;*/
-                    break;
-                }
-            }
-            if (found_glue) break;
-        }
-        if (bad_latency) continue;
-        if (found_glue)
-        {
-            /* Recursion */
-            result = dns_iterative_root_worker(host, query_type, next_ns_ip, depth + 1);
-
-            if (result.nAns > 0)
-            {
+        if (find_ipv4_glue(addit, ntohs(dns->add_count), next_ns_name, next_ns_ip)) {
+            candidates_found++;
+            if (try_ns_ip(next_ns_ip, host, query_type, depth, &result, &rtt_rejections)) {
                 dns_free_mem(dns, answers, auth, addit);
                 return result;
             }
-
-            if (result.status == DNS_ERR_RTT_EXHAUSTED)
-                rtt_rejections++;
         }
-        else
-        {
+        else {
             DnsResult ns_result;
 
-            if (strcmp(host, next_ns_name) == 0)
-            {
+            if (strcmp(host, next_ns_name) == 0) {
                 printf("\x1b[31m[Abort]\x1b[0m Circular dependency: Need %s to resolve %s\n", next_ns_name, host);
                 continue;
             }
-            printf("No glue record for %s. Recrusively resolving NS IP...\n", next_ns_name);
 
+            printf("No glue record for %s. Recursively resolving NS IP...\n", next_ns_name);
             ns_result = dns_resolve_iterative_root(next_ns_name);
 
-            if (ns_result.nAns > 0)
-            {
-                for (k = 0; k < ns_result.nAns; k++)
-                {
-                    c_text_copy(strlen(ns_result.answers[k]) + 1, next_ns_ip, ns_result.answers[k]);
+            if (ns_result.nAns > 0) {
+                for (j = 0; j < ns_result.nAns; j++) {
+                    c_text_copy(strlen(ns_result.answers[j]) + 1, next_ns_ip, ns_result.answers[j]);
+                    candidates_found++;
 
-                    if (strcmp(next_ns_ip, "127.0.0.1") != 0)
-                    {
-                        candidates_found++;
-
-                        if (!verify_latency(next_ns_ip))
-						{
-							printf("%s exceeded max latency! Skipping.\n", next_ns_ip);
-							rtt_rejections++;
-							continue;
-						}
-                        if (!verify_cable(next_ns_ip))
-                        {
-                            continue;
-                        }
-                    }
-
-                    result = dns_iterative_root_worker(host, query_type, next_ns_ip, depth + 1);
-                    if (result.nAns > 0)
-                    {
+                    if (try_ns_ip(next_ns_ip, host, query_type, depth, &result, &rtt_rejections)) {
                         DnsResult_free(&ns_result);
-
                         dns_free_mem(dns, answers, auth, addit);
                         return result;
                     }
-                    if (result.status == DNS_ERR_RTT_EXHAUSTED)
-                        rtt_rejections++;
                 }
-                DnsResult_free(&ns_result);
             }
+            DnsResult_free(&ns_result);
         }
     }
 
-    if (candidates_found > 0 && candidates_found == rtt_rejections)
-    {
-        printf("\x1b[31m[DNS Rejected]\x1b[0m Failed to resolve %s: all %d nameservers exceed max RTT.\n", host, candidates_found);
+    if (candidates_found > 0 && candidates_found == rtt_rejections) {
+        printf("\x1b[31m[DNS Rejected]\x1b[0m Failed to resolve %s: all %u nameservers exceed max RTT.\n", host, candidates_found);
         result.status = DNS_ERR_RTT_EXHAUSTED;
     }
-    else
-    {
+    else {
         result.status = DNS_ERR_GENERIC;
     }
+cleanup_and_fail:
     dns_free_mem(dns, answers, auth, addit);
     result.nAns = 0;
     result.answers = NULL;
     return result;
+}
+
+static boolean find_ipv4_glue(RES_RECORD *addit, int add_count, const char *ns_name, char *out_ip)
+{
+    int j;
+    StyxSockaddrInet a = { 0 };
+
+    for (j = 0; j < add_count; j++)
+    {
+        if (strcmp((char *)addit[j].name, ns_name) == 0 && ntohs(addit[j].resource->type) == T_A) {
+            long *p = (long *)addit[j].rdata;
+            a.Ipv4.sin_addr.s_addr = (*p);
+            strcpy(out_ip, inet_ntoa(a.Ipv4.sin_addr));
+            printf("Found IPv4 glue record: %s\n", out_ip);
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+static boolean try_ns_ip(const char *ns_ip, const char *host, int query_type, uint depth, DnsResult *out_result, uint *rtt_rejections)
+{
+    if (strcmp(ns_ip, "127.0.0.1") == 0) {
+        return FALSE;
+    }
+
+    if (!verify_latency(ns_ip)) {
+        printf("%s exceeded max latency! Skipping.\n", ns_ip);
+        (*rtt_rejections)++;
+        return FALSE;
+    }
+
+    if (!verify_cable(ns_ip)) {
+        return FALSE;
+    }
+
+    *out_result = dns_iterative_root_worker(host, query_type, (char *)ns_ip, depth + 1);
+
+    if (out_result->nAns > 0) {
+        return TRUE;
+    }
+
+    if (out_result->status == DNS_ERR_RTT_EXHAUSTED) {
+        (*rtt_rejections)++;
+    }
+
+    return FALSE;
 }
 
 static void read_name(uint8 name[256], uint8 *reader, uint8 *buffer, int *count)

@@ -2,7 +2,7 @@
 #include "datastore.h"
 
 #ifdef _WIN32
-#define DB_DIRECTORY "..\\..\\..\\db\\measurementinfo.vdb"
+#define DB_DIRECTORY "db\\measurementinfo.vdb"
 #else
 #define DB_DIRECTORY "db/measurementinfo.vdb"
 #endif
@@ -15,7 +15,7 @@ void datastore_init()
     char pwd[256];
     gDatastore_lock = europa_mutex_create();
     gDatastore = europa_database_open(DB_DIRECTORY);
-    europa_pwd(pwd, sizeof pwd);
+    europa_get_pwd(pwd, sizeof pwd);
     printf("PWD: %s\n", pwd);
 }
 

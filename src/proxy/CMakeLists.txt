@@ -7,9 +7,9 @@
 
 	"verify/v_measurement.c"
 	
-	"proxy.c"
+	"proxy2.c"
 	"main.c"
-)
+ )
 
 target_include_directories(proxy PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 

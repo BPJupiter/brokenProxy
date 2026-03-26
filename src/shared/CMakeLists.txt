@@ -7,7 +7,7 @@ add_library(bpj_core STATIC
 	"Europa/e_time.c"
 	"Styx/s_network.c"
 	"Talos/t_error.c"
-)
+ )
 
 target_include_directories(bpj_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 

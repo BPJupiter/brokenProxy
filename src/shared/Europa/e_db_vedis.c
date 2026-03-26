@@ -76,7 +76,15 @@ boolean europa_database_fetch(EDBHandle *database, const void *key, int key_leng
 	if (rv == VEDIS_OK)
 		return TRUE;
 
-	printf("Fetch failed! Vedis returned code: %d\n", rv);
+	switch (rv)
+	{
+		case VEDIS_NOTFOUND:
+			printf("Inserting record for key: %s\n", (char *)key);
+		break;
+		default:
+			printf("Fetch failed! Vedis returned code: %d\n", rv);
+		break;
+	}
 
 	vedis_config(database, VEDIS_CONFIG_ERR_LOG, &err_buf, &err_len);
 	if (err_len > 0)

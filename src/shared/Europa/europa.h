@@ -47,8 +47,18 @@ extern void     europa_signal_destroy(void *signal);     /* Destroys signal bloc
 extern boolean  europa_signal_wait(void *signal, void *mutex);     /* Sets thread to wait on blocker for another thread to activate it */
 extern boolean  europa_signal_activate(void *signal);     /* Activates blocker so one or more threads waiting on the signal will be released */
 extern boolean  europa_signal_activate_all(void *signal);     /* Activates blocker so that all threads waiting on a signal will be released */
-extern EuropaThread europa_thread(void (*func)(void *data), void *data, char *name);     /* Launches thread executing func pointer with data as args. Once function returns, thread is deleted. */
-extern void     europa_join(EuropaThread thread);
+extern EuropaThread europa_thread_create(void (*func)(void *data), void *data, char *name);     /* Launches thread executing func pointer with data as args. Once function returns, thread is deleted. */
+extern void     europa_thread_join(EuropaThread thread);
+extern void     europa_thread_detach(EuropaThread thread);
+
+
+/* -------- Atomics -------- */
+
+typedef void * volatile EAtomicPointer; /* An atomic pointer */
+typedef uint64 volatile EAtomicInteger; /* an atomic 64 bit integer */
+typedef uint64 volatile EAtomicUsers; /* An atomic lock that lets multiple users read but only one write */
+#include "e_atomics_internal.h"
+
 
 /* -------- Timing -------- */
 
@@ -63,7 +73,10 @@ extern void     europa_sleepd(double time);
 
 /* -------- Execution -------- */
 
-extern boolean  europa_execute(const char *command);     /* Execute command on platform */
+extern int  europa_execute(const char *command);     /* Execute command on platform */
+extern void europa_process_shutdown(int pid); /* graceful */
+extern void europa_process_terminate(int pid); /* kills immediately */
+extern void europa_process_reload(int pid);
 
 /* -------- File Traversal -------- */
 
@@ -78,7 +91,9 @@ extern boolean  europa_execute(const char *command);     /* Execute command on p
 #endif
 #define EUROPA_DIR_HOME_PATH "."
 
-extern void     europa_pwd(char *output, uint32 output_size);
+extern void     europa_get_pwd(char *output, uint32 output_size);
+extern void     europa_set_pwd(char *new_dir);
+extern int      europa_pwd_to_root(char *root_folder_name);
 extern boolean  europa_path_search(char *file, boolean partial, char *path, boolean folders, uint number, char *out_buffer, uint out_buffer_size); /* Searches for a file recursively in a path, and writes its location to the out_buffer. If "partial" is set the search will also yeild results where the search string only makes up part of the file name.*/
 
 typedef void EDir;

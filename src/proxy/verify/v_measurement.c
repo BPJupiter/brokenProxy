@@ -25,10 +25,11 @@ boolean verify_latency(const char *ip)
     double rtt_cutoff, rtt_current;
     uint64 cm_size;
 
-    if (!sharedContext_callback_isEnabled_ping())
+    if (!sharedContext_callback_isEnabled_ping()) {
         return TRUE;
+    }
 
-    sharedContext_getVariable(SCV_MAX_RTT, &rtt_cutoff);
+    sharedContext_var_get_maxRtt(&rtt_cutoff);
     if (strcmp(current_ip, ip) == 0 && (current_measurement.resultFlags & PING_RESULT) == PING_RESULT)
     {
         rtt_current = current_measurement.pingResult.rtt;

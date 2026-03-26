@@ -128,7 +128,7 @@ void *europa_path_watch(char *path, boolean subfolders)
 
 #ifdef _WIN32
 
-void europa_pwd(char *output, uint32 output_size)
+void europa_get_pwd(char *output, uint32 output_size)
 {
     uint length;
     char *last_slash;
@@ -148,14 +148,28 @@ void europa_pwd(char *output, uint32 output_size)
     }
 }
 
+void europa_set_pwd(char *new_dir)
+{
+    if (SetCurrentDirectoryA(new_dir) == 0) {
+        printf("Error settings current directory. Error code: %lu\n", GetLastError());
+    }
+}
+
 #else
 
-void europa_pwd(char *output, uint32 output_size)
+void europa_get_pwd(char *output, uint32 output_size)
 {
     if (getcwd(output, output_size) == NULL)
     {
         printf("Error getting module filename\n");
         return;
+    }
+}
+
+void europa_set_pwd(char *new_dir)
+{
+    if (chdir(new_dir) != 0) {
+        perror("Error setting current directory");
     }
 }
 
@@ -380,16 +394,7 @@ char invalid_characters[] = {'>', '<', '\"', '|', '?', '*'};
 
 int europa_path_rename(char *old_name, char *new_name)
 {
-    wchar_t wide_oldname[EUROPA_WINDOWS_PATH_LENGTH_MAX];
-    wchar_t wide_newname[EUROPA_WINDOWS_PATH_LENGTH_MAX];
-    uint pos, i;
-    for(i = pos = 0; i < EUROPA_WINDOWS_PATH_LENGTH_MAX - 1 && old_name[pos] != 0; i++)
-        wide_oldname[i] = c_utf8_to_uint32(old_name, &pos);
-    wide_oldname[i] = 0;
-    for(i = pos = 0; i < EUROPA_WINDOWS_PATH_LENGTH_MAX - 1 && new_name[pos] != 0; i++)
-        wide_newname[i] = c_utf8_to_uint32(new_name, &pos);
-    wide_newname[i] = 0;
-    return _wrename(wide_oldname, wide_newname);
+    return MoveFileExA(old_name, new_name, MOVEFILE_REPLACE_EXISTING);
 }
 
 int europa_path_remove(char *path)
@@ -492,7 +497,7 @@ FILE *europa_project_root_fopen(const char *root_folder_name, const char *filena
     if (strlen(root_folder_name) > 32) return NULL;
     if (strlen(filename) > 128) return NULL;
 
-    europa_pwd(root_dir, sizeof(root_dir));
+    europa_get_pwd(root_dir, sizeof(root_dir));
     dir_ptr = strstr(root_dir, root_folder_name);
     if (NULL == dir_ptr)
         return NULL;
@@ -502,4 +507,21 @@ FILE *europa_project_root_fopen(const char *root_folder_name, const char *filena
     *dir_ptr = '\0';
     strcat(root_dir, filename);
     return europa_path_open(root_dir, perms);
+}
+
+int europa_pwd_to_root(const char *root_folder_name)
+{
+    char root_dir[256] = "\0";
+    char *dir_ptr = NULL;
+
+    europa_get_pwd(root_dir, sizeof(root_dir));
+    dir_ptr = strstr(root_dir, root_folder_name);
+    if (NULL == dir_ptr)
+        return 1;
+    dir_ptr += strlen(root_folder_name);
+    if (*dir_ptr != '/')
+        *(dir_ptr++) = '/';
+    *dir_ptr = '\0';
+    europa_set_pwd(root_dir);
+    return 0;
 }

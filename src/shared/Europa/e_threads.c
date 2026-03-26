@@ -173,7 +173,7 @@ typedef struct
 }EuropaThreadNameParam;
 #pragma pack(pop)
 
-EuropaThread europa_thread(void (*func)(void *data), void *data, char *name)
+EuropaThread europa_thread_create(void (*func)(void *data), void *data, char *name)
 {
     EuropaThreadNameParam info;
     EuropaThreadParams *thread_param;
@@ -189,11 +189,18 @@ EuropaThread europa_thread(void (*func)(void *data), void *data, char *name)
     return thread_h;
 }
 
-void europa_join(EuropaThread thread)
+void europa_thread_join(EuropaThread thread)
 {
     if (thread)
     {
         WaitForSingleObject(thread, INFINITE);
+        CloseHandle(thread);
+    }
+}
+
+void europa_thread_detach(EuropaThread thread)
+{
+    if (thread) {
         CloseHandle(thread);
     }
 }
@@ -209,7 +216,7 @@ void *e_thread_thread(void *param)
     return NULL;
 }
 
-EuropaThread europa_thread(void (*func)(void *data), void *data, char *name)
+EuropaThread europa_thread_create(void (*func)(void *data), void *data, char *name)
 {
     pthread_t thread_id;
     EuropaThreadParams *thread_param;
@@ -229,9 +236,14 @@ EuropaThread europa_thread(void (*func)(void *data), void *data, char *name)
     return thread_id;
 }
 
-void europa_join(EuropaThread thread)
+void europa_thread_join(EuropaThread thread)
 {
     pthread_join(thread, NULL);
+}
+
+void europa_thread_detach(EuropaThread thread)
+{
+    pthread_detach(thread);
 }
 
 #endif
@@ -264,25 +276,90 @@ void europa_sleepd(double time)
 
 #ifdef _WIN32
 
-boolean europa_execute(char *command)
+int europa_execute(char *command)
 {
     STARTUPINFO startup_info;
     PROCESS_INFORMATION process_info;
     ZeroMemory(&startup_info, sizeof(startup_info));
     startup_info.cb = sizeof(startup_info);
     ZeroMemory(&process_info, sizeof(process_info));
-    return CreateProcess(NULL, command, NULL, NULL, FALSE, 0, NULL, NULL, &startup_info, &process_info);
+
+    if (CreateProcess(NULL, command, NULL, NULL, FALSE, CREATE_NEW_PROCESS_GROUP, NULL, NULL, &startup_info, &process_info)) {
+        int child_pid = (int)process_info.dwProcessId;
+
+        CloseHandle(process_info.hProcess);
+        CloseHandle(process_info.hThread);
+        
+        return child_pid;
+    }
+
+    return 0;
+}
+
+void europa_process_shutdown(int pid)
+{
+    if (pid > 0) {
+        GenerateConsoleCtrlEvent(CTRL_BREAK_EVENT, pid);
+    }
+}
+
+void europa_process_terminate(int pid)
+{
+    if (pid > 0) {
+        HANDLE hProc = OpenProcess(PROCESS_TERMINATE, FALSE, pid);
+        if (hProc) {
+            TerminateProcess(hProc, 0);
+            CloseHandle(hProc);
+        }
+    }
+}
+
+void europa_process_reload(int pid)
+{
+    if (pid > 0) {
+        char event_name[128];
+        snprintf(event_name, sizeof(event_name), "Global\\EuropaReload_%d", pid);
+
+        HANDLE hEvent = OpenEvent(EVENT_MODIFY_STATE, FALSE, event_name);
+        if (hEvent) {
+            SetEvent(hEvent);
+            CloseHandle(hEvent);
+        }
+        else {
+            printf("Could not find proxy reload event for PID %d\n", pid);
+        }
+    }
 }
 
 #else
 
-boolean europa_execute(const char *command)
+int europa_execute(const char *command)
 {
-    uint id;
+    int id;
     id = fork();
-    if (id == 0)
-        return execl(command, NULL);
-    return FALSE;
+    if (id == 0) {
+        execl(command, command, (char *)NULL);
+        exit(1);
+    }
+    else if (id > 0) {
+        return id;
+    }
+    return 0;
+}
+
+void europa_process_shutdown(int pid)
+{
+    if (pid > 0) kill(pid, SIGTERM);
+}
+
+void europa_process_terminate(int pid)
+{
+    if (pid > 0) kill(pid, SIGKILL);
+}
+
+void europa_process_reload(int pid)
+{
+    if (pid > 0) kill(pid, SIGUSR1);
 }
 
 #endif

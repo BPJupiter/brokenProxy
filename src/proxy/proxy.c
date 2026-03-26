@@ -48,7 +48,8 @@ struct settings
 
 static int host_port_from_url(const char *url, char *host, int *port);
 static void tunnel_data(void *arg);
-static void handle_client(void *arg);
+static void handle_tcp_client(void *arg);
+static void handle_udp_client(void *arg);
 static void update_proxy_settings(void);
 
 static void *thread_count_mutex = NULL;
@@ -58,9 +59,6 @@ static void *settings_mod_mutex = NULL;
 static int settings_modified = 1;
 
 static boolean shutdown_flag = FALSE;
-
-/* must be global such that shutdown can close() */
-VSocket gServer_handle;
 
 static int host_port_from_url(const char *url, char *host, int *port)
 {
@@ -159,7 +157,7 @@ static void tunnel_data(void *arg)
 }
 
 /* Handle individual client connection */
-static void handle_client(void *arg)
+static void handle_tcp_client(void *arg)
 {
     client_info_t *client_info = (client_info_t *)arg;
     VSocket client_handle = client_info->client_handle;
@@ -193,43 +191,78 @@ static void handle_client(void *arg)
     printf("Thread %ld: %s\n", (long)arg, get_memory_usage_str_kb());
 
     /* Receive initial request */
-    bytes_recvd = recv(client_handle, buffer, BUFFER_SIZE - 1, 0);
-    if (bytes_recvd <= 0)
+    bytes_recvd = recv(client_handle, buffer, BUFFER_SIZE, 0);
+    if (bytes_recvd < 3 || buffer[0] != 0x05) goto cleanup;
+
+    uint8 auth_reply[2] = { 0x05, 0x00 };
+    send(client_handle, auth_reply, 2, 0);
+
+    bytes_recvd = recv(client_handle, buffer, BUFFER_SIZE, 0);
+    if (bytes_recvd < 10 || buffer[0] != 0x05) goto cleanup;
+
+    int command = buffer[1];
+
+    char dest_ip[INET6_ADDRSTRLEN] = { 0 };
+    int dest_port = 0;
+    int header_length = 0;
+
+    if (buffer[3] == 0x01)
     {
-        goto cleanup;
+        sprintf(dest_ip, "%d.%d.%d.%d", buffer[4], buffer[5], buffer[6], buffer[7]);
+        dest_port = (buffer[8] << 8) | buffer[9];
     }
-    buffer[bytes_recvd] = '\0';
+	else if (buffer[3] == 0x03) /* domain name */
+    {
+        int name_len = buffer[4];
+        header_length = 4 + 1 + name_len + 2; /* RSV+FRAG+ATYP(4) + Len(1) + Name + Port(2) */
+        if (bytes_recvd < header_length) return;
+
+        memcpy(dest_ip, &buffer[5], name_len);
+        dest_ip[name_len] = '\0';
+
+        dest_port = (buffer[5 + name_len] << 8) | buffer[5 + name_len + 1];
+        sharedContext_callback_execute_dnsResolve(&dns_result, dest_ip);
+
+    }
+    else if (buffer[3] == 0x04) /* IPV6 */
+    {
+        header_length = 4 + 16 + 2;
+        /* I don't know what to do here. */
+    }
+    else
+    {
+        return;
+    }
+
+    if (command == 0x01)
+    {
+		if (!verify_latency(destination_ip))
+		{
+			printf("Request RTT Exceeded %.2lf ms! Packet dropped!\n", rtt_cutoff);
+			DnsResult_free(&dns_result);
+			goto cleanup;
+		}
+		if (!verify_cable(destination_ip))
+		{
+			printf("Request uses disabled cable! Packet dropped!\n");
+			DnsResult_free(&dns_result);
+			goto cleanup;
+		}
+
+    }
+    else if (command == 0x03)
+    {
+        uint8 udp_reply[10] = { 0x05, 0x00, 0x00, 0x01, 127,0,0,1, 0,0 };
+        send(client_handle, udp_reply, 10, 0);
+
+        while (recv(client_handle, buffer, 1, 0) > 0)
+            ;
+    }
     
     /* ----------------------------------------------------- */
     printf("\nBUFFER:\n%s...\n", buffer);
     return;
 
-    /* Parse first line - split by newline */
-    first_line_end = strchr(buffer, '\n');
-    if (!first_line_end)
-    {
-        goto cleanup;
-    }
-
-    first_line_len = first_line_end - buffer;
-    strncpy(first_line, buffer, first_line_len);
-    first_line[first_line_len] = '\0';
-
-    /* Parse: METHOD URL VERSION */
-    if (sscanf(first_line, "%15s %511s %15s", method, url_buf, version) != 3)
-    {
-        goto cleanup;
-    }
-
-    url = url_buf;
-
-    /* Extract host and port from URL */
-    if (host_port_from_url(url, host, &port) != 0)
-    {
-        goto cleanup;
-    }
-
-    /* Resolve hostname using custom DNS resolver */
     sharedContext_callback_execute_dnsResolve(&dns_result, host);
 
     if (dns_result.status == DNS_ERR_RTT_EXHAUSTED)
@@ -344,6 +377,87 @@ cleanup:
     return;
 }
 
+static void handle_udp_client(void *arg)
+{
+    VSocket udp_server_handle = (VSocket)(intptr_t)arg;
+    char buffer[BUFFER_SIZE];
+    struct sockaddr_in client_addr;
+    socklen_t client_len = sizeof(client_addr);
+
+    int header_length = 0;
+    char target_ip_str[INET6_ADDRSTRLEN] = { 0 };
+    int target_port = 0;
+
+    DnsResult dns_result;
+
+    int bytes_recvd = recvfrom(udp_server_handle, buffer, BUFFER_SIZE, 0, (struct sockaddr *)&client_addr, &client_len);
+
+    if (bytes_recvd < 10) return;
+
+    if (buffer[0] != 0x00 || buffer[1] != 0x00) return;
+
+    /* frag */
+    if (buffer[2] != 0x00) return;
+
+    if (buffer[3] == 0x01) /* ipv4 */
+    {
+        header_length = 4 + 4 + 2; /* RSV + FRAG + ATYP(4) + IPV4(4) + PORT(2) */
+        if (bytes_recvd < header_length) return;
+
+        sprintf(target_ip_str, "%d.%d.%d.%d", buffer[4], buffer[5], buffer[6], buffer[7]);
+
+        target_port = (buffer[8] << 8) | buffer[9];
+    }
+    else if (buffer[3] == 0x03) /* domain name */
+    {
+        int name_len = buffer[4];
+        header_length = 4 + 1 + name_len + 2; /* RSV+FRAG+ATYP(4) + Len(1) + Name + Port(2) */
+        if (bytes_recvd < header_length) return;
+
+        memcpy(target_ip_str, &buffer[5], name_len);
+        target_ip_str[name_len] = '\0';
+
+        target_port = (buffer[5 + name_len] << 8) | buffer[5 + name_len + 1];
+        sharedContext_callback_execute_dnsResolve(&dns_result, target_ip_str);
+
+    }
+    else if (buffer[3] == 0x04) /* IPV6 */
+    {
+        header_length = 4 + 16 + 2;
+        /* I don't know what to do here. */
+    }
+    else
+    {
+        return;
+    }
+
+    uint8 *payload = buffer + header_length;
+    int payload_length = bytes_recvd - header_length;
+
+    printf("Client wants to send %d bytes of UDP to %s:%d\n", payload_length, target_ip_str, target_port);
+
+    /* VERIFICATION */
+    double rtt_cutoff;
+	sharedContext_getVariable(SCV_MAX_RTT, &rtt_cutoff);
+
+	if (!verify_latency(target_ip_str))
+	{
+		printf("Request RTT Exceeded %.2lf ms! Packet dropped!\n", rtt_cutoff);
+		DnsResult_free(&dns_result);
+        return;
+	}
+	if (!verify_cable(target_ip_str))
+	{
+		printf("Request uses disabled cable! Packet dropped!\n");
+		DnsResult_free(&dns_result);
+        return;
+	}
+
+    VSocket new_handle = styx_socket_create(FALSE, target_port);
+    /* idk what to do here */
+
+}
+
 static void update_proxy_settings(void)
 {
     FILE *fp;
@@ -420,87 +534,106 @@ static void update_proxy_settings(void)
 int proxy_start(int proxy_port)
 {
     struct sockaddr_in addr;
-    int opt;
+    int opt = 1;
+    VSocket tcp_server_handle;
+    VSocket udp_server_handle;
 
 #ifndef _WIN32
     /* Ignore SIGPIPE - prevents crash when writing to closed socket */
     signal(SIGPIPE, SIG_IGN);
 #endif
 
-    gServer_handle = styx_socket_create(TRUE, 0);
-    if (!styx_socket_assert(gServer_handle, "Server socket creation: "))
+    tcp_server_handle = styx_socket_create(TRUE, proxy_port);
+    if (!styx_socket_assert(tcp_server_handle, "Server tcp socket creation: "))
         exit(1);
 
-    /* Set socket options */
-    opt = 1;
-    setsockopt(gServer_handle, SOL_SOCKET, SO_REUSEADDR, (const char *)&opt, sizeof(opt));
+    setsockopt(tcp_server_handle, SOL_SOCKET, SO_REUSEADDR, (const char *)&opt, sizeof(opt));
 
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = inet_addr(PROXY_HOST);
-    addr.sin_port = htons(proxy_port);
-
-    if (bind(gServer_handle, (struct sockaddr *)&addr, sizeof(addr)) < 0)
-    {
-        styx_print_error("Bind failed. ");
+    udp_server_handle = styx_socket_create(FALSE, proxy_port);
+    if (!styx_socket_assert(udp_server_handle, "Server udp socket creation: "))
         exit(1);
-    }
-
-    if (listen(gServer_handle, MAX_CLIENTS) < 0)
-    {
-        styx_print_error("Listen failed");
-        exit(1);
-    }
 
     sharedContext_callback_toggle_dnsResolve(RT_FULL);
     settings_mod_mutex = europa_mutex_create();
     thread_count_mutex = europa_mutex_create();
 
-    printf("Proxy server listening on %s:%d\n", PROXY_HOST, proxy_port);
+    printf("Proxy server listening on TCP and UDP %s:%d\n", PROXY_HOST, proxy_port);
 
     /* Accept connections and spawn threads */
     while (1)
     {
-        EuropaThread thread = 0;
-        client_info_t *client_info = NULL;
-        socklen_t client_len;
+        fd_set readfds;
+        int maxfd;
+        struct timeval timeout;
+        int activity;
 
         if (shutdown_flag)
-        {
             break;
-        }
 
         printf("Memory (KB): %s\n", get_memory_usage_str_kb());
 
-        client_info = malloc(sizeof(*client_info));
-        client_len = sizeof(client_info->client_addr);
+        FD_ZERO(&readfds);
 
-        talos_malloc_assert(client_info);
+        FD_SET(tcp_server_handle, &readfds);
+        FD_SET(udp_server_handle, &readfds);
 
-        europa_mutex_lock(settings_mod_mutex);
-        if (settings_modified)
-        {
-            update_proxy_settings();
-            settings_modified = 0;
+        maxfd = (tcp_server_handle > udp_server_handle) ? tcp_server_handle : udp_server_handle;
+
+        timeout.tv_sec = 1;
+        timeout.tv_usec = 0;
+
+        activity = select(maxfd + 1, &readfds, NULL, NULL, &timeout);
+
+        if (activity < 0 && errno != EINTR) {
+            styx_print_error("Select error: ");
+            break;
         }
-        europa_mutex_unlock(settings_mod_mutex);
 
-        client_info->client_handle = accept(gServer_handle, (struct sockaddr *)&client_info->client_addr.Ipv4, &client_len);
-
-        if (!styx_socket_assert(client_info->client_handle, "Accept error"))
-        {
-            free(client_info);
+        if (activity == 0)
             continue;
+
+        if (FD_ISSET(tcp_server_handle, &readfds))
+        {
+            EuropaThread thread = 0;
+            client_info_t *client_info = NULL;
+            socklen_t client_len;
+
+            client_info = malloc(sizeof(*client_info));
+            client_len = sizeof(client_info->client_addr);
+
+            talos_malloc_assert(client_info);
+
+            europa_mutex_lock(settings_mod_mutex);
+            if (settings_modified)
+            {
+                update_proxy_settings();
+                settings_modified = 0;
+            }
+            europa_mutex_unlock(settings_mod_mutex);
+
+            client_info->client_handle = accept(tcp_server_handle, (struct sockaddr *)&client_info->client_addr.Ipv4, &client_len);
+
+            if (!styx_socket_assert(client_info->client_handle, "Accept error"))
+            {
+                free(client_info);
+                continue;
+            }
+
+            printf("Accepted connection from %s:%d\n", inet_ntoa(client_info->client_addr.Ipv4.sin_addr), ntohs(client_info->client_addr.Ipv4.sin_port));
+
+            thread = europa_thread(handle_tcp_client, client_info, NULL);
+            if (thread == 0)
+            {
+                talos_print_error("Thread creation");
+                styx_socket_destroy(client_info->client_handle);
+                free(client_info);
+            }
         }
 
-        printf("Accepted connection from %s:%d\n", inet_ntoa(client_info->client_addr.Ipv4.sin_addr), ntohs(client_info->client_addr.Ipv4.sin_port));
-
-        thread = europa_thread(handle_client, client_info, NULL);
-        if (thread == 0)
+        if (FD_ISSET(udp_server_handle, &readfds))
         {
-            talos_print_error("Thread creation");
-            styx_socket_destroy(client_info->client_handle);
-            free(client_info);
+            EuropaThread thread = 0;
+            thread = europa_thread(handle_udp_client, (void*)(intptr_t)udp_server_handle, NULL);
         }
     }
 

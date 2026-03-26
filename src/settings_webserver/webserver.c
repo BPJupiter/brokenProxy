@@ -19,10 +19,17 @@ static int update_settings(char resource[512], char *buffer, uint buffer_len, VS
 static int initiate_shutdown(char resource[512], char *buffer, uint buffer_len, VSocket client_handle);
 static int delete_datastore(char resource[512], char *buffer, uint buffer_len, VSocket client_handle);
 
-int webserver_start(int port)
+int g_proxy_pid = -1;
+
+static void restart_proxy();
+
+int webserver_start(int port, int proxy_pid)
 {
 	VSocket server_handle;
 	int yes = 1;
+
+	g_proxy_pid = proxy_pid;
+	printf("proxy pid: %d\n", g_proxy_pid);
 
 	server_handle = styx_socket_create(TRUE, port);
 	if (!styx_socket_assert(server_handle, "Webserver socket creation: "))
@@ -69,8 +76,8 @@ static int handle_http_request(VSocket client_handle)
 	if (first_line_len > FIRST_LINE_MAX_LEN)
 		return 1; /* Buffer overflow */
 
-	c_text_copy(first_line_len, first_line, request);
-	first_line[first_line_len] = '\0';
+	c_text_copy(first_line_len-1, first_line, request);
+	first_line[first_line_len-1] = '\0';
 
 	if (sscanf(first_line, "%15s %511s %15s", method, resource, version) != 3)
 		return 1; /* Malformed request */
@@ -121,13 +128,13 @@ static int handle_http_request(VSocket client_handle)
 
 	}
 
-	/*
-	printf("REQUEST:\n%s...\n", request);
-	printf("\nFIRSTLINE:\n%s...\n", first_line);
-	printf("\nMETHOD:\n%s...\n", method);
-	printf("\nRESOURCE:\n%s...\n", resource);
-	printf("\nVERSION:\n%s...\n", version);
-	*/
+	if (0) {
+		printf("REQUEST:\n%s...\n", request);
+		printf("\nFIRSTLINE:\n%s...\n", first_line);
+		printf("\nMETHOD:\n%s...\n", method);
+		printf("\nRESOURCE:\n%s...\n", resource);
+		printf("\nVERSION:\n%s...\n", version);
+	}
 
 	return 0;
 }
@@ -325,11 +332,13 @@ static int update_settings(char resource[512], char *request, uint request_len, 
 	}
 
 	new_json = cJSON_Print(file_json);
-	fp = europa_project_root_fopen(PROJECT_ROOT_FOLDER_NAME, "settings/settings.json", "w");
+	fp = europa_project_root_fopen(PROJECT_ROOT_FOLDER_NAME, "settings/settings.json.tmp", "w");
 	if (NULL != fp)
 	{
 		fputs(new_json, fp);
 		fclose(fp);
+		europa_path_rename("settings/settings.json.tmp", "settings/settings.json");
+		restart_proxy();
 		send_all(client_handle, HTTP_200_OK, strlen(HTTP_200_OK));
 	}
 	else
@@ -354,7 +363,15 @@ static int update_settings(char resource[512], char *request, uint request_len, 
 
 static int initiate_shutdown(char resource[512], char *buffer, uint buffer_len, VSocket client_handle)
 {
-	/* IMPLEMENT ME */
+	send_all(client_handle, "HTTP/1.1 200 OK\r\n\r\nShutdown initiated.", 39);
+
+	printf("\nTerminating proxy.\n");
+	europa_process_terminate(g_proxy_pid);
+
+	printf("\nWebserver exiting.\n");
+	exit(0);
+
+	return 0;
 }
 static int delete_datastore(char resource[512], char *buffer, uint buffer_len, VSocket client_handle)
 {
@@ -375,4 +392,9 @@ static int send_all(VSocket socket, const char *buf, uint len)
         bytes_left -= n;
     }
     return 0;
+}
+
+static void restart_proxy()
+{
+	europa_process_reload(g_proxy_pid);
 }
