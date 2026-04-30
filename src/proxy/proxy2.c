@@ -13,6 +13,7 @@
 
 #include <signal.h>
 #include <stdarg.h>
+#include <errno.h>
 
 #define BUFFER_SIZE (1 << 16)
 #define UDP_HEADER_IPV4_LEN 10
@@ -491,7 +492,7 @@ static void _restart(int signum)
 
 static void _shutdown(int signum)
 {
-	_stop();
+	return;
 }
 
 static int proxy_printf(const char *format, ...)

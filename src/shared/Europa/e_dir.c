@@ -180,6 +180,7 @@ boolean europa_path_search(char *file, boolean partial, char *path, boolean fold
     uint i, j, found = 0;
     DIR *d;
     edirent *ent;
+    UNUSED(folders);
     d = opendir(path);
     if(d != NULL)
     {
@@ -352,6 +353,7 @@ boolean europa_path_volume_stats(char *path, size_t *block_size, size_t *free_si
 
 boolean europa_path_volume_stats(char *path, size_t *block_size, size_t *free_size, size_t *used_size, size_t *total_size)
 {
+    UNUSED(path); UNUSED(block_size); UNUSED(free_size); UNUSED(used_size); UNUSED(total_size);
 /*	struct statvfs buf;
     if(0 == statvfs(path, &buf))
     {
@@ -360,10 +362,11 @@ boolean europa_path_volume_stats(char *path, size_t *block_size, size_t *free_si
  * used_size = buf.f_blocks * buf.f_frsize - buf.f_blocks * buf.f_bsize
  * total_size = buf.f_blocks * buf.f_frsize;
     }*/
+    return FALSE;
 }
 #endif
 
-void europa_path_test()
+void europa_path_test(void)
 {
     char file[128];
     uint i;
@@ -390,8 +393,8 @@ uint c_uint32_to_utf8(uint32 character, char *out); /*convets a 32 bit unicode c
 
 
 char invalid_characters[] = {'>', '<', '\"', '|', '?', '*'};
-// CON, PRN, AUX, NUL, COM1, COM2, COM3, COM4, COM5, COM6, COM7, COM8, COM9, LPT1, LPT2, LPT3, LPT4, LPT5, LPT6, LPT7, LPT8, and LPT9
-
+/* CON, PRN, AUX, NUL, COM1, COM2, COM3, COM4, COM5, COM6, COM7, COM8, COM9, LPT1, LPT2, LPT3, LPT4, LPT5, LPT6, LPT7, LPT8, and LPT9
+*/
 int europa_path_rename(char *old_name, char *new_name)
 {
     return MoveFileExA(old_name, new_name, MOVEFILE_REPLACE_EXISTING);

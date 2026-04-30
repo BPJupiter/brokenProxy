@@ -1,8 +1,8 @@
 #ifdef __GCC_HAVE_SYNC_COMPARE_AND_SWAP_8 /* supported by both GCC and LLVM */
 
-#define europa_atomic_integer_init(a, b) __atomic_store_n(&b, __ATOMIC_RELEASE)
+#define europa_atomic_integer_init(a, b) __atomic_store_n(&a, b, __ATOMIC_RELEASE)
 #define europa_atomic_integer_read(a) __atomic_load_n(&a, __ATOMIC_ACQUIRE)
-#define europa_atomic_integer_write(a, b) __atomic_store(&a, &b, __ATOMIC_RELEASE)
+#define europa_atomic_integer_write(a, b) __atomic_store_n(&a, b, __ATOMIC_RELEASE)
 #define europa_atomic_integer_compare_and_exchange(a, b, c) __atomic_compare_exchange_n(&a, &b, c, TRUE, __ATOMIC_RELEASE, __ATOMIC_RELAXED)
 #define europa_atomic_integer_free(a)
 

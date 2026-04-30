@@ -7,6 +7,8 @@
 #include "webserver.h"
 #include "response_codes.h"
 
+#include <string.h>
+
 #define BUFFER_SIZE (1 << 16)
 #define FIRST_LINE_MAX_LEN (1 << 10)
 #define PROJECT_ROOT_FOLDER_NAME "brokenProxy"
@@ -246,7 +248,7 @@ static int update_settings(char resource[512], char *request, uint request_len, 
 	{
 		send_all(client_handle, HTTP_500_HEADER, strlen(HTTP_500_HEADER));
 		send_all(client_handle, HTTP_500_HTML, strlen(HTTP_500_HTML));
-		return;
+		return 1;
 	}
 	body_start += 4;
 
@@ -257,7 +259,7 @@ static int update_settings(char resource[512], char *request, uint request_len, 
 		printf("Error: Failed to parse incoming POST JSON body.\n");
 		send_all(client_handle, HTTP_500_HEADER, strlen(HTTP_500_HEADER));
 		send_all(client_handle, HTTP_500_HTML, strlen(HTTP_500_HTML));
-		return;
+		return 1;
 	}
 
 	fp = europa_project_root_fopen(PROJECT_ROOT_FOLDER_NAME, "settings/settings.json", "rb");
@@ -267,7 +269,7 @@ static int update_settings(char resource[512], char *request, uint request_len, 
 		cJSON_Delete(payload_json);
 		send_all(client_handle, HTTP_500_HEADER, strlen(HTTP_500_HEADER));
 		send_all(client_handle, HTTP_500_HTML, strlen(HTTP_500_HTML));
-		return;
+		return 1;
 	}
 
 	buffer = malloc((sizeof * buffer) * BUFFER_SIZE);
@@ -289,7 +291,7 @@ static int update_settings(char resource[512], char *request, uint request_len, 
 		cJSON_Delete(payload_json);
 		send_all(client_handle, HTTP_500_HEADER, strlen(HTTP_500_HEADER));
 		send_all(client_handle, HTTP_500_HTML, strlen(HTTP_500_HTML));
-		return;
+		return 1;
 	}
 
 	settings = cJSON_GetObjectItemCaseSensitive(file_json, "settings");
@@ -308,7 +310,7 @@ static int update_settings(char resource[512], char *request, uint request_len, 
 		cJSON_Delete(payload_json);
 		send_all(client_handle, HTTP_500_HEADER, strlen(HTTP_500_HEADER));
 		send_all(client_handle, HTTP_500_HTML, strlen(HTTP_500_HTML));
-		return;
+		return 1;
 	}
 
 	cJSON_ReplaceItemInObject(pingObj, "maxLatency",

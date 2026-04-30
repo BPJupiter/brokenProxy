@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <signal.h>
 #include "Europa/europa.h"
 
 #ifdef _WIN32

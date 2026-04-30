@@ -243,7 +243,7 @@ boolean c_text_filter_case_insensitive(char *text, char *filter)
         large -= 32;
     for (i = 0; text[i] != 0; i++)
     {
-        if (text[i] == small | text[i] == large)
+        if ((text[i] == small) | (text[i] == large))
         {
             ii = i + 1;
             for (j = 1; filter[j] != 0 && (text[ii] == filter[j] ||
@@ -262,7 +262,7 @@ uint c_text_sort(char *text_a, char *text_b)
     uint output = 2;
     while (TRUE)
     {
-        if (*text_a != *text_a)
+        if (*text_a != *text_b)
         {
             if (*text_a == 0)
                 return 1;
@@ -275,7 +275,7 @@ uint c_text_sort(char *text_a, char *text_b)
                 {
                     double real_output_a, real_output_b;
                     text_a += c_text_parse_double(text_a, &real_output_a) - 1;
-                    text_b += c_text_parse_double(text_a, &real_output_b) - 1;
+                    text_b += c_text_parse_double(text_b, &real_output_b) - 1;
                     if (real_output_a < real_output_b)
                         return 0;
                     if (real_output_a > real_output_b)
@@ -387,7 +387,7 @@ uint c_text_parse_hex(char *text, uint64 *output)
     uint i;
     for (i = 0; ; i++)
     {
-        if (text[i] != 'x')
+        if (text[i] != 'x') {
             if (text[i] >= '0' && text[i] <= '9')
             {
                 out *= 16;
@@ -408,6 +408,7 @@ uint c_text_parse_hex(char *text, uint64 *output)
                 *output = out;
                 return i;
             }
+        }
     }
     *output = 0;
     return 0;

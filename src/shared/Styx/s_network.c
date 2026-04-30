@@ -97,13 +97,15 @@ VSocket styx_socket_create(boolean stream, uint16 port)
                 fprintf(stderr, "Styx Error: Failed to listen(), code %d (%s)\n", errno, strerror(errno));
     }
 
-    if (setsockopt(s, SOL_SOCKET, SO_BROADCAST, &option, sizeof option) != 0)
+    if (setsockopt(s, SOL_SOCKET, SO_BROADCAST, &option, sizeof option) != 0) {
         /* fprintf(stderr, "Styx: Couldn't set broadcast option of socket to %d\n", option); */
-        ;
-	if (setsockopt(s, SOL_SOCKET, SO_SNDBUF, &buffer_size, sizeof buffer_size) != 0)
+    }
+	if (setsockopt(s, SOL_SOCKET, SO_SNDBUF, &buffer_size, sizeof buffer_size) != 0) {
 		fprintf(stderr, "Styx: Couldn't set send buffer size of socket to %d\n", buffer_size);
-	if (setsockopt(s, SOL_SOCKET, SO_RCVBUF, &buffer_size, sizeof buffer_size) != 0)
+    }
+	if (setsockopt(s, SOL_SOCKET, SO_RCVBUF, &buffer_size, sizeof buffer_size) != 0) {
 		fprintf(stderr, "Styx: Couldn't set recieve buffer size of socket to %d\n", buffer_size);
+    }
 	return s;
 }
 
@@ -231,22 +233,24 @@ void styx_local_dns_server_get(char *dest, uint32 dest_buf_len)
     }
     free(fi);
 #else
-    struct __res_state dns = { 0 };
-
-    if (res_ninit(&dns) == 0)
     {
-        if (dns.nscount > 0)
-        {
-            struct in_addr addr = dns.nsaddr_list[0].sin_addr;
-            char *ip_str = inet_ntoa(addr);
+        struct __res_state dns = { 0 };
 
-            if (ip_str != NULL)
+        if (res_ninit(&dns) == 0)
+        {
+            if (dns.nscount > 0)
             {
-                c_text_copy(dest_buf_len, dest, ip_str);
-                dest[dest_buf_len - 1] = '\0';
+                struct in_addr addr = dns.nsaddr_list[0].sin_addr;
+                char *ip_str = inet_ntoa(addr);
+
+                if (ip_str != NULL)
+                {
+                    c_text_copy(dest_buf_len, dest, ip_str);
+                    dest[dest_buf_len - 1] = '\0';
+                }
             }
+            res_nclose(&dns);
         }
-        res_nclose(&dns);
     }
 #endif
 }
