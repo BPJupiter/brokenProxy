@@ -6,6 +6,12 @@
 
 #define WEBSERVER_PORT 13406
 
+#ifdef _WIN32
+#define PROXY_PATH "bin/proxy.exe"
+#else
+#define PROXY_PATH "./bin/proxy"
+#endif
+
 void signal_handler(int sig)
 {
 	printf("\nCaught signal %d\n", sig);
@@ -28,7 +34,7 @@ int main(int argc, char **argv)
 
 	signal(SIGINT, signal_handler);
 
-	proxy_pid = europa_execute("bin/proxy.exe");
+	proxy_pid = europa_execute(PROXY_PATH);
 	if (proxy_pid == 0) {
 		printf("FAILED TO LAUNCH PROXY PROCESS.\n");
 		exit(1);

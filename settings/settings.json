@@ -8,7 +8,7 @@
 			"trEnabled":	false
 		},
 		"localDNS":	{
-			"locDNSEnabled":	false
+			"locDNSEnabled":	true
 		},
 		"disabledCables":	[]
 	}

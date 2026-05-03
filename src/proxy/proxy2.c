@@ -76,6 +76,7 @@ static void proxy_settings_init();
 static void proxy_reload_settings();
 static void thread_handler(void *arg);
 static void handle_client(VSocket client_handle);
+static void handle_tcp_connect(VSocket client_handle, char *buf, size_t bytes_read);
 static int transfer_data(VSocket from_handle, VSocket to_handle);
 static void handle_udp_associate(VSocket tcp_client_handle);
 
@@ -129,14 +130,10 @@ int proxy_start(int port)
 			client_handle = accept(server_handle, NULL, NULL);
 
 			if (styx_socket_assert(client_handle, NULL)) {
-				VSocket *temp_handle = malloc(sizeof(*temp_handle));
-				*temp_handle = client_handle;
-
 				EuropaThread thread;
 
-				if ((thread = europa_thread_create(thread_handler, (void *)temp_handle, NULL)) < 0) {
+				if ((thread = europa_thread_create(thread_handler, (void *)(long)client_handle, NULL)) < 0) {
 					printf("Failed to create new thread.\n");
-					free(temp_handle);
 					styx_socket_destroy(client_handle);
 				}
 				else {
@@ -180,121 +177,35 @@ static void proxy_reload_settings()
 
 static void thread_handler(void *arg)
 {
-	VSocket client_handle = *(VSocket *)arg;
-	free(arg);
+	VSocket client_handle = (VSocket)(long)arg;
 	handle_client(client_handle);
 	return;
 }
 
 static void handle_client(VSocket client_handle)
 {
-	uint8 buf[256];
+	char buf[256];
 
 	if (recv(client_handle, buf, 256, 0) <= 0 || buf[0] != VERSION5) {
 		styx_socket_destroy(client_handle); return;
 	}
 
-	uint8 greeting_reply[] = { 0x05, 0x00 };
+	uint8 greeting_reply[] = { VERSION5, NOAUTH };
 	send(client_handle, greeting_reply, 2, 0);
 
 	int bytes_read = recv(client_handle, buf, 256, 0);
 	if (bytes_read < 4) {
-		styx_socket_destroy(client_handle); return;
+		styx_socket_destroy(client_handle);
+		return;
 	}
 
-	if (buf[1] == CONNECT) {
-		struct sockaddr_in target_addr;
-		memset(&target_addr, 0, sizeof(target_addr));
-		target_addr.sin_family = AF_INET;
-		char target_str[256];
-		char target_ip[256];
-
-		if (buf[3] == IPV4) {
-			if (bytes_read < 10) { styx_socket_destroy(client_handle); return; }
-			memcpy(&target_addr.sin_addr.s_addr, &buf[4], 4);
-			memcpy(&target_addr.sin_port, &buf[8], 2);
-			inet_ntop(AF_INET, &target_addr.sin_addr, target_str, INET_ADDRSTRLEN);
-			inet_ntop(AF_INET, &target_addr.sin_addr, target_ip, INET_ADDRSTRLEN);
-		}
-		else if (buf[3] == DOMAIN) {
-			int domain_len = buf[4];
-			if (bytes_read < 5 + domain_len + 2) { styx_socket_destroy(client_handle); return; }
-
-			char domain[256];
-			memcpy(domain, &buf[5], domain_len);
-			domain[domain_len] = '\0';
-			c_text_copy(strlen(domain)+1, target_str, domain);
-
-			memcpy(&target_addr.sin_port, &buf[5 + domain_len], 2);
-
-			DnsResult dns_result;
-			sharedContext_callback_execute_dnsResolve(&dns_result, target_str);
-			if (dns_result.nAns == 0) {
-				printf("DNS resolution failed for domain: %s\n", domain);
-				styx_socket_destroy(client_handle); return;
-			}
-			/*
-			inet_ntop(AF_INET, &dns_result.answers[0], target_ip, INET_ADDRSTRLEN);
-			inet_pton(AF_INET, target_ip, &target_addr.sin_addr.s_addr);
-			*/
-			strncpy(target_ip, dns_result.answers[0], INET_ADDRSTRLEN - 1);
-			target_ip[INET_ADDRSTRLEN - 1] = '\0';
-			inet_pton(AF_INET, target_ip, &target_addr.sin_addr.s_addr);
-			DnsResult_free(&dns_result);
-		}
-		else {
-			printf("Unsupported ATYP: 0x%02x\n", buf[3]);
-			styx_socket_destroy(client_handle); return;
-		}
-
-		double rtt_cutoff;
-		sharedContext_var_get_maxRtt(&rtt_cutoff);
-
-		printf("App requested connection to: %s:%d\n", target_str, ntohs(target_addr.sin_port));
-
-		if (!verify_latency(target_ip)) {
-			printf("Request RTT Exceeded %.2lf ms! Packet dropped!\n", rtt_cutoff);
-			styx_socket_destroy(client_handle); return;
-		}
-		if (!verify_cable(target_ip)) {
-			printf("Request uses disabled cable! Packet dropped!\n");
-			styx_socket_destroy(client_handle); return;
-		}
-
-		VSocket target_handle = styx_socket_create(TRUE, 0);
-		styx_socket_assert(target_handle, "Target handle");
-		if (connect(target_handle, (struct sockaddr *)&target_addr, sizeof(target_addr)) < 0) {
-			printf("Failed to connect to target.\n");
-			styx_socket_destroy(client_handle); styx_socket_destroy(target_handle); return;
-		}
-
-		uint8 connect_reply[10] = { 0x05, 0x00, 0x00, 0x01, 0,0,0,0, 0,0 };
-		send(client_handle, connect_reply, 10, 0);
-		printf("Connection established.\n");
-
-		fd_set read_handles;
-		VSocket max_handle = (client_handle > target_handle) ? client_handle : target_handle;
-
-		while (1) {
-			FD_ZERO(&read_handles);
-			FD_SET(client_handle, &read_handles);
-			FD_SET(target_handle, &read_handles);
-
-			if (select(max_handle + 1, &read_handles, NULL, NULL, NULL) < 0) {
-				if (errno == EINTR) continue;
-				break;
-			}
-
-			if (FD_ISSET(client_handle, &read_handles)) {
-				if (transfer_data(client_handle, target_handle) < 0) break;
-			}
-			if (FD_ISSET(target_handle, &read_handles)) {
-				if (transfer_data(target_handle, client_handle) < 0) break;
-			}
-		}
-		printf("Connection to %s is closed.\n", target_str);
+	if (buf[0] != VERSION5) {
 		styx_socket_destroy(client_handle);
-		styx_socket_destroy(target_handle);
+		return;
+	}
+	if (buf[1] == CONNECT) {
+		printf("App requested TCP Connection.\n");
+		handle_tcp_connect(client_handle, buf, bytes_read);
 	}
 	else if (buf[1] == UDP_ASSOCIATE) {
 		printf("App requested UDP Association.\n");
@@ -304,6 +215,109 @@ static void handle_client(VSocket client_handle)
 		printf("Unsupported SOCKS command: 0x%02x\n", buf[1]);
 		styx_socket_destroy(client_handle);
 	}
+}
+
+static void handle_tcp_connect(VSocket client_handle, char *buf, size_t bytes_read)
+{
+	struct sockaddr_in target_addr;
+	memset(&target_addr, 0, sizeof(target_addr));
+	target_addr.sin_family = AF_INET;
+	char target_domain[256];
+	char target_ip[256];
+
+	if (buf[3] == IPV4) {
+		if (bytes_read < 10) {
+			styx_socket_destroy(client_handle);
+			return;
+		}
+		memcpy(&target_addr.sin_addr.s_addr, &buf[4], 4);
+		memcpy(&target_addr.sin_port, &buf[8], 2);
+		inet_ntop(AF_INET, &target_addr.sin_addr, target_domain, INET_ADDRSTRLEN);
+		inet_ntop(AF_INET, &target_addr.sin_addr, target_ip, INET_ADDRSTRLEN);
+	}
+	else if (buf[3] == DOMAIN) {
+		uint8 domain_len = buf[4];
+		if (bytes_read < (5 + domain_len + 2)) {
+			styx_socket_destroy(client_handle);
+			return;
+		}
+
+		memcpy(target_domain, &buf[5], domain_len);
+		target_domain[domain_len] = '\0';
+
+		memcpy(&target_addr.sin_port, &buf[5 + domain_len], 2);
+
+		DnsResult dns_result;
+		sharedContext_callback_execute_dnsResolve(&dns_result, target_domain);
+		if (dns_result.nAns == 0) {
+			printf("DNS resolution failed for domain: %s\n", target_domain);
+			styx_socket_destroy(client_handle); return;
+		}
+		c_text_copy(strlen(dns_result.answers[0])+1, target_ip, dns_result.answers[0]);
+		inet_pton(AF_INET, target_ip, &target_addr.sin_addr.s_addr);
+		DnsResult_free(&dns_result);
+	}
+	else {
+		printf("Unsupported ATYP: 0x%02x\n", buf[3]);
+		styx_socket_destroy(client_handle); return;
+	}
+
+	double rtt_cutoff;
+	sharedContext_var_get_maxRtt(&rtt_cutoff);
+
+	printf("App requested connection to: %s:%d\n", target_domain, ntohs(target_addr.sin_port));
+
+	uint8 rep = OK;
+	if (!verify_latency(target_ip)) {
+		printf("Request RTT Exceeded %.2lf ms! Packet dropped!\n", rtt_cutoff);
+		rep = TTL_EXPIRED;
+	}
+	if (!verify_cable(target_ip)) {
+		printf("Request uses disabled cable! Packet dropped!\n");
+		rep = NETWORK_UNREACHABLE;
+	}
+
+	VSocket target_handle = styx_socket_create(TRUE, 0);
+	styx_socket_assert(target_handle, "Target handle");
+	if (connect(target_handle, (struct sockaddr *)&target_addr, sizeof(target_addr)) < 0) {
+		printf("Failed to connect to target.\n");
+		rep = GENERAL_FAILURE;
+	}
+
+	uint8 connect_reply[10] = { 0x05, rep, 0x00, 0x01, 0x00,0x00,0x00,0x00, 0x00,0x00 };
+	send(client_handle, connect_reply, 10, 0);
+
+	if (rep != OK) {
+		styx_socket_destroy(client_handle);
+		styx_socket_destroy(target_handle);
+		return;
+	}
+
+	printf("Connection established.\n");
+
+	fd_set read_handles;
+	VSocket max_handle = (client_handle > target_handle) ? client_handle : target_handle;
+
+	while (1) {
+		FD_ZERO(&read_handles);
+		FD_SET(client_handle, &read_handles);
+		FD_SET(target_handle, &read_handles);
+
+		if (select(max_handle + 1, &read_handles, NULL, NULL, NULL) < 0) {
+			if (errno == EINTR) continue;
+			break;
+		}
+
+		if (FD_ISSET(client_handle, &read_handles)) {
+			if (transfer_data(client_handle, target_handle) < 0) break;
+		}
+		if (FD_ISSET(target_handle, &read_handles)) {
+			if (transfer_data(target_handle, client_handle) < 0) break;
+		}
+	}
+	printf("Connection to %s is closed.\n", target_domain);
+	styx_socket_destroy(client_handle);
+	styx_socket_destroy(target_handle);
 }
 
 static int transfer_data(VSocket from_handle, VSocket to_handle)
