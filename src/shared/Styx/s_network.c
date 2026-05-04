@@ -158,9 +158,14 @@ void styx_print_error(const char *msg)
 
 boolean styx_network_address_lookup(StyxNetworkAddress *address, const char *dns_name, uint16 default_port)
 {
-    struct hostent *he = NULL;
     char *colon = NULL, *buf = NULL;
+    boolean result = FALSE;
+    const char *host = dns_name;
+    struct addrinfo hints, *res = NULL;
+    int status;
+
     address->port = default_port;
+
     if ((colon = strchr(dns_name, ':')) != NULL)
     {
         size_t hl = strlen(dns_name);
@@ -170,36 +175,61 @@ boolean styx_network_address_lookup(StyxNetworkAddress *address, const char *dns
             c_text_copy(hl + 1, buf, dns_name);
             colon = buf + (colon - dns_name);
             *colon = '\0';
-            dns_name = buf;
+            host = buf;
             if (sscanf(colon + 1, "%u", &tp) == 1)
             {
                 address->port = (unsigned short)tp;
-                if (address->port != tp)
-                    return FALSE;
+                if (address->port != tp) {
+                    goto cleanup;
+                }
             }
-            else
-                return FALSE;
+            else {
+                goto cleanup;
+            }
         }
-        else
-            return FALSE;
+        else {
+            goto cleanup;
+        }
     }
 
 #if defined _WIN32
     if (!styx_socket_init_win32())
     {
         printf("Cannot resolve DNS as WSA will not startup.\n");
-        return FALSE;
+        goto cleanup;
     }
 #endif
 
-    if (dns_name != NULL && (he = gethostbyname(dns_name)) != NULL)
-    {
-        memcpy(&address->ip, he->h_addr_list[0], he->h_length);
-        address->ip = ntohl(address->ip);
-        return TRUE;
+    if (host == NULL) {
+        printf("DNS name is null.\n");
+        goto cleanup;
     }
-    printf("DNS name null OR gethostbyname returned null.\n");
-    return FALSE;
+
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+
+    status = getaddrinfo(host, NULL, &hints, &res);
+    if (status != 0) {
+        printf("getaddrinfo failed: %s: %s:%d\n", gai_strerror(status), __FILE__, __LINE__);
+        goto cleanup;
+    }
+
+    if (res != NULL) {
+        struct sockaddr_in *ipv4 = (struct sockaddr_in *)res->ai_addr;
+        address->ip = ntohl(ipv4->sin_addr.s_addr);
+        result = TRUE;
+    }
+
+cleanup:
+    if (res != NULL) {
+        freeaddrinfo(res);
+    }
+    if (buf != NULL) {
+        free(buf);
+    }
+
+    return result;
 }
 
 
