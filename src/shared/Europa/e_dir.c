@@ -369,14 +369,13 @@ boolean europa_path_volume_stats(char *path, size_t *block_size, size_t *free_si
 void europa_path_test(void)
 {
     char file[128];
-    uint i;
     void *dir;
 
     dir = europa_path_dir_open("./");
     printf("dir Poninter %p\n", dir);
     if(dir != NULL)
     {
-        for(i = 0; europa_path_dir_next(dir, file, 128); i++)
+        for(; europa_path_dir_next(dir, file, 128);)
             printf("FILE:%s\n", file);
         europa_path_dir_close(dir);
     }

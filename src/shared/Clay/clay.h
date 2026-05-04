@@ -59,11 +59,13 @@ typedef float freal;
 #endif
 
 #if !defined(C_NO_MEMORY_DEBUG)
-#define C_MEMORY_DEBUG /* turns on the memory debugging system */
-/*#define C_MEMORY_PRINT /* turns on the memory debugging system */
+/* turns on the memory debugging system */
+/* #define C_MEMORY_DEBUG */
+/*#define C_MEMORY_PRINT */
 #endif
 #if !defined(C_EXIT_CRASH)
-/*#define C_EXIT_CRASH*/ /* turns on  the crash on exit */
+/* turns on  the crash on exit */
+/*#define C_EXIT_CRASH*/ 
 #endif
 
 #include <stdlib.h>

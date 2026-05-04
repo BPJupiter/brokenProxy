@@ -65,7 +65,7 @@ typedef uint64 volatile EAtomicUsers; /* An atomic lock that lets multiple users
 extern void     europa_current_time_get(uint32 *seconds, uint32 *fractions);
 extern double   europa_delta_time_compute(uint new_seconds, uint new_fractions, uint old_seconds, uint old_fractions);
 
-extern int64    europa_current_system_time_get();
+extern int64    europa_current_system_time_get(void);
 extern void     europa_current_date_local(int64 time, uint *seconds, uint *minutes, uint *hours, uint *week_days, uint *month_days, uint *month, uint *year);
 
 extern void     europa_sleepi(uint seconds, uint nano_seconds);

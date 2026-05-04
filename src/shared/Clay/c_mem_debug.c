@@ -462,11 +462,11 @@ boolean c_debug_mem_test(void *pointer, size_t size, boolean ignore_not_found)
     {
         for (j = 0; j < c_alloc_lines[i].alloc_count; j++)
         {
-            if (c_alloc_lines[i].allocs[j].buf >= pointer && ((uint8 *)c_alloc_lines[i].allocs[j].buf) + c_alloc_lines[i].allocs[j].size <= pointer)
+            if (c_alloc_lines[i].allocs[j].buf >= pointer && ((uint8 *)c_alloc_lines[i].allocs[j].buf) + c_alloc_lines[i].allocs[j].size <= (uint8 *)pointer) /* technically UB */
             {
                 if (((uint8 *)c_alloc_lines[i].allocs[j].buf) + c_alloc_lines[i].allocs[j].size < ((uint8 *)pointer) + size)
                 {
-                    printf("MEM ERROR: Not enough memory to access pointer %p, %u bytes missing\n", pointer, (uint)(((uint8 *)c_alloc_lines[i].allocs[j].buf) + c_alloc_lines[i].allocs[j].size) - (uint)(((uint8 *)pointer) + size));
+                    printf("CLAY Mem Debugger error: Not enough memory to access pointer %p, %u bytes missing\n", pointer, (uint)(((uint8 *)c_alloc_lines[i].allocs[j].buf) + c_alloc_lines[i].allocs[j].size) - (uint)(((uint8 *)pointer) + size));
                     if (c_alloc_mutex != NULL)
                         c_alloc_mutex_unlock(c_alloc_mutex);
                     return TRUE;

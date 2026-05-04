@@ -10,7 +10,7 @@
 void *gDatastore_lock = NULL; /* unused */
 EDBHandle *gDatastore = NULL;
 
-void datastore_init()
+void datastore_init(void)
 {
     char pwd[256];
     gDatastore_lock = europa_mutex_create();
@@ -19,7 +19,7 @@ void datastore_init()
     printf("PWD: %s\n", pwd);
 }
 
-void datastore_destroy()
+void datastore_destroy(void)
 {
     if (NULL != gDatastore)
     {

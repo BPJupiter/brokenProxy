@@ -47,7 +47,7 @@ double europa_delta_time_compute(uint new_seconds, uint new_fractions, uint old_
     return (double)new_seconds - (double)old_seconds + ((double)new_fractions - (double)old_fractions) / (double)(0xffffffff);
 }
 
-int64 europa_current_system_time_get()
+int64 europa_current_system_time_get(void)
 {
     time_t rawtime;
     time(&rawtime);

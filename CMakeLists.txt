@@ -14,6 +14,8 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin")
 
 find_package(Threads REQUIRED)
 
+add_compile_options(-Wpedantic -Wall -Wextra)
+
 add_subdirectory(lib)
 add_subdirectory(src/shared)
 add_subdirectory(src/proxy)

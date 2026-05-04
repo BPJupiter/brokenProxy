@@ -117,7 +117,7 @@ static DnsResult process_auth_records(DNS_HEADER *dns,
                                       const char *host, int query_type, uint depth);
 static boolean find_ipv4_glue(RES_RECORD *addit, int add_count, const char *ns_name, char *out_ip);
 static boolean try_ns_ip(const char *ns_ip, const char *host, int query_type, uint depth, DnsResult *out_result, uint *rtt_rejections);
-static DnsResult localhost();
+static DnsResult localhost(void);
 static void  change_to_dns_name_format(uint8 *, const char *);
 static void read_name(uint8 name[256], uint8 *, uint8 *, int *);
 static void  dns_free_mem(DNS_HEADER *dns, RES_RECORD *answers, RES_RECORD *auth, RES_RECORD *addit);
@@ -319,7 +319,7 @@ DnsResult dns_resolve_iterative_local(const char *host)
     return result;
 }
 
-static DnsResult localhost()
+static DnsResult localhost(void)
 {
     DnsResult result = { 0 };
     char lh[] = "127.0.0.1";
@@ -952,7 +952,6 @@ static void dns_free_mem(DNS_HEADER *dns, RES_RECORD *answers, RES_RECORD *auth,
 static boolean external_dns_is_blocked(void)
 {
     DnsResult result = { 0 };
-    uint i;
     result = dns_iterative_root_worker("www.google.com", T_A, current_root_ip, 0);
     if (result.nAns <= 0)
     {

@@ -51,6 +51,7 @@ unsigned __stdcall windows_reload_listener(void *arg)
 #else
 void handle_reload(int sig)
 {
+    UNUSED(sig);
     printf("\nReload signal recieved!\n");
     g_reload_settings = 1;
 }

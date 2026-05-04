@@ -4,6 +4,6 @@
 #include <stddef.h>
 
 int proxy_start(int port);
-void proxy_shutdown();
+void proxy_shutdown(void);
 
 #endif

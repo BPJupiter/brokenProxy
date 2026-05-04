@@ -17,13 +17,13 @@ static int send_all(VSocket socket, const char *buf, uint len);
 
 static int handle_http_request(VSocket client_handle);
 static int send_resource(char resource[512], char *buffer, uint buffer_len, VSocket client_handle);
-static int update_settings(char resource[512], char *buffer, uint buffer_len, VSocket client_handle);
+static int update_settings(char resource[512], const char *buffer, uint buffer_len, const VSocket client_handle);
 static int initiate_shutdown(char resource[512], char *buffer, uint buffer_len, VSocket client_handle);
 static int delete_datastore(char resource[512], char *buffer, uint buffer_len, VSocket client_handle);
 
 int g_proxy_pid = -1;
 
-static void restart_proxy();
+static void restart_proxy(void);
 
 int webserver_start(int port, int proxy_pid)
 {
@@ -219,10 +219,11 @@ static int send_resource(char resource[512], char *buffer, uint buffer_len, VSoc
 	return 0;
 }
 
-static int update_settings(char resource[512], char *request, uint request_len, VSocket client_handle)
+static int update_settings(char resource[512], const char *request, uint request_len, const VSocket client_handle)
 {
 	FILE *fp;
 	char *buffer;
+	char *body_start;
 	char *new_json;
 
 	cJSON *file_json;
@@ -237,13 +238,15 @@ static int update_settings(char resource[512], char *request, uint request_len, 
 
 	size_t bytes_read;
 
+	UNUSED(request_len);
+
 	if (strcmp(resource, "/settings") != 0 && strcmp(resource, "/settings.json") != 0)
 	{
 		printf("PUT but no settings requested.\n");
 		return 1;
 	}
 
-	char *body_start = strstr(request, "\r\n\r\n");
+	body_start = strstr(request, "\r\n\r\n");
 	if (!body_start)
 	{
 		send_all(client_handle, HTTP_500_HEADER, strlen(HTTP_500_HEADER));
@@ -365,6 +368,10 @@ static int update_settings(char resource[512], char *request, uint request_len, 
 
 static int initiate_shutdown(char resource[512], char *buffer, uint buffer_len, VSocket client_handle)
 {
+	UNUSED(resource);
+	UNUSED(buffer);
+	UNUSED(buffer_len);
+	UNUSED(client_handle);
 	send_all(client_handle, "HTTP/1.1 200 OK\r\n\r\nShutdown initiated.", 39);
 
 	printf("\nTerminating proxy.\n");
@@ -377,6 +384,11 @@ static int initiate_shutdown(char resource[512], char *buffer, uint buffer_len, 
 }
 static int delete_datastore(char resource[512], char *buffer, uint buffer_len, VSocket client_handle)
 {
+	UNUSED(resource);
+	UNUSED(buffer);
+	UNUSED(buffer_len);
+	UNUSED(client_handle);
+	return 1;
 	/* IMPLEMENT ME */
 }
 
@@ -396,7 +408,7 @@ static int send_all(VSocket socket, const char *buf, uint len)
     return 0;
 }
 
-static void restart_proxy()
+static void restart_proxy(void)
 {
 	europa_process_reload(g_proxy_pid);
 }

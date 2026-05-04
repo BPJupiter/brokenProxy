@@ -19,7 +19,7 @@ if (MSVC)
 	target_compile_definitions(bpj_core PUBLIC _CRT_SECURE_NO_WARNINGS)
 	target_link_libraries(bpj_core PUBLIC Ws2_32)
 else()
-	target_compile_options(bpj_core PRIVATE -pedantic -Wall -Wextra)
+	target_compile_options(bpj_core PRIVATE -Wpedantic -Wall -Wextra)
 	target_link_libraries(bpj_core PUBLIC m)
 
 	target_compile_options(bpj_core PRIVATE $<$<CONFIG:Debug>:-g> $<$<CONFIG:Debug>:-static>)

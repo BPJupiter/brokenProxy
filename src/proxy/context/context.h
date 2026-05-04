@@ -57,8 +57,8 @@ extern boolean sharedContext_callback_set_dnsResolve(ResolveType type);
 extern boolean sharedContext_callback_set_traceroute(boolean enabled);
 extern boolean sharedContext_callback_set_ping(boolean enabled);
 
-extern boolean sharedContext_callback_isEnabled_traceroute();
-extern boolean sharedContext_callback_isEnabled_ping();
+extern boolean sharedContext_callback_isEnabled_traceroute(void);
+extern boolean sharedContext_callback_isEnabled_ping(void);
 
 extern boolean sharedContext_callback_execute_dnsResolve(DnsResult *dns_result, const char *hostname);
 extern boolean sharedContext_callback_execute_traceroute(TracertResult *tracert_result, const char *ip);

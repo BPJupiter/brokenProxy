@@ -25,7 +25,7 @@ EDBHandle *europa_database_open(const char *filename)
 		initialised = FALSE;
 		vedis_config(database, VEDIS_CONFIG_ERR_LOG, &err_buf, &err_len);
 		if (err_len > 0)
-			printf(err_buf);
+			printf("%s\n", err_buf);
 	}
 	return database;
 }
@@ -47,7 +47,7 @@ void europa_database_close(EDBHandle **database)
 
 	vedis_config(*database, VEDIS_CONFIG_ERR_LOG, &err_buf, &err_len);
 	if (err_len > 0)
-		printf(err_buf);
+		printf("%s\n", err_buf);
 }
 
 boolean europa_database_store(EDBHandle *database, const void *key, int key_length, const void *data, uint64 data_length)
@@ -63,7 +63,7 @@ boolean europa_database_store(EDBHandle *database, const void *key, int key_leng
 
 	vedis_config(database, VEDIS_CONFIG_ERR_LOG, &err_buf, &err_len);
 	if (err_len > 0)
-		printf(err_buf);
+		printf("%s\n", err_buf);
 	return FALSE;
 }
 
@@ -72,7 +72,7 @@ boolean europa_database_fetch(EDBHandle *database, const void *key, int key_leng
 	int rv;
 	const char *err_buf;
 	int err_len;
-	rv = vedis_kv_fetch(database, key, key_length, buffer, (int64)buffer_size);
+	rv = vedis_kv_fetch(database, key, key_length, buffer, (vedis_int64 *)buffer_size);
 	if (rv == VEDIS_OK)
 		return TRUE;
 
@@ -88,7 +88,7 @@ boolean europa_database_fetch(EDBHandle *database, const void *key, int key_leng
 
 	vedis_config(database, VEDIS_CONFIG_ERR_LOG, &err_buf, &err_len);
 	if (err_len > 0)
-		printf(err_buf);
+		printf("%s\n", err_buf);
 	return FALSE;
 }
 
@@ -103,7 +103,7 @@ boolean europa_database_delete(EDBHandle *database, const void *key, int key_len
 
 	vedis_config(database, VEDIS_CONFIG_ERR_LOG, &err_buf, &err_len);
 	if (err_len > 0)
-		printf(err_buf);
+		printf("%s\n", err_buf);
 	return FALSE;
 }
 
