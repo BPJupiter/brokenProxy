@@ -54,7 +54,7 @@ TracertResult traceroute(const char *address)
     for (i = 0; fgets(line, sizeof(line), fp) != NULL; i++)
     {
         uint rtt[3] = { 0, 0, 0 };
-        char address[64] = NO_ADDRESS;
+        char line_address[64] = NO_ADDRESS;
         uint j, k = 0;
 
         if (strlen(line) == 1) break;
@@ -92,10 +92,10 @@ TracertResult traceroute(const char *address)
 
             newline = strchr(p, '\n');
             if (newline) *newline = '\0';
-            c_text_copy(strlen(p) + 1, address, p);
+            c_text_copy(strlen(p) + 1, line_address, p);
         }
 
-        c_text_copy(strlen(address) + 1, hopAddress_temp[i], address);
+        c_text_copy(strlen(line_address) + 1, hopAddress_temp[i], line_address);
     }
 
     result.hopCount = i;

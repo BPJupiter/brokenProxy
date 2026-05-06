@@ -85,7 +85,7 @@ static void reload_config(void);
 static void _restart(int signum);
 static void _shutdown(int signum);
 
-int proxy_start(int port)
+int proxy_start(uint16 port)
 {
 	VSocket server_handle, client_handle;
 	int opt = 1;

@@ -67,17 +67,17 @@ VSocket styx_socket_create(boolean stream, uint16 port)
     VSocket s;
 #if defined _WIN32
     if (!styx_socket_init_win32())
-        return -1;
+        return INVALID_VSOCKET;
 #endif
     if (stream)
     {
         if ((s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) == -1)
-            return -1;
+            return INVALID_VSOCKET;
     }
     else
     {
         if ((s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1)
-            return -1;
+            return INVALID_VSOCKET;
     }
 
     if (port != 0 || !stream)
@@ -90,7 +90,7 @@ VSocket styx_socket_create(boolean stream, uint16 port)
         {
             fprintf(stderr, "Styx Error: Failed to bind(), code %d (%s)\n", errno, strerror(errno));
             styx_socket_destroy(s);
-            return -1;
+            return INVALID_VSOCKET;
         }
         if (stream)
             if (listen(s, 8) < 0)

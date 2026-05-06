@@ -14,7 +14,11 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin")
 
 find_package(Threads REQUIRED)
 
-add_compile_options(-Wpedantic -Wall -Wextra)
+if (MSVC)
+	add_compile_options(/W4)
+else()
+	add_compile_options(-Wpedantic -Wall -Wextra)
+endif()
 
 add_subdirectory(lib)
 add_subdirectory(src/shared)

@@ -13,7 +13,7 @@
 #define FIRST_LINE_MAX_LEN (1 << 10)
 #define PROJECT_ROOT_FOLDER_NAME "brokenProxy"
 
-static int send_all(VSocket socket, const char *buf, uint len);
+static int send_all(VSocket socket, const char *buf, size_t len);
 
 static int handle_http_request(VSocket client_handle);
 static int send_resource(char resource[512], char *buffer, uint buffer_len, VSocket client_handle);
@@ -25,7 +25,7 @@ int g_proxy_pid = -1;
 
 static void restart_proxy(void);
 
-int webserver_start(int port, int proxy_pid)
+int webserver_start(uint16 port, int proxy_pid)
 {
 	VSocket server_handle;
 	int yes = 1;
@@ -392,10 +392,10 @@ static int delete_datastore(char resource[512], char *buffer, uint buffer_len, V
 	/* IMPLEMENT ME */
 }
 
-static int send_all(VSocket socket, const char *buf, uint len)
+static int send_all(VSocket socket, const char *buf, size_t len)
 {
-	uint total_sent = 0;
-    uint bytes_left = len;
+	size_t total_sent = 0;
+    size_t bytes_left = len;
     int n;
 
     while (total_sent < len)

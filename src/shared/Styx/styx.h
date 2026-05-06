@@ -8,6 +8,7 @@
 #include <Ws2tcpip.h>
 typedef SOCKADDR_INET StyxSockaddrInet;
 typedef SOCKET VSocket;
+#define INVALID_VSOCKET INVALID_SOCKET
 #else
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -18,7 +19,11 @@ typedef union
     uint16 si_family;
 }StyxSockaddrInet;
 typedef int VSocket;
+#define INVALID_VSOCKET -1
+#endif
 
+#ifndef ssize_t
+typedef int ssize_t;
 #endif
 
 typedef struct

@@ -100,8 +100,8 @@ typedef struct
     QUERY *ques;
 } QUESTION;
 
-static DnsResult dns_iterative_root_worker(const char *host, int query_type, char *current_ns_ip, uint depth); /* Confusing naming; Function is recursive in the programming sense. Overall resolves DNS through the iterative resolution process. */
-static size_t init_dns_header(uint8 *buf, const char *host, int query_type);
+static DnsResult dns_iterative_root_worker(const char *host, uint16 query_type, char *current_ns_ip, uint depth); /* Confusing naming; Function is recursive in the programming sense. Overall resolves DNS through the iterative resolution process. */
+static size_t init_dns_header(uint8 *buf, const char *host, uint16 query_type);
 static void read_answers(DNS_HEADER *dns, RES_RECORD *answers, uint8 **reader, uint8 *buf, int *stop);
 static void read_authorities(DNS_HEADER *dns, RES_RECORD *auth, uint8 **reader, uint8 *buf, int *stop);
 static void read_additional(DNS_HEADER *dns, RES_RECORD *addit, uint8 **reader, uint8 *buf, int *stop);
@@ -109,14 +109,14 @@ static DnsResult handle_found_answers(DNS_HEADER *dns,
                                       RES_RECORD *answers,
                                       RES_RECORD *auth,
                                       RES_RECORD *addit,
-                                      int query_type, uint depth);
+                                      uint16 query_type, uint depth);
 static DnsResult process_auth_records(DNS_HEADER *dns,
                                       RES_RECORD *answers,
                                       RES_RECORD *auth,
                                       RES_RECORD *addit,
-                                      const char *host, int query_type, uint depth);
+                                      const char *host, uint16 query_type, uint depth);
 static boolean find_ipv4_glue(RES_RECORD *addit, int add_count, const char *ns_name, char *out_ip);
-static boolean try_ns_ip(const char *ns_ip, const char *host, int query_type, uint depth, DnsResult *out_result, uint *rtt_rejections);
+static boolean try_ns_ip(const char *ns_ip, const char *host, uint16 query_type, uint depth, DnsResult *out_result, uint *rtt_rejections);
 static DnsResult localhost(void);
 static void  change_to_dns_name_format(uint8 *, const char *);
 static void read_name(uint8 name[256], uint8 *, uint8 *, int *);
@@ -338,7 +338,7 @@ static DnsResult localhost(void)
 }
 
 /* Perform a DNS query by sending a packet */
-static DnsResult dns_iterative_root_worker(const char *host, int query_type, char *ns_ip, uint depth)
+static DnsResult dns_iterative_root_worker(const char *host, uint16 query_type, char *ns_ip, uint depth)
 {
     DnsResult result;
     uint8 buf[65536] = {0};
@@ -460,14 +460,14 @@ static DnsResult dns_iterative_root_worker(const char *host, int query_type, cha
     return result;
 }
 
-static size_t init_dns_header(uint8 *buf, const char *host, int query_type)
+static size_t init_dns_header(uint8 *buf, const char *host, uint16 query_type)
 {
     DNS_HEADER *dns = (DNS_HEADER *)buf;
     uint8 *qname;
     uint16 f = 0;
     QUERY *qinfo = {0};
 
-    dns->id = (uint16)htons(getpid());
+    dns->id = (uint16)htons(13709); /* smiley on a numpad :) */
     f |= DNS_FLAG_RD;
     dns->flags = htons(f);
     dns->q_count = htons(1); /* we have 1 question */
@@ -615,7 +615,7 @@ static DnsResult handle_found_answers(DNS_HEADER *dns,
                                       RES_RECORD *answers,
                                       RES_RECORD *auth,
                                       RES_RECORD *addit,
-                                      int query_type, uint depth)
+                                      uint16 query_type, uint depth)
 {
     DnsResult result = { 0 };
     StyxSockaddrInet a = {0};
@@ -697,7 +697,7 @@ static DnsResult process_auth_records(DNS_HEADER *dns,
                                       RES_RECORD *answers,
                                       RES_RECORD *auth,
                                       RES_RECORD *addit,
-                                      const char *host, int query_type, uint depth)
+                                      const char *host, uint16 query_type, uint depth)
 {
     DnsResult result = { 0 };
     char next_ns_name[256] = "\0";
@@ -785,7 +785,7 @@ static boolean find_ipv4_glue(RES_RECORD *addit, int add_count, const char *ns_n
     return FALSE;
 }
 
-static boolean try_ns_ip(const char *ns_ip, const char *host, int query_type, uint depth, DnsResult *out_result, uint *rtt_rejections)
+static boolean try_ns_ip(const char *ns_ip, const char *host, uint16 query_type, uint depth, DnsResult *out_result, uint *rtt_rejections)
 {
     if (strcmp(ns_ip, "127.0.0.1") == 0) {
         return FALSE;

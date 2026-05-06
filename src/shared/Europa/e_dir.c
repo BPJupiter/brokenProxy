@@ -42,6 +42,7 @@ DIR *opendir(char *path)
         if ((handle = FindFirstFileW(unicode_path, &data)) != INVALID_HANDLE_VALUE)
         {
             dir = malloc(sizeof *dir);
+            if (dir == NULL) return NULL;
             dir->handle = handle;
             dir->data = data;
             dir->ent.d_name[0] = 0;
@@ -53,6 +54,7 @@ DIR *opendir(char *path)
     else
     {
         dir = malloc(sizeof *dir);
+        if (dir == NULL) return NULL;
         dir->handle = NULL;
         dir->ent.d_name[0] = 64;
         dir->ent.d_name[1] = ':';
@@ -459,6 +461,7 @@ uint8 *europa_path_load(char *path, size_t *size)
     }
     rewind(f);
     buffer = malloc(allocation + 1);
+    if (buffer == NULL) return NULL;
     memset(buffer, 0, allocation + 1);
     fread(buffer, 1, allocation, f);
     fclose(f);

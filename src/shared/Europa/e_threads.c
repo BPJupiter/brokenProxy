@@ -15,6 +15,7 @@ void *europa_mutex_create(void)
 {
     CRITICAL_SECTION *mutex;
     mutex = malloc(sizeof *mutex);
+    if (mutex == NULL) return NULL;
     InitializeCriticalSection(mutex);
     return mutex;
 }
@@ -82,6 +83,7 @@ void *europa_signal_create(void)
 {
     CONDITION_VARIABLE *p;
     p = malloc(sizeof *p);
+    if (p == NULL) return NULL;
     InitializeConditionVariable(p);
     return p;
 }
@@ -182,6 +184,7 @@ EuropaThread europa_thread_create(void (*func)(void *data), void *data, char *na
     DWORD dwThreadID;
 
     thread_param = malloc(sizeof *thread_param);
+    if (thread_param == NULL) return NULL;
     thread_param->func = func;
     thread_param->data = data;
 
