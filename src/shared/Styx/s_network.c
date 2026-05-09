@@ -6,7 +6,7 @@
 #include "Europa/europa.h"
 
 #if defined _WIN32
-#include <WinSock2.h>
+#include <winsock2.h>
 #include <iphlpapi.h>
 #pragma comment(lib, "WSock32.lib")
 #pragma comment(lib, "IPHLPAPI.lib")
