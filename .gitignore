@@ -4,7 +4,8 @@
 *.obj
 
 # build dir
-build/*
+build/
+bin/
 
 # static libraries
 *.a
