@@ -252,3 +252,34 @@ boolean styxPackBufferClear(SHandle *handle)
 	}
 	return TRUE;
 }
+
+boolean styxPackBufferAdd(SHandle *handle, const uint8 *data, uint length)
+{
+	uint pos = 0;
+
+	if (handle == NULL || data == NULL) {
+		return FALSE;
+	}
+
+	while (pos < length) {
+		size_t left;
+		size_t size;
+
+		left = handle->write_buffer_size - handle->write_buffer_pos;
+		size = (length - pos < left) ? (length - pos) : left;
+
+		if (size > 0) {
+			memcpy(&handle->write_buffer[handle->write_buffer_pos], &data[pos], size);
+			handle->write_buffer_pos += size;
+			pos += size;
+		}
+
+		if (handle->write_buffer_pos == handle->write_buffer_size) {
+			if (!styxPackBufferClear(handle)) {
+				return FALSE; /* output no longer available */
+			}
+		}
+	}
+
+	return TRUE;
+}

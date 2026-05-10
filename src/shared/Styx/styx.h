@@ -104,5 +104,46 @@ extern SHandleType styxType(SHandle *handle);
 extern void     styxFree(SHandle *handle);
 extern int      styxNetworkWait(SHandle **handles, boolean *read, boolean *write, uint handle_count, uint micro_seconds);
 
+/* -------- Data Packing --------
+ * Functions used to pack data into a stream. If STYX_DEBUG is not defined, the param "name" will be removed with the macro.
+ * In debug mode (where both STYX_DEBUG is defined AND the bug mode of the stream has been set to TRUE styxDebugModeSet)
+ * the name and data type will be checked to make sure they match the name and type that was packed.
+ * If this test fails the application will terminate on unpack and write out a Error raport to standard out.*/
+
+extern void     styxPackUint8(SHandle *handle, uint8 value, char *name);
+extern void     styxPackInt8(SHandle *handle, int8 value, char *name);
+extern void     styxPackUint16(SHandle *handle, uint16 value, char *name);
+extern void     styxPackInt16(SHandle *handle, int16 value, char *name);
+extern void     styxPackUint32(SHandle *handle, uint32 value, char *name);
+extern void     styxPackInt32(SHandle *handle, int32 value, char *name);
+extern void     styxPackUint64(SHandle *handle, uint64 value, char *name);
+extern void     styxPackInt64(SHandle *handle, int64 value, char *name);
+extern void     styxPackFloat(SHandle *handle, float value, char *name);
+extern void     styxPackDouble(SHandle *handle, double value, char *name);
+extern boolean  styxPackString(SHandle *handle, char *value, char *name);
+extern uint64   styxPackRaw(SHandle *handle, uint8 *data, uint64 length, char *name);
+
+/* -------- Data Unpacking --------
+ * Functions used to unpack data in to a stram. If STYX_DEBUG is not defined, the param "name" will be removed with a macro.
+ * In debug mode (where both STYX_DEBUG is defined AND the bug mode of the stream has been set to TRUE styxDebugModeSet)
+ * the name, and data type will be checked to make sure they match the name and type that was packed.
+ * If this test fails the application will terminate and write out a Error raport to standard out.*/
+
+extern uint8    styxUnpackUint8(SHandle *handle, char *name);
+extern int8     styxUnpackInt8(SHandle *handle, char *name);
+extern uint16   styxUnpackUint16(SHandle *handle, char *name);
+extern int16    styxUnpackInt16(SHandle *handle, char *name);
+extern uint32   styxUnpackUint32(SHandle *handle, char *name);
+extern int32    styxUnpackInt32(SHandle *handle, char *name);
+extern uint64   styxUnpackUint64(SHandle *handle, char *name);
+extern int64    styxUnpackInt64(SHandle *handle, char *name);
+extern float    styxUnpackFloat(SHandle *handle, char *name);
+extern double   styxUnpackDouble(SHandle *handle, char *name);
+extern boolean  styxUnpackString(SHandle *handle, char *value, uint buffer_size, char *name);
+extern char    *styxUnpackStringWithOwnership(SHandle *handle, char *name);
+extern uint64   styxUnpackRaw(SHandle *handle, uint8 *buffer, uint64 buffer_len, char *name);
+
+#include "s_debug.h"
+
 
 #endif /* STYX_H */
