@@ -3,9 +3,9 @@
 
 #include "styx.h"
 
-extern void styxSocketDestroy(VSocket socket);
+extern void styx_socket_destroy(VSocket socket);
 
-void styxFree(SHandle *handle)
+void styx_free(SHandle *handle)
 {
 	if (handle == NULL) {
 		return;
@@ -14,7 +14,7 @@ void styxFree(SHandle *handle)
 	if (handle->type == S_HT_FILE_WRITE ||
 		handle->type == S_HT_STREAMING_SERVER ||
 		handle->type == S_HT_STREAMING_CONNECTION) {
-		styxPackBufferClear(handle);
+		styx_pack_buffer_clear(handle);
 	}
 
 	if (handle->text_copy != NULL) {
@@ -33,7 +33,7 @@ void styxFree(SHandle *handle)
 	}
 
 	if (handle->socket != INVALID_VSOCKET) {
-		styxSocketDestroy(handle->socket);
+		styx_socket_destroy(handle->socket);
 	}
 
 	if (handle->type == S_HT_FILE_WRITE && handle->file_name != NULL) {
@@ -60,7 +60,7 @@ void styxFree(SHandle *handle)
 	free(handle);
 }
 
-SHandleType styxType(SHandle *handle)
+SHandleType styx_type(SHandle *handle)
 {
 	return handle->type;
 }

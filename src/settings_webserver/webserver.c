@@ -1,5 +1,6 @@
-#include "Styx/styx.h"
+#include "Clay/clay.h"
 #include "Europa/europa.h"
+#include "Styx/styx.h"
 #include "Talos/talos.h"
 
 #include "cjson/cJSON.h"
@@ -8,18 +9,17 @@
 #include "response_codes.h"
 
 #include <string.h>
+#include <errno.h>
 
-#define BUFFER_SIZE (1 << 16)
+#define BUFFER_SIZE (1 << 12)
 #define FIRST_LINE_MAX_LEN (1 << 10)
 #define PROJECT_ROOT_FOLDER_NAME "brokenProxy"
 
-static int send_all(VSocket socket, const char *buf, size_t len);
-
-static int handle_http_request(VSocket client_handle);
-static int send_resource(char resource[512], char *buffer, uint buffer_len, VSocket client_handle);
-static int update_settings(char resource[512], const char *buffer, uint buffer_len, const VSocket client_handle);
-static int initiate_shutdown(char resource[512], char *buffer, uint buffer_len, VSocket client_handle);
-static int delete_datastore(char resource[512], char *buffer, uint buffer_len, VSocket client_handle);
+static int handle_http_request(SHandle *client_handle);
+static int send_resource(SHandle *client_handle, char resource[512], char *buffer, uint buffer_len);
+static int update_settings(SHandle *client_handle, char resource[512], const char *buffer, uint buffer_len);
+static int initiate_shutdown(SHandle *client_handle, char resource[512], char *buffer, uint buffer_len);
+static int delete_datastore(SHandle *client_handle, char resource[512], char *buffer, uint buffer_len);
 
 int g_proxy_pid = -1;
 
@@ -27,35 +27,30 @@ static void restart_proxy(void);
 
 int webserver_start(uint16 port, int proxy_pid)
 {
-	VSocket server_handle;
-	int yes = 1;
+	SHandle *server_handle, *client_handle;
+	StyxNetworkAddress client_addr;
 
 	g_proxy_pid = proxy_pid;
 	printf("proxy pid: %d\n", g_proxy_pid);
 
-	server_handle = styx_socket_create(TRUE, port);
-	if (!styx_socket_assert(server_handle, "Webserver socket creation: "))
+	server_handle = styx_network_stream_address_create(NULL, port, FALSE);
+	if (!server_handle) {
+		fprintf(stderr, "Could not create server handle\n");
 		exit(1);
-
-	setsockopt(server_handle, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes);
-
-	while (1)
-	{
-		socklen_t client_len;
-		VSocket client_handle;
-		StyxSockaddrInet client_addr;
-
-		client_len = sizeof client_addr;
-		client_handle = accept(server_handle, (struct sockaddr*)&client_addr.Ipv4, &client_len);
-
-		if (!styx_socket_assert(client_handle, "Client socket creation: "))
-			exit(1);
-
-		handle_http_request(client_handle);
 	}
+
+	while (1) {
+		client_handle = styx_network_stream_wait_for_connection(server_handle, &client_addr);
+		if (client_handle) {
+			handle_http_request(client_handle);
+		}
+	}
+	initiate_shutdown(client_handle, NULL, NULL, 0);
+	printf("OH NO\n");
+	return 0;
 }
 
-static int handle_http_request(VSocket client_handle)
+static int handle_http_request(SHandle *client_handle)
 {
 	char request[BUFFER_SIZE] = { 0 };
 	int bytes_recvd = 0;
@@ -66,9 +61,18 @@ static int handle_http_request(VSocket client_handle)
 
 	char method[16], resource[512], version[16];
 
-	bytes_recvd = recv(client_handle, request, BUFFER_SIZE - 1, 0);
-	if (bytes_recvd <= 0)
+	boolean ready = FALSE;
+	const int timeout_us = 50000;
+
+	while (!ready) {
+		ready = TRUE;
+		styx_network_wait(&client_handle, &ready, NULL, 1, timeout_us);
+	}
+
+	bytes_recvd = styx_unpack_raw(client_handle, (uint8 *)request, BUFFER_SIZE, NULL);
+	if (bytes_recvd <= 0) {
 		return 1;
+	}
 
 	first_line_end = strchr(request, '\n');
 	if (!first_line_end)
@@ -90,19 +94,19 @@ static int handle_http_request(VSocket client_handle)
 
 	if (strcmp(method, "GET") == 0)
 	{
-		send_resource(resource, request, sizeof(request), client_handle);
+		send_resource(client_handle, resource, request, sizeof(request));
 	}
 	else if (strcmp(method, "PUT") == 0)
 	{
-		update_settings(resource, request, sizeof(request), client_handle);
+		update_settings(client_handle, resource, request, sizeof(request));
 	}
 	else if (strcmp(method, "POST") == 0)
 	{
-		initiate_shutdown(resource, request, sizeof(request), client_handle);
+		initiate_shutdown(client_handle, resource, request, sizeof(request));
 	}
 	else if (strcmp(method, "DELETE") == 0)
 	{
-		delete_datastore(resource, request, sizeof(request), client_handle);
+		delete_datastore(client_handle, resource, request, sizeof(request));
 	}
 	/* These should not be requested. */
 	else if (strcmp(method, "HEAD") == 0)
@@ -141,16 +145,31 @@ static int handle_http_request(VSocket client_handle)
 	return 0;
 }
 
-static int send_resource(char resource[512], char *buffer, uint buffer_len, VSocket client_handle)
+static int send_http_404(SHandle *handle)
+{
+	styx_pack_string(handle, HTTP_404_HEADER, NULL);
+	styx_pack_string(handle, HTTP_404_HTML, NULL);
+	return styx_network_stream_send_force(handle);
+}
+
+static int send_http_500(SHandle *handle)
+{
+	styx_pack_string(handle, HTTP_500_HEADER, NULL);
+	styx_pack_string(handle, HTTP_500_HTML, NULL);
+	return styx_network_stream_send_force(handle);
+}
+
+static int send_resource(SHandle *client_handle, char resource[512], char *buffer, uint buffer_len)
 {
 	FILE *fp = NULL;
 
 	char path[256] = { 0 };
 	char extension[64] = { 0 };
+	boolean r = FALSE, w = FALSE;
 
 	long content_length;
-	int header_length;
 	size_t bytes_read;
+	size_t header_len;
 
 	if (strcmp(resource, "/settings") == 0
 		|| strcmp(resource, "/settings.json") == 0)
@@ -170,17 +189,10 @@ static int send_resource(char resource[512], char *buffer, uint buffer_len, VSoc
 	else if (strstr(path, ".ico") != NULL)		strcpy(extension, "image/x-icon");
 
 	fp = europa_project_root_fopen(PROJECT_ROOT_FOLDER_NAME, path, "rb");
-	if (!fp)
-	{
-		if (send_all(client_handle, HTTP_404_HEADER, strlen(HTTP_404_HEADER)) == -1)
-		{
-			printf("Socket fd: %d\n", client_handle);
-			talos_print_error("Error sending header!\n");
-		}
-		if (send_all(client_handle, HTTP_404_HTML, strlen(HTTP_404_HTML)) == -1)
-		{
-			printf("Socket fd: %d\n", client_handle);
-			talos_print_error("Error sending body!\n");
+	if (!fp) {
+		if (send_http_404(client_handle) == 0) {
+			printf("Socket fd: %p\n", (void *)client_handle);
+			talos_print_error("Error sending 404!\n");
 		}
 		return 1;
 	}
@@ -189,7 +201,7 @@ static int send_resource(char resource[512], char *buffer, uint buffer_len, VSoc
 	content_length = ftell(fp);
 	rewind(fp);
 
-	header_length = sprintf(buffer,
+	header_len = sprintf(buffer,
 		"HTTP/1.1 200 OK\r\n"
 		"Content-Type: %s\r\n"
 		"Content-Length: %ld\r\n"
@@ -197,21 +209,32 @@ static int send_resource(char resource[512], char *buffer, uint buffer_len, VSoc
 		"\r\n",
 		extension, content_length);
 
-	if (send_all(client_handle, buffer, header_length) == -1)
-	{
-		printf("Socket fd: %d\n", client_handle);
+	w = TRUE;
+	while (!w) {
+		w = TRUE;
+		styx_network_wait(&client_handle, NULL, &w, 1, 50000);
+	}
+
+	if (styx_pack_raw(client_handle, (uint8 *)buffer, header_len, NULL) == 0) {
+		printf("Socket fd: %p\n", (void *)client_handle);
 		talos_print_error("Error sending header!\n");
 		fclose(fp);
 		return 1;
 	}
-	while ((bytes_read = fread(buffer, 1, buffer_len, fp)) > 0)
-	{
-		if (send_all(client_handle, buffer, bytes_read) == -1)
-		{
-			printf("Socket fd: %d\n", client_handle);
-			talos_print_error("Error sending body!\n");
-			fclose(fp);
-			return 1;
+	while ((bytes_read = fread(buffer, 1, buffer_len, fp)) > 0) {
+		size_t chunk_sent = 0;
+
+		while (chunk_sent < bytes_read) {
+			size_t sent = styx_pack_raw(client_handle, (uint8 *)buffer, bytes_read, NULL);
+			chunk_sent += sent;
+
+			if (chunk_sent < bytes_read) {
+				w = FALSE;
+				while (!w) {
+					w = TRUE;
+					styx_network_wait(&client_handle, NULL, &w, 1, 50000);
+				}
+			}
 		}
 	}
 	
@@ -219,7 +242,7 @@ static int send_resource(char resource[512], char *buffer, uint buffer_len, VSoc
 	return 0;
 }
 
-static int update_settings(char resource[512], const char *request, uint request_len, const VSocket client_handle)
+static int update_settings(SHandle *client_handle, char resource[512], const char *request, uint request_len)
 {
 	FILE *fp;
 	char *buffer;
@@ -247,10 +270,8 @@ static int update_settings(char resource[512], const char *request, uint request
 	}
 
 	body_start = strstr(request, "\r\n\r\n");
-	if (!body_start)
-	{
-		send_all(client_handle, HTTP_500_HEADER, strlen(HTTP_500_HEADER));
-		send_all(client_handle, HTTP_500_HTML, strlen(HTTP_500_HTML));
+	if (!body_start) {
+		(void)send_http_500(client_handle);	
 		return 1;
 	}
 	body_start += 4;
@@ -260,8 +281,7 @@ static int update_settings(char resource[512], const char *request, uint request
 	if (payload_json == NULL)
 	{
 		printf("Error: Failed to parse incoming POST JSON body.\n");
-		send_all(client_handle, HTTP_500_HEADER, strlen(HTTP_500_HEADER));
-		send_all(client_handle, HTTP_500_HTML, strlen(HTTP_500_HTML));
+		(void)send_http_500(client_handle);
 		return 1;
 	}
 
@@ -270,8 +290,7 @@ static int update_settings(char resource[512], const char *request, uint request
 	{
 		talos_print_error("Error opening settings.json file!");
 		cJSON_Delete(payload_json);
-		send_all(client_handle, HTTP_500_HEADER, strlen(HTTP_500_HEADER));
-		send_all(client_handle, HTTP_500_HTML, strlen(HTTP_500_HTML));
+		(void)send_http_500(client_handle);
 		return 1;
 	}
 
@@ -292,8 +311,7 @@ static int update_settings(char resource[512], const char *request, uint request
 			printf("CJSON Error: %s: line %d file %s\n", error_ptr, __LINE__, __FILE__);
 		}
 		cJSON_Delete(payload_json);
-		send_all(client_handle, HTTP_500_HEADER, strlen(HTTP_500_HEADER));
-		send_all(client_handle, HTTP_500_HTML, strlen(HTTP_500_HTML));
+		(void)send_http_500(client_handle);
 		return 1;
 	}
 
@@ -311,8 +329,7 @@ static int update_settings(char resource[512], const char *request, uint request
 		printf("Error: JSON structure invalid!\n");
 		cJSON_Delete(file_json);
 		cJSON_Delete(payload_json);
-		send_all(client_handle, HTTP_500_HEADER, strlen(HTTP_500_HEADER));
-		send_all(client_handle, HTTP_500_HTML, strlen(HTTP_500_HTML));
+		(void)send_http_500(client_handle);
 		return 1;
 	}
 
@@ -338,18 +355,16 @@ static int update_settings(char resource[512], const char *request, uint request
 
 	new_json = cJSON_Print(file_json);
 	fp = europa_project_root_fopen(PROJECT_ROOT_FOLDER_NAME, "settings/settings.json.tmp", "w");
-	if (NULL != fp)
-	{
+	if (NULL != fp) {
 		fputs(new_json, fp);
 		fclose(fp);
 		europa_path_rename("settings/settings.json.tmp", "settings/settings.json");
 		restart_proxy();
-		send_all(client_handle, HTTP_200_OK, strlen(HTTP_200_OK));
+		styx_pack_string(client_handle, HTTP_200_OK, NULL);
+		styx_network_stream_send_force(client_handle);
 	}
-	else
-	{
-		send_all(client_handle, HTTP_500_HEADER, strlen(HTTP_500_HEADER));
-		send_all(client_handle, HTTP_500_HTML, strlen(HTTP_500_HTML));
+	else {
+		(void)send_http_500(client_handle);
 	}
 
 	if (new_json)
@@ -366,23 +381,27 @@ static int update_settings(char resource[512], const char *request, uint request
 	return 0;
 }
 
-static int initiate_shutdown(char resource[512], char *buffer, uint buffer_len, VSocket client_handle)
+static int initiate_shutdown(SHandle *client_handle, char resource[512], char *buffer, uint buffer_len)
 {
 	UNUSED(resource);
 	UNUSED(buffer);
 	UNUSED(buffer_len);
-	UNUSED(client_handle);
-	send_all(client_handle, "HTTP/1.1 200 OK\r\n\r\nShutdown initiated.", 39);
+	styx_pack_string(client_handle, "HTTP/1.1 200 OK\r\n\r\nShutdown initiated.", NULL);
+	styx_network_stream_send_force(client_handle);
 
 	printf("\nTerminating proxy.\n");
 	europa_process_terminate(g_proxy_pid);
 
+#ifdef C_MEMORY_DEBUG
+	c_debug_mem_print(0);
+#endif
+	
 	printf("\nWebserver exiting.\n");
 	exit(0);
 
 	return 0;
 }
-static int delete_datastore(char resource[512], char *buffer, uint buffer_len, VSocket client_handle)
+static int delete_datastore(SHandle *client_handle, char resource[512], char *buffer, uint buffer_len)
 {
 	UNUSED(resource);
 	UNUSED(buffer);
@@ -390,22 +409,6 @@ static int delete_datastore(char resource[512], char *buffer, uint buffer_len, V
 	UNUSED(client_handle);
 	return 1;
 	/* IMPLEMENT ME */
-}
-
-static int send_all(VSocket socket, const char *buf, size_t len)
-{
-	size_t total_sent = 0;
-    size_t bytes_left = len;
-    int n;
-
-    while (total_sent < len)
-    {
-        n = send(socket, buf + total_sent, bytes_left, 0);
-        if (n == -1) { return -1; }
-        total_sent += n;
-        bytes_left -= n;
-    }
-    return 0;
 }
 
 static void restart_proxy(void)

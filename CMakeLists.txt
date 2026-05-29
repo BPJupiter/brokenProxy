@@ -7,6 +7,11 @@ endif()
 
 project ("brokenProxy" C)
 
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+	message(STATUS "Setting build type to 'Debug' as none was specified.")
+	set(CMAKE_BUILD_TYPE Debug CACHE STRING "Choose the type of build." FORCE)
+endif()
+
 set(CMAKE_C_STANDARD 90)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
@@ -17,7 +22,7 @@ find_package(Threads REQUIRED)
 if (MSVC)
 	add_compile_options(/W4)
 else()
-	add_compile_options(-Wpedantic -Wall -Wextra)
+	add_compile_options(-Wpedantic -Wall -Wextra -Wno-long-long)
 endif()
 
 add_subdirectory(lib)

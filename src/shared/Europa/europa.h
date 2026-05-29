@@ -3,26 +3,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "Clay/clay.h"
-/*
- #ifndef uint
-   typedef unsigned int uint;
- #endif
- #ifndef boolean
-   typedef unsigned char boolean;
- #endif
- #ifndef uint64
-   typedef unsigned long long uint64;
- #endif
- #ifndef int64
-   typedef long long int64;
- #endif
- #ifndef uint32
-   typedef unsigned int uint32;
- #endif
- #ifndef uint8
-   typedef unsigned char uint8;
- #endif
- */
 
 #ifdef _WIN32
     #define WIN32_LEAN_AND_MEAN

@@ -38,10 +38,10 @@ const size_t styx_type_size[] = {sizeof(uint8),
 								sizeof(uint8),
 								sizeof(char)};
 
-extern boolean styxPackBufferClear(SHandle *handle);
-extern boolean styxPackBufferAdd(SHandle *handle, const uint8 *data, uint length);
+extern boolean styx_pack_buffer_clear(SHandle *handle);
+extern boolean styx_pack_buffer_add(SHandle *handle, const uint8 *data, uint length);
 
-static boolean styxPackDebugHeader(SHandle *handle, STypes type, uint vector_length, char *name, char *file, uint line, int value_int, double value_double, char *value_string)
+static boolean styx_pack_debug_header(SHandle *handle, STypes type, uint vector_length, char *name, char *file, uint line, int value_int, double value_double, char *value_string)
 {
 	if (handle == NULL || name == NULL || file == NULL) {
 		return FALSE;
@@ -67,7 +67,7 @@ static boolean styxPackDebugHeader(SHandle *handle, STypes type, uint vector_len
 	}
 
 	if (handle->write_buffer_pos + styx_type_size[type] > handle->write_buffer_size - STYX_HEADER_SIZE_MAX) {
-		if (!styxPackBufferClear(handle)) {
+		if (!styx_pack_buffer_clear(handle)) {
 			return FALSE;
 		}
 	}
@@ -102,7 +102,7 @@ static boolean styxPackDebugHeader(SHandle *handle, STypes type, uint vector_len
 	return TRUE;
 }
 
-static boolean styxUnpackDebugHeader(SHandle *handle, STypes type, uint vector_length, char *name, char *file, uint line)
+static boolean styx_unpack_debug_header(SHandle *handle, STypes type, uint vector_length, char *name, char *file, uint line)
 {
 	if (handle == NULL || name == NULL || file == NULL) {
 		return FALSE;
@@ -184,18 +184,18 @@ static boolean styxUnpackDebugHeader(SHandle *handle, STypes type, uint vector_l
 /* ----------------------------------------------------------------- */
 
 #ifdef STYX_DEBUG
-void styxPackUint8Internal(SHandle *handle uint8 value, char *name, char *file, uint line)
+void styx_pack_uint8_internal(SHandle *handle uint8 value, char *name, char *file, uint line)
 #else
-void styxPackUint8Internal(SHandle *handle, uint8 value)
+void styx_pack_uint8_internal(SHandle *handle, uint8 value)
 #endif
 {
 #ifdef STYX_DEBUG
-	if (!styxPackDebugHeader(handle, S_TYPE_UINT8, 1, name, file, line, value, value, "")) {
+	if (!styx_pack_debug_header(handle, S_TYPE_UINT8, 1, name, file, line, value, value, "")) {
 		return; /* dest is gone */
 	}
 #else
 	if (handle->write_buffer_pos + styx_type_size[S_TYPE_UINT8] > handle->write_buffer_size - STYX_HEADER_SIZE_MAX) {
-		if (!styxPackBufferClear(handle)) {
+		if (!styx_pack_buffer_clear(handle)) {
 			return; /* dest is gone */
 		}
 	}
@@ -204,41 +204,41 @@ void styxPackUint8Internal(SHandle *handle, uint8 value)
 }
 
 #ifdef STYX_DEBUG
-uint8 styxUnpackUint8Internal(SHandle *handle, char *name, char *file, uint line)
+uint8 styx_unpack_uint8_internal(SHandle *handle, char *name, char *file, uint line)
 #else
-uint8 styxUnpackUint8Internal(SHandle *handle)
+uint8 styx_unpack_uint8_internal(SHandle *handle)
 #endif
 {
 	/* send or save data if buffer is filling up */
 	if (handle->read_buffer_pos + styx_type_size[S_TYPE_UINT8] + STYX_HEADER_SIZE_MAX >= handle->read_buffer_used) {
-		styxUnpackBufferGet(handle);
+		styx_unpack_buffer_get(handle);
 	}
 #ifdef STYX_DEBUG
 	/* include the data desc header */
 	if (handle->debug_descriptor) {
-		styxUnpackDebugHeader(handle, S_TYPE_UINT8, 1, name, file, line);
+		styx_unpack_debug_header(handle, S_TYPE_UINT8, 1, name, file, line);
 	}
 #endif
 	return handle->read_buffer[handle->read_buffer_pos++];
 }
 
-/* extern void styxPackVectorUint8Internal(SHandle *handle, uint8 value, char *name, uint length, char *file, uint line); */
+/* extern void styx_pack_vector_uint8_internal(SHandle *handle, uint8 value, char *name, uint length, char *file, uint line); */
 
 /* ---------------------------------------------------------------- */
 
 #ifdef STYX_DEBUG
-void styxPackInt8Internal(SHandle *handle int8 value, char *name, char *file, uint line)
+void styx_pack_int8_internal(SHandle *handle int8 value, char *name, char *file, uint line)
 #else
-void styxPackInt8Internal(SHandle *handle, int8 value)
+void styx_pack_int8_internal(SHandle *handle, int8 value)
 #endif
 {
 #ifdef STYX_DEBUG
-	if (!styxPackDebugHeader(handle, S_TYPE_INT8, 1, name, file, line, value, value, "")) {
+	if (!styx_pack_debug_header(handle, S_TYPE_INT8, 1, name, file, line, value, value, "")) {
 		return; /* dest is gone */
 	}
 #else
 	if (handle->write_buffer_pos + styx_type_size[S_TYPE_INT8] > handle->write_buffer_size - STYX_HEADER_SIZE_MAX) {
-		if (!styxPackBufferClear(handle)) {
+		if (!styx_pack_buffer_clear(handle)) {
 			return; /* dest is gone */
 		}
 	}
@@ -247,19 +247,19 @@ void styxPackInt8Internal(SHandle *handle, int8 value)
 }
 
 #ifdef STYX_DEBUG
-int8 styxUnpackInt8Internal(SHandle *handle, char *name, char *file, uint line)
+int8 styx_unpack_int8_internal(SHandle *handle, char *name, char *file, uint line)
 #else
-int8 styxUnpackInt8Internal(SHandle *handle)
+int8 styx_unpack_int8_internal(SHandle *handle)
 #endif
 {
 	/* send or save data if buffer is filling up */
 	if (handle->read_buffer_pos + styx_type_size[S_TYPE_INT8] + STYX_HEADER_SIZE_MAX >= handle->read_buffer_used) {
-		styxUnpackBufferGet(handle);
+		styx_unpack_buffer_get(handle);
 	}
 #ifdef STYX_DEBUG
 	/* include the data desc header */
 	if (handle->debug_descriptor) {
-		styxUnpackDebugHeader(handle, S_TYPE_INT8, 1, name, file, line);
+		styx_unpack_debug_header(handle, S_TYPE_INT8, 1, name, file, line);
 	}
 #endif
 	return (int8)handle->read_buffer[handle->read_buffer_pos++];
@@ -268,18 +268,18 @@ int8 styxUnpackInt8Internal(SHandle *handle)
 /* ---------------------------------------------------------------- */
 
 #ifdef STYX_DEBUG
-void styxPackUint16Internal(SHandle *handle uint16 value, char *name, char *file, uint line)
+void styx_pack_uint16_internal(SHandle *handle uint16 value, char *name, char *file, uint line)
 #else
-void styxPackUint16Internal(SHandle *handle, uint16 value)
+void styx_pack_uint16_internal(SHandle *handle, uint16 value)
 #endif
 {
 #ifdef STYX_DEBUG
-	if (!styxPackDebugHeader(handle, S_TYPE_UINT16, 1, name, file, line, value, value, "")) {
+	if (!styx_pack_debug_header(handle, S_TYPE_UINT16, 1, name, file, line, value, value, "")) {
 		return; /* dest is gone */
 	}
 #else
 	if (handle->write_buffer_pos + styx_type_size[S_TYPE_UINT16] > handle->write_buffer_size - STYX_HEADER_SIZE_MAX) {
-		if (!styxPackBufferClear(handle)) {
+		if (!styx_pack_buffer_clear(handle)) {
 			return; /* dest is gone */
 		}
 	}
@@ -289,20 +289,20 @@ void styxPackUint16Internal(SHandle *handle, uint16 value)
 }
 
 #ifdef STYX_DEBUG
-uint16 styxUnpackUint16Internal(SHandle *handle, char *name, char *file, uint line)
+uint16 styx_unpack_uint16_internal(SHandle *handle, char *name, char *file, uint line)
 #else
-uint16 styxUnpackUint16Internal(SHandle *handle)
+uint16 styx_unpack_uint16_internal(SHandle *handle)
 #endif
 {
 	uint16 data;
 	/* send or save data if buffer is filling up */
 	if (handle->read_buffer_pos + styx_type_size[S_TYPE_UINT16] + STYX_HEADER_SIZE_MAX >= handle->read_buffer_used) {
-		styxUnpackBufferGet(handle);
+		styx_unpack_buffer_get(handle);
 	}
 #ifdef STYX_DEBUG
 	/* include the data desc header */
 	if (handle->debug_descriptor) {
-		styxUnpackDebugHeader(handle, S_TYPE_UINT16, 1, name, file, line);
+		styx_unpack_debug_header(handle, S_TYPE_UINT16, 1, name, file, line);
 	}
 #endif
 	data = ((uint16) handle->read_buffer[handle->read_buffer_pos++]) << 8;
@@ -313,18 +313,18 @@ uint16 styxUnpackUint16Internal(SHandle *handle)
 /* ---------------------------------------------------------------- */
 
 #ifdef STYX_DEBUG
-void styxPackInt16Internal(SHandle *handle int16 value, char *name, char *file, uint line)
+void styx_pack_int16_internal(SHandle *handle int16 value, char *name, char *file, uint line)
 #else
-void styxPackInt16Internal(SHandle *handle, int16 value)
+void styx_pack_int16_internal(SHandle *handle, int16 value)
 #endif
 {
 #ifdef STYX_DEBUG
-	if (!styxPackDebugHeader(handle, S_TYPE_INT16, 1, name, file, line, value, value, "")) {
+	if (!styx_pack_debug_header(handle, S_TYPE_INT16, 1, name, file, line, value, value, "")) {
 		return; /* dest is gone */
 	}
 #else
 	if (handle->write_buffer_pos + styx_type_size[S_TYPE_INT16] > handle->write_buffer_size - STYX_HEADER_SIZE_MAX) {
-		if (!styxPackBufferClear(handle)) {
+		if (!styx_pack_buffer_clear(handle)) {
 			return; /* dest is gone */
 		}
 	}
@@ -334,20 +334,20 @@ void styxPackInt16Internal(SHandle *handle, int16 value)
 }
 
 #ifdef STYX_DEBUG
-int16 styxUnpackInt16Internal(SHandle *handle, char *name, char *file, uint line)
+int16 styx_unpack_int16_internal(SHandle *handle, char *name, char *file, uint line)
 #else
-int16 styxUnpackInt16Internal(SHandle *handle)
+int16 styx_unpack_int16_internal(SHandle *handle)
 #endif
 {
 	int16 data;
 	/* send or save data if buffer is filling up */
 	if (handle->read_buffer_pos + styx_type_size[S_TYPE_INT16] + STYX_HEADER_SIZE_MAX >= handle->read_buffer_used) {
-		styxUnpackBufferGet(handle);
+		styx_unpack_buffer_get(handle);
 	}
 #ifdef STYX_DEBUG
 	/* include the data desc header */
 	if (handle->debug_descriptor) {
-		styxUnpackDebugHeader(handle, S_TYPE_INT16, 1, name, file, line);
+		styx_unpack_debug_header(handle, S_TYPE_INT16, 1, name, file, line);
 	}
 #endif
 	data = ((int16) handle->read_buffer[handle->read_buffer_pos++]) << 8;
@@ -358,18 +358,18 @@ int16 styxUnpackInt16Internal(SHandle *handle)
 /* ---------------------------------------------------------------- */
 
 #ifdef STYX_DEBUG
-void styxPackUint32Internal(SHandle *handle uint32 value, char *name, char *file, uint line)
+void styx_pack_uint32_internal(SHandle *handle uint32 value, char *name, char *file, uint line)
 #else
-void styxPackUint32Internal(SHandle *handle, uint32 value)
+void styx_pack_uint32_internal(SHandle *handle, uint32 value)
 #endif
 {
 #ifdef STYX_DEBUG
-	if (!styxPackDebugHeader(handle, S_TYPE_UINT32, 1, name, file, line, value, value, "")) {
+	if (!styx_pack_debug_header(handle, S_TYPE_UINT32, 1, name, file, line, value, value, "")) {
 		return; /* dest is gone */
 	}
 #else
 	if (handle->write_buffer_pos + styx_type_size[S_TYPE_UINT32] > handle->write_buffer_size - STYX_HEADER_SIZE_MAX) {
-		if (!styxPackBufferClear(handle)) {
+		if (!styx_pack_buffer_clear(handle)) {
 			return; /* dest is gone */
 		}
 	}
@@ -381,20 +381,20 @@ void styxPackUint32Internal(SHandle *handle, uint32 value)
 }
 
 #ifdef STYX_DEBUG
-uint32 styxUnpackUint32Internal(SHandle *handle, char *name, char *file, uint line)
+uint32 styx_unpack_uint32_internal(SHandle *handle, char *name, char *file, uint line)
 #else
-uint32 styxUnpackUint32Internal(SHandle *handle)
+uint32 styx_unpack_uint32_internal(SHandle *handle)
 #endif
 {
 	uint32 data;
 	/* send or save data if buffer is filling up */
 	if (handle->read_buffer_pos + styx_type_size[S_TYPE_UINT32] + STYX_HEADER_SIZE_MAX >= handle->read_buffer_used) {
-		styxUnpackBufferGet(handle);
+		styx_unpack_buffer_get(handle);
 	}
 #ifdef STYX_DEBUG
 	/* include the data desc header */
 	if (handle->debug_descriptor) {
-		styxUnpackDebugHeader(handle, S_TYPE_UINT32, 1, name, file, line);
+		styx_unpack_debug_header(handle, S_TYPE_UINT32, 1, name, file, line);
 	}
 #endif
 	data = ((uint32) handle->read_buffer[handle->read_buffer_pos++]) << 24;
@@ -407,18 +407,18 @@ uint32 styxUnpackUint32Internal(SHandle *handle)
 /* ---------------------------------------------------------------- */
 
 #ifdef STYX_DEBUG
-void styxPackInt32Internal(SHandle *handle int32 value, char *name, char *file, uint line)
+void styx_pack_int32_internal(SHandle *handle int32 value, char *name, char *file, uint line)
 #else
-void styxPackInt32Internal(SHandle *handle, int32 value)
+void styx_pack_int32_internal(SHandle *handle, int32 value)
 #endif
 {
 #ifdef STYX_DEBUG
-	if (!styxPackDebugHeader(handle, S_TYPE_INT32, 1, name, file, line, value, value, "")) {
+	if (!styx_pack_debug_header(handle, S_TYPE_INT32, 1, name, file, line, value, value, "")) {
 		return; /* dest is gone */
 	}
 #else
 	if (handle->write_buffer_pos + styx_type_size[S_TYPE_INT32] > handle->write_buffer_size - STYX_HEADER_SIZE_MAX) {
-		if (!styxPackBufferClear(handle)) {
+		if (!styx_pack_buffer_clear(handle)) {
 			return; /* dest is gone */
 		}
 	}
@@ -430,20 +430,20 @@ void styxPackInt32Internal(SHandle *handle, int32 value)
 }
 
 #ifdef STYX_DEBUG
-int32 styxUnpackInt32Internal(SHandle *handle, char *name, char *file, uint line)
+int32 styx_unpack_int32_internal(SHandle *handle, char *name, char *file, uint line)
 #else
-int32 styxUnpackInt32Internal(SHandle *handle)
+int32 styx_unpack_int32_internal(SHandle *handle)
 #endif
 {
 	int32 data;
 	/* send or save data if buffer is filling up */
 	if (handle->read_buffer_pos + styx_type_size[S_TYPE_INT32] + STYX_HEADER_SIZE_MAX >= handle->read_buffer_used) {
-		styxUnpackBufferGet(handle);
+		styx_unpack_buffer_get(handle);
 	}
 #ifdef STYX_DEBUG
 	/* include the data desc header */
 	if (handle->debug_descriptor) {
-		styxUnpackDebugHeader(handle, S_TYPE_INT32, 1, name, file, line);
+		styx_unpack_debug_header(handle, S_TYPE_INT32, 1, name, file, line);
 	}
 #endif
 	data = ((int32) handle->read_buffer[handle->read_buffer_pos++]) << 24;
@@ -456,18 +456,18 @@ int32 styxUnpackInt32Internal(SHandle *handle)
 /* ---------------------------------------------------------------- */
 
 #ifdef STYX_DEBUG
-void styxPackUint64Internal(SHandle *handle uint64 value, char *name, char *file, uint line)
+void styx_pack_uint64_internal(SHandle *handle uint64 value, char *name, char *file, uint line)
 #else
-void styxPackUint64Internal(SHandle *handle, uint64 value)
+void styx_pack_uint64_internal(SHandle *handle, uint64 value)
 #endif
 {
 #ifdef STYX_DEBUG
-	if (!styxPackDebugHeader(handle, S_TYPE_UINT64, 1, name, file, line, value, value, "")) {
+	if (!styx_pack_debug_header(handle, S_TYPE_UINT64, 1, name, file, line, value, value, "")) {
 		return; /* dest is gone */
 	}
 #else
 	if (handle->write_buffer_pos + styx_type_size[S_TYPE_UINT64] > handle->write_buffer_size - STYX_HEADER_SIZE_MAX) {
-		if (!styxPackBufferClear(handle)) {
+		if (!styx_pack_buffer_clear(handle)) {
 			return; /* dest is gone */
 		}
 	}
@@ -483,20 +483,20 @@ void styxPackUint64Internal(SHandle *handle, uint64 value)
 }
 
 #ifdef STYX_DEBUG
-uint64 styxUnpackUint64Internal(SHandle *handle, char *name, char *file, uint line)
+uint64 styx_unpack_uint64_internal(SHandle *handle, char *name, char *file, uint line)
 #else
-uint64 styxUnpackUint64Internal(SHandle *handle)
+uint64 styx_unpack_uint64_internal(SHandle *handle)
 #endif
 {
 	uint64 data;
 	/* send or save data if buffer is filling up */
 	if (handle->read_buffer_pos + styx_type_size[S_TYPE_UINT64] + STYX_HEADER_SIZE_MAX >= handle->read_buffer_used) {
-		styxUnpackBufferGet(handle);
+		styx_unpack_buffer_get(handle);
 	}
 #ifdef STYX_DEBUG
 	/* include the data desc header */
 	if (handle->debug_descriptor) {
-		styxUnpackDebugHeader(handle, S_TYPE_UINT64, 1, name, file, line);
+		styx_unpack_debug_header(handle, S_TYPE_UINT64, 1, name, file, line);
 	}
 #endif
 	data = ((uint64) handle->read_buffer[handle->read_buffer_pos++]) << 56;
@@ -513,18 +513,18 @@ uint64 styxUnpackUint64Internal(SHandle *handle)
 /* ---------------------------------------------------------------- */
 
 #ifdef STYX_DEBUG
-void styxPackInt64Internal(SHandle *handle int64 value, char *name, char *file, uint line)
+void styx_pack_int64_internal(SHandle *handle int64 value, char *name, char *file, uint line)
 #else
-void styxPackInt64Internal(SHandle *handle, int64 value)
+void styx_pack_int64_internal(SHandle *handle, int64 value)
 #endif
 {
 #ifdef STYX_DEBUG
-	if (!styxPackDebugHeader(handle, S_TYPE_INT64, 1, name, file, line, value, value, "")) {
+	if (!styx_pack_debug_header(handle, S_TYPE_INT64, 1, name, file, line, value, value, "")) {
 		return; /* dest is gone */
 	}
 #else
 	if (handle->write_buffer_pos + styx_type_size[S_TYPE_INT64] > handle->write_buffer_size - STYX_HEADER_SIZE_MAX) {
-		if (!styxPackBufferClear(handle)) {
+		if (!styx_pack_buffer_clear(handle)) {
 			return; /* dest is gone */
 		}
 	}
@@ -540,20 +540,20 @@ void styxPackInt64Internal(SHandle *handle, int64 value)
 }
 
 #ifdef STYX_DEBUG
-int64 styxUnpackInt64Internal(SHandle *handle, char *name, char *file, uint line)
+int64 styx_unpack_int64_internal(SHandle *handle, char *name, char *file, uint line)
 #else
-int64 styxUnpackInt64Internal(SHandle *handle)
+int64 styx_unpack_int64_internal(SHandle *handle)
 #endif
 {
 	int64 data;
 	/* send or save data if buffer is filling up */
 	if (handle->read_buffer_pos + styx_type_size[S_TYPE_INT64] + STYX_HEADER_SIZE_MAX >= handle->read_buffer_used) {
-		styxUnpackBufferGet(handle);
+		styx_unpack_buffer_get(handle);
 	}
 #ifdef STYX_DEBUG
 	/* include the data desc header */
 	if (handle->debug_descriptor) {
-		styxUnpackDebugHeader(handle, S_TYPE_INT64, 1, name, file, line);
+		styx_unpack_debug_header(handle, S_TYPE_INT64, 1, name, file, line);
 	}
 #endif
 	data = ((int64) handle->read_buffer[handle->read_buffer_pos++]) << 56;
@@ -570,19 +570,19 @@ int64 styxUnpackInt64Internal(SHandle *handle)
 /* ---------------------------------------------------------------- */
 
 #ifdef STYX_DEBUG
-void styxPackFloatInternal(SHandle *handle float value, char *name, char *file, uint line)
+void styx_pack_float_internal(SHandle *handle float value, char *name, char *file, uint line)
 #else
-void styxPackFloatInternal(SHandle *handle, float value)
+void styx_pack_float_internal(SHandle *handle, float value)
 #endif
 {
 	union { uint32 integer; float real; } punt;
 #ifdef STYX_DEBUG
-	if (!styxPackDebugHeader(handle, S_TYPE_FLOAT, 1, name, file, line, value, value, "")) {
+	if (!styx_pack_debug_header(handle, S_TYPE_FLOAT, 1, name, file, line, value, value, "")) {
 		return; /* dest is gone */
 	}
 #else
 	if (handle->write_buffer_pos + styx_type_size[S_TYPE_FLOAT] > handle->write_buffer_size - STYX_HEADER_SIZE_MAX) {
-		if (!styxPackBufferClear(handle)) {
+		if (!styx_pack_buffer_clear(handle)) {
 			return; /* dest is gone */
 		}
 	}
@@ -595,20 +595,20 @@ void styxPackFloatInternal(SHandle *handle, float value)
 }
 
 #ifdef STYX_DEBUG
-float styxUnpackFloatInternal(SHandle *handle, char *name, char *file, uint line)
+float styx_unpack_float_internal(SHandle *handle, char *name, char *file, uint line)
 #else
-float styxUnpackFloatInternal(SHandle *handle)
+float styx_unpack_float_internal(SHandle *handle)
 #endif
 {
 	union { uint32 integer; float real; } punt;
 	/* send or save data if buffer is filling up */
 	if (handle->read_buffer_pos + styx_type_size[S_TYPE_FLOAT] + STYX_HEADER_SIZE_MAX >= handle->read_buffer_used) {
-		styxUnpackBufferGet(handle);
+		styx_unpack_buffer_get(handle);
 	}
 #ifdef STYX_DEBUG
 	/* include the data desc header */
 	if (handle->debug_descriptor) {
-		styxUnpackDebugHeader(handle, S_TYPE_FLOAT, 1, name, file, line);
+		styx_unpack_debug_header(handle, S_TYPE_FLOAT, 1, name, file, line);
 	}
 #endif
 	punt.integer = ((uint32) handle->read_buffer[handle->read_buffer_pos++]) << 24;
@@ -621,19 +621,19 @@ float styxUnpackFloatInternal(SHandle *handle)
 /* ---------------------------------------------------------------- */
 
 #ifdef STYX_DEBUG
-void styxPackDoubleInternal(SHandle *handle double value, char *name, char *file, uint line)
+void styx_pack_double_internal(SHandle *handle double value, char *name, char *file, uint line)
 #else
-void styxPackDoubleInternal(SHandle *handle, double value)
+void styx_pack_double_internal(SHandle *handle, double value)
 #endif
 {
 	union { uint32 integer[2]; double real; } punt;
 #ifdef STYX_DEBUG
-	if (!styxPackDebugHeader(handle, S_TYPE_DOUBLE, 1, name, file, line, value, value, "")) {
+	if (!styx_pack_debug_header(handle, S_TYPE_DOUBLE, 1, name, file, line, value, value, "")) {
 		return; /* dest is gone */
 	}
 #else
 	if (handle->write_buffer_pos + styx_type_size[S_TYPE_DOUBLE] > handle->write_buffer_size - STYX_HEADER_SIZE_MAX) {
-		if (!styxPackBufferClear(handle)) {
+		if (!styx_pack_buffer_clear(handle)) {
 			return; /* dest is gone */
 		}
 	}
@@ -650,20 +650,20 @@ void styxPackDoubleInternal(SHandle *handle, double value)
 }
 
 #ifdef STYX_DEBUG
-double styxUnpackDoubleInternal(SHandle *handle, char *name, char *file, uint line)
+double styx_unpack_double_internal(SHandle *handle, char *name, char *file, uint line)
 #else
-double styxUnpackDoubleInternal(SHandle *handle)
+double styx_unpack_double_internal(SHandle *handle)
 #endif
 {
 	union { uint32 integer[2]; double real; } punt;
 	/* send or save data if buffer is filling up */
 	if (handle->read_buffer_pos + styx_type_size[S_TYPE_DOUBLE] + STYX_HEADER_SIZE_MAX >= handle->read_buffer_used) {
-		styxUnpackBufferGet(handle);
+		styx_unpack_buffer_get(handle);
 	}
 #ifdef STYX_DEBUG
 	/* include the data desc header */
 	if (handle->debug_descriptor) {
-		styxUnpackDebugHeader(handle, S_TYPE_DOUBLE, 1, name, file, line);
+		styx_unpack_debug_header(handle, S_TYPE_DOUBLE, 1, name, file, line);
 	}
 #endif
 	punt.integer[0] = ((uint32) handle->read_buffer[handle->read_buffer_pos++]) << 24;
@@ -680,9 +680,9 @@ double styxUnpackDoubleInternal(SHandle *handle)
 /* ---------------------------------------------------------------- */
 
 #ifdef STYX_DEBUG
-uint64 styxPackRawInternal(SHandle *handle, uint8 *data, uint64 length, char *name, char *file, uint line)
+uint64 styx_pack_raw_internal(SHandle *handle, uint8 *data, uint64 length, char *name, char *file, uint line)
 #else
-uint64 styxPackRawInternal(SHandle *handle, uint8 *data, uint64 length)
+uint64 styx_pack_raw_internal(SHandle *handle, uint8 *data, uint64 length)
 #endif
 {
 	if (handle == NULL || data == NULL) {
@@ -690,12 +690,12 @@ uint64 styxPackRawInternal(SHandle *handle, uint8 *data, uint64 length)
 	}
 
 #ifdef STYX_DEBUG
-	if (!styxPackDebugHeader(handle, S_TYPE_RAW, (uint)length, name, file, line, (int)length, (double)length, "")) {
+	if (!styx_pack_debug_header(handle, S_TYPE_RAW, (uint)length, name, file, line, (int)length, (double)length, "")) {
 		return 0; /* dest is gone */
 	}
 #else
 	if (handle->write_buffer_pos + length + STYX_HEADER_SIZE_MAX > handle->write_buffer_size) {
-		if (!styxPackBufferClear(handle)) {
+		if (!styx_pack_buffer_clear(handle)) {
 			return 0; /* dest is gone */
 		}
 	}
@@ -704,7 +704,7 @@ uint64 styxPackRawInternal(SHandle *handle, uint8 *data, uint64 length)
 	if (handle->type == S_HT_STREAMING_SERVER || handle->type == S_HT_STREAMING_CONNECTION) {
 		size_t size;
 		if (handle->write_buffer_pos) {
-			size = styxNetworkStreamSend(handle, handle->write_buffer, handle->write_buffer_pos);
+			size = styx_network_stream_send(handle, handle->write_buffer, handle->write_buffer_pos);
 			if (size == handle->write_buffer_pos) {
 				handle->write_buffer_pos = 0;
 			}
@@ -715,7 +715,7 @@ uint64 styxPackRawInternal(SHandle *handle, uint8 *data, uint64 length)
 			}
 		}
 
-		size = styxNetworkStreamSend(handle, &data[handle->write_raw_progress], length - handle->write_raw_progress);
+		size = styx_network_stream_send(handle, &data[handle->write_raw_progress], length - handle->write_raw_progress);
 		handle->write_raw_progress += size;
 		if (handle->write_raw_progress == length) {
 			handle->write_raw_progress = 0;
@@ -723,12 +723,12 @@ uint64 styxPackRawInternal(SHandle *handle, uint8 *data, uint64 length)
 		return size;
 	}
 	else if (handle->type == S_HT_PACKET_PEER) {
-		memcpy(&handle->write_buffer[handle->write_buffer_pos++], data, length);
+		memcpy(&handle->write_buffer[handle->write_buffer_pos], data, length);
 		handle->write_buffer_pos += length;
 		return length;
 	}
 	else if (handle->type == S_HT_FILE_WRITE) {
-		styxPackBufferClear(handle);
+		styx_pack_buffer_clear(handle);
 		fwrite(data, 1, length, handle->file);
 		return length;
 	}
@@ -736,9 +736,9 @@ uint64 styxPackRawInternal(SHandle *handle, uint8 *data, uint64 length)
 }
 
 #ifdef STYX_DEBUG
-uint64 styxUnpackRawInternal(SHandle *handle, uint8 *buffer, uint64 buffer_length, char *name, char *file, uint line)
+uint64 styx_unpack_raw_internal(SHandle *handle, uint8 *buffer, uint64 buffer_length, char *name, char *file, uint line)
 #else
-uint64 styxUnpackRawInternal(SHandle *handle, uint8 *buffer, uint64 buffer_length)
+uint64 styx_unpack_raw_internal(SHandle *handle, uint8 *buffer, uint64 buffer_length)
 #endif
 {
 	if (handle == NULL || buffer == NULL || buffer_length == 0) {
@@ -747,11 +747,11 @@ uint64 styxUnpackRawInternal(SHandle *handle, uint8 *buffer, uint64 buffer_lengt
 
 #ifdef STYX_DEBUG
 	if (handle->debug_descriptor && handle->read_raw_progress == 0) {
-		if (!styxUnpackBufferGet(handle) && handle->read_buffer_pos >= handle->read_buffer_used) {
+		if (!styx_unpack_buffer_get(handle) && handle->read_buffer_pos >= handle->read_buffer_used) {
 			return 0;
 		}
 		if (handle->read_buffer_pos + STYX_HEADER_SIZE_MAX <= handle->read_buffer_used) {
-			styxUnpackDebugHeader(handle, S_TYPE_RAW, 1, name, file, line);
+			styx_unpack_debug_header(handle, S_TYPE_RAW, 1, name, file, line);
 		}
 		else {
 			return 0;
@@ -768,7 +768,7 @@ uint64 styxUnpackRawInternal(SHandle *handle, uint8 *buffer, uint64 buffer_lengt
 		}
 		memcpy(buffer, &handle->read_buffer[handle->read_buffer_pos], progress);
 		handle->read_buffer_pos = handle->read_buffer_used;
-		size = styxNetworkStreamReceive(handle, &buffer[progress], buffer_length - progress);
+		size = styx_network_stream_receive(handle, &buffer[progress], buffer_length - progress);
 
 		progress += size;
 		if (progress == buffer_length) {
@@ -805,9 +805,9 @@ uint64 styxUnpackRawInternal(SHandle *handle, uint8 *buffer, uint64 buffer_lengt
 /* ---------------------------------------------------------------- */
 
 #ifdef STYX_DEBUG
-boolean styxPackStringInternal(SHandle *handle, const char *string, char *name, char *file, uint line)
+boolean styx_pack_string_internal(SHandle *handle, const char *string, char *name, char *file, uint line)
 #else
-boolean styxPackStringInternal(SHandle *handle, const char *string)
+boolean styx_pack_string_internal(SHandle *handle, const char *string)
 #endif
 {
 	uint length = 0, pos = 0, size;
@@ -817,13 +817,13 @@ boolean styxPackStringInternal(SHandle *handle, const char *string)
 	}
 
 #ifdef STYX_DEBUG
-	if (!styxPackDebugHeader(handle, S_TYPE_STRING, 1, name, file, line, 0, 0, string)) {
+	if (!styx_pack_debug_header(handle, S_TYPE_STRING, 1, name, file, line, 0, 0, string)) {
 		return FALSE;
 	}
 #endif
 	if (string == NULL) {
 		if (handle->write_buffer_pos == handle->write_buffer_size) {
-			if (!styxPackBufferClear(handle)) {
+			if (!styx_pack_buffer_clear(handle)) {
 				return FALSE;
 			}
 		}
@@ -842,7 +842,7 @@ boolean styxPackStringInternal(SHandle *handle, const char *string)
 				pos += size;
 			}
 			if (handle->write_buffer_pos == handle->write_buffer_size) {
-				if (!styxPackBufferClear(handle)) {
+				if (!styx_pack_buffer_clear(handle)) {
 					return FALSE;
 				}
 			}
@@ -852,9 +852,9 @@ boolean styxPackStringInternal(SHandle *handle, const char *string)
 }
 
 #ifdef STYX_DEBUG
-boolean styxUnpackStringInternal(SHandle *handle, char *string, uint buffer_size, char *name, char *file, uint line)
+boolean styx_unpack_string_internal(SHandle *handle, char *string, uint buffer_size, char *name, char *file, uint line)
 #else
-boolean styxUnpackStringInternal(SHandle *handle, char *string, uint buffer_size)
+boolean styx_unpack_string_internal(SHandle *handle, char *string, uint buffer_size)
 #endif
 {
 	boolean marker;
@@ -865,11 +865,11 @@ boolean styxUnpackStringInternal(SHandle *handle, char *string, uint buffer_size
 	}
 
 	if (handle->read_buffer_pos + styx_type_size[S_TYPE_STRING] + STYX_HEADER_SIZE_MAX >= handle->read_buffer_used) {
-		styxUnpackBufferGet(handle);
+		styx_unpack_buffer_get(handle);
 	}
 #ifdef STYX_DEBUG
 	if (handle->debug_descriptor) {
-		styxUnpackDebugHeader(handle, S_TYPE_STRING, 1, name, file, line);
+		styx_unpack_debug_header(handle, S_TYPE_STRING, 1, name, file, line);
 	}
 #endif
 
@@ -894,7 +894,7 @@ boolean styxUnpackStringInternal(SHandle *handle, char *string, uint buffer_size
 			}
 			return TRUE;
 		}
-		if (!styxUnpackBufferGet(handle)) {
+		if (!styx_unpack_buffer_get(handle)) {
 			if (!marker) {
 				handle->read_marker = -1;
 			}
@@ -904,9 +904,9 @@ boolean styxUnpackStringInternal(SHandle *handle, char *string, uint buffer_size
 }
 
 #ifdef STYX_DEBUG
-char *styxUnpackStringWithOwnershipInternal(SHandle *handle, char *name, char *file, uint line)
+char *styx_unpack_string_with_ownership_internal(SHandle *handle, char *name, char *file, uint line)
 #else
-char *styxUnpackStringWithOwnershipInternal(SHandle *handle)
+char *styx_unpack_string_with_ownership_internal(SHandle *handle)
 #endif
 {
 	char *string = NULL;
@@ -918,11 +918,11 @@ char *styxUnpackStringWithOwnershipInternal(SHandle *handle)
 	}
 
 	if (handle->read_buffer_pos + styx_type_size[S_TYPE_STRING] + STYX_HEADER_SIZE_MAX >= handle->read_buffer_used) {
-		styxUnpackBufferGet(handle);
+		styx_unpack_buffer_get(handle);
 	}
 #ifdef STYX_DEBUG
 	if (handle->debug_descriptor) {
-		styxUnpackDebugHeader(handle, S_TYPE_STRING, 1, name, file, line);
+		styx_unpack_debug_header(handle, S_TYPE_STRING, 1, name, file, line);
 	}
 #endif
 	marker = handle->read_marker != -1;
@@ -950,7 +950,7 @@ char *styxUnpackStringWithOwnershipInternal(SHandle *handle)
 			}
 			return string;
 		}
-		if (!styxUnpackBufferGet(handle)) {
+		if (!styx_unpack_buffer_get(handle)) {
 			if (!marker) {
 				handle->read_marker = -1;
 			}
@@ -959,17 +959,17 @@ char *styxUnpackStringWithOwnershipInternal(SHandle *handle)
 	}
 }
 
-void styxRestartMarkerSet(SHandle *handle)
+void styx_restart_marker_set(SHandle *handle)
 {
 	handle->read_marker = handle->read_buffer_pos;
 }
 
-void styxRestartMarkerRelease(SHandle *handle)
+void styx_restart_marker_release(SHandle *handle)
 {
 	handle->read_marker = -1;
 }
 
-void styxRestartMarkerResetInternal(SHandle *handle, char *file, uint line)
+void styx_restart_marker_reset_internal(SHandle *handle, char *file, uint line)
 {
 	if (handle->read_marker == -1) {
 		fprintf(stderr, "Styx: styxRestartMarkerReset error on line %u in file %s. Marker not set.\n", line, file);
@@ -979,7 +979,7 @@ void styxRestartMarkerResetInternal(SHandle *handle, char *file, uint line)
 	handle->read_marker = -1;
 }
 
-boolean styxRetrievableInternal(SHandle *handle, uint size)
+boolean styx_retrievable_internal(SHandle *handle, uint size)
 {
 	if (handle == NULL) {
 		return FALSE;
@@ -1043,7 +1043,7 @@ boolean styxRetrievableInternal(SHandle *handle, uint size)
 	return handle->read_buffer_pos + size <= handle->read_buffer_used;
 }
 
-boolean styxRetrievable(SHandle *handle, uint size)
+boolean styx_retrievable(SHandle *handle, uint size)
 {
 	if (handle == NULL) {
 		return FALSE;
@@ -1054,16 +1054,16 @@ boolean styxRetrievable(SHandle *handle, uint size)
 	}
 
 	while (TRUE) {
-		if (styxRetrievableInternal(handle, size)) {
+		if (styx_retrievable_internal(handle, size)) {
 			return TRUE;
 		}
-		if (!styxUnpackBufferGet(handle)) {
+		if (!styx_unpack_buffer_get(handle)) {
 			return FALSE;
 		}
 	}
 }
 
-boolean styxRetrievableTerminatedInternal(SHandle *handle)
+boolean styx_retrievable_terminated_internal(SHandle *handle)
 {
 	uint i;
 
@@ -1120,14 +1120,14 @@ boolean styxRetrievableTerminatedInternal(SHandle *handle)
 	return handle->read_buffer[i] == 0;
 }
 
-boolean styxRetrievableTerminated(SHandle *handle)
+boolean styx_retrievable_terminated(SHandle *handle)
 {
 	if (handle == NULL) {
 		return FALSE;
 	}
 
 	while (TRUE) {
-		if (styxRetrievableTerminatedInternal(handle)) {
+		if (styx_retrievable_terminated_internal(handle)) {
 			return TRUE;
 		}
 
@@ -1135,7 +1135,7 @@ boolean styxRetrievableTerminated(SHandle *handle)
 			return FALSE;
 		}
 		
-		if (!styxUnpackBufferGet(handle)) {
+		if (!styx_unpack_buffer_get(handle)) {
 			return FALSE;
 		}
 	}

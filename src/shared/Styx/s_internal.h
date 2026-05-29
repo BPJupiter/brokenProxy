@@ -1,4 +1,13 @@
 
+#ifdef _WIN32
+#include <winsock2.h>
+typedef SOCKET VSocket;
+#define INVALID_VSOCKET INVALID_SOCKET
+#else
+typedef int VSocket;
+#define INVALID_VSOCKET -1
+#endif
+
 #define STYX_MINIMUM_WRITE_SPACE 1024
 
 typedef enum {
@@ -45,8 +54,8 @@ typedef struct {
     boolean connected;
 } SHandle;
 
-extern uint 	styxUnpackBufferGet(SHandle *handle);
-extern boolean 	styxPackBufferClear(SHandle *handle);
-extern void 	styxHandleClear(SHandle *handle, uint type);
-extern size_t 	styxNetworkStreamReceive(SHandle *handle, uint8 *buffer, size_t length);
-extern size_t 	styxNetworkStreamSend(SHandle *handle, uint8 *buffer, size_t length);
+extern uint 	styx_unpack_buffer_get(SHandle *handle);
+extern boolean 	styx_pack_buffer_clear(SHandle *handle);
+extern void 	styx_handle_clear(SHandle *handle, uint type);
+extern size_t 	styx_network_stream_receive(SHandle *handle, uint8 *buffer, size_t length);
+extern size_t 	styx_network_stream_send(SHandle *handle, uint8 *buffer, size_t length);

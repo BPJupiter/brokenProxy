@@ -6,7 +6,7 @@
 
 char *styx_debug_magic_number = "StYxLiBdEbUg";
 
-SHandle *styxBufferCreate(void)
+SHandle *styx_buffer_create(void)
 {
 	SHandle *handle;
 	handle = malloc(sizeof *handle);
@@ -14,13 +14,13 @@ SHandle *styxBufferCreate(void)
 		return NULL;
 	}
 
-	styxHandleClear(handle, S_HT_BUFFER);
-	styxUnpackBufferGet(handle);
+	styx_handle_clear(handle, S_HT_BUFFER);
+	styx_unpack_buffer_get(handle);
 
 	return handle;
 }
 
-void *styxBufferGet(SHandle *handle, uint32 *size)
+void *styx_buffer_get(SHandle *handle, uint32 *size)
 {
 	if (handle == NULL || size == NULL) {
 		return NULL;
@@ -45,7 +45,7 @@ void *styxBufferGet(SHandle *handle, uint32 *size)
 	return &handle->read_buffer[handle->read_buffer_pos];
 }
 
-void styxBufferSet(SHandle *handle, void *data, uint32 size)
+void styx_buffer_set(SHandle *handle, void *data, uint32 size)
 {
 	if (handle == NULL || data == NULL || size == 0) {
 		return;
@@ -76,7 +76,7 @@ void styxBufferSet(SHandle *handle, void *data, uint32 size)
 	handle->write_buffer_pos += size;
 }
 
-void styxHandleClear(SHandle *handle, uint type)
+void styx_handle_clear(SHandle *handle, uint type)
 {
 	uint styx_buffer_size[] = {4096, /* S_HT_STREAMING_SERVER */
 								4096, /* S_HT_STREAMING_CONNECTION */
@@ -120,7 +120,7 @@ void styxHandleClear(SHandle *handle, uint type)
 	handle->file_name = NULL;
 }
 
-uint styxUnpackBufferGet(SHandle *handle)
+uint styx_unpack_buffer_get(SHandle *handle)
 {
 	size_t size, i, start;
 
@@ -167,7 +167,7 @@ uint styxUnpackBufferGet(SHandle *handle)
 		size_t new_size = handle->read_buffer_size == 0 ? 1024 : handle->read_buffer_size * 2;
 		uint8 *temp = realloc(handle->read_buffer, sizeof(*handle->read_buffer) * new_size);
 		if (temp == NULL) {
-			fprintf(stderr, "Styx: Out of memory in styxUnpackBufferGet\n");
+			fprintf(stderr, "Styx: Out of memory in styx_unpack_buffer_get\n");
 			return FALSE;
 		}
 		handle->read_buffer = temp;
@@ -180,7 +180,7 @@ uint styxUnpackBufferGet(SHandle *handle)
 			size = fread(&handle->read_buffer[handle->read_buffer_used], (sizeof *handle->read_buffer), handle->read_buffer_size - handle->read_buffer_used, handle->file);
 		}
 		if (handle->type == S_HT_STREAMING_SERVER || handle->type == S_HT_STREAMING_CONNECTION) {
-			size = styxNetworkStreamReceive(handle, &handle->read_buffer[handle->read_buffer_used], handle->read_buffer_size - handle->read_buffer_used);
+			size = styx_network_stream_receive(handle, &handle->read_buffer[handle->read_buffer_used], handle->read_buffer_size - handle->read_buffer_used);
 		}
 		if (size > 0) {
 			handle->read_buffer_used += size;
@@ -204,7 +204,7 @@ uint styxUnpackBufferGet(SHandle *handle)
 	return FALSE;
 }
 
-boolean styxPackBufferClear(SHandle *handle)
+boolean styx_pack_buffer_clear(SHandle *handle)
 {
 	if (handle == NULL) {
 		return FALSE;
@@ -225,7 +225,7 @@ boolean styxPackBufferClear(SHandle *handle)
 	}
 
 	if (handle->type == S_HT_STREAMING_SERVER || handle->type == S_HT_STREAMING_CONNECTION) {
-		int out	= styxNetworkStreamSendForce(handle);
+		int out	= styx_network_stream_send_force(handle);
 
 		if (out == -1) {
 			return FALSE;
@@ -253,7 +253,7 @@ boolean styxPackBufferClear(SHandle *handle)
 	return TRUE;
 }
 
-boolean styxPackBufferAdd(SHandle *handle, const uint8 *data, uint length)
+boolean styx_pack_buffer_add(SHandle *handle, const uint8 *data, uint length)
 {
 	uint pos = 0;
 
@@ -275,7 +275,7 @@ boolean styxPackBufferAdd(SHandle *handle, const uint8 *data, uint length)
 		}
 
 		if (handle->write_buffer_pos == handle->write_buffer_size) {
-			if (!styxPackBufferClear(handle)) {
+			if (!styx_pack_buffer_clear(handle)) {
 				return FALSE; /* output no longer available */
 			}
 		}
