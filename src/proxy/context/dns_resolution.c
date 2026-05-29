@@ -1,8 +1,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
-#include <errno.h>
 #include <string.h>
+#include <arpa/inet.h>
+#include <sys/types.h>
 
 #include "Clay/clay.h"
 #include "Styx/styx.h"
@@ -100,31 +101,32 @@ typedef struct
     QUERY *ques;
 } QUESTION;
 
-static DnsResult dns_iterative_root_worker(const char *host, uint16 query_type, char *current_ns_ip, uint depth); /* Confusing naming; Function is recursive in the programming sense. Overall resolves DNS through the iterative resolution process. */
+static boolean dns_iterative_root_worker(StyxNetworkAddress *dest, const char *dns_name, uint16 query_type, const char *current_ns_ip, uint depth); /* Confusing naming; Function is recursive in the programming sense. Overall resolves DNS through the iterative resolution process. */
 static size_t init_dns_header(uint8 *buf, const char *host, uint16 query_type);
 static void read_answers(DNS_HEADER *dns, RES_RECORD *answers, uint8 **reader, uint8 *buf, int *stop);
 static void read_authorities(DNS_HEADER *dns, RES_RECORD *auth, uint8 **reader, uint8 *buf, int *stop);
 static void read_additional(DNS_HEADER *dns, RES_RECORD *addit, uint8 **reader, uint8 *buf, int *stop);
-static DnsResult handle_found_answers(DNS_HEADER *dns,
+static boolean handle_found_answers(StyxNetworkAddress *out,
+                                      DNS_HEADER *dns,
                                       RES_RECORD *answers,
                                       RES_RECORD *auth,
                                       RES_RECORD *addit,
                                       uint16 query_type, uint depth);
-static DnsResult process_auth_records(DNS_HEADER *dns,
+static boolean process_auth_records(StyxNetworkAddress *out,
+                                      DNS_HEADER *dns,
                                       RES_RECORD *answers,
                                       RES_RECORD *auth,
                                       RES_RECORD *addit,
                                       const char *host, uint16 query_type, uint depth);
 static boolean find_ipv4_glue(RES_RECORD *addit, int add_count, const char *ns_name, char *out_ip);
-static boolean try_ns_ip(const char *ns_ip, const char *host, uint16 query_type, uint depth, DnsResult *out_result, uint *rtt_rejections);
-static DnsResult localhost(void);
+static boolean try_ns_ip(StyxNetworkAddress *out, const char *ns_ip, const char *host, uint16 query_type, uint depth, uint *rtt_rejections);
+static boolean localhost(StyxNetworkAddress *address);
 static void  change_to_dns_name_format(uint8 *, const char *);
 static void read_name(uint8 name[256], uint8 *, uint8 *, int *);
 static void  dns_free_mem(DNS_HEADER *dns, RES_RECORD *answers, RES_RECORD *auth, RES_RECORD *addit);
-static boolean external_dns_is_blocked(void);
-static void  set_to_local_dns(void);
+static void free_addresses(StyxNetworkAddress *addr);
 
-void print_response_contents(void *dns_ptr, void *answers_ptr, void *auth_ptr, void *addit_ptr, void *a_ptr);
+void print_response_contents(void *dns_ptr, void *answers_ptr, void *auth_ptr, void *addit_ptr);
 
 char RootServers[][16] = {
     "198.41.0.4",     /* A */
@@ -218,62 +220,19 @@ int main()
 }
 #endif
 
-void DnsResult_free(DnsResult *dns_result)
+boolean dns_resolve_iterative_root_func(StyxNetworkAddress *dest, const char *dns_name, uint16 default_port, boolean *do_ipv6)
 {
-    uint i;
-    for (i = 0; i < dns_result->nAns; i++)
-        free(dns_result->answers[i]);
-    free(dns_result->answers);
-
-    dns_result->status = DNS_OK;
-    dns_result->nAns = 0;
-    dns_result->answers = NULL;
-}
-
-DnsResult dns_resolve_recursive_local(const char *host)
-{
-    DnsResult result = {0};
-    StyxNetworkAddress address;
-    char ipstr[16];
-    if (host[0] == '/')
-    {
-        return localhost();
-    }
-
-    if (!styx_network_address_lookup(&address, host, 443))
-    {
-        printf("Quick Resolve: Could not resolve!\n");
-        result.status = DNS_ERR_GENERIC;
-        result.nAns = 0;
-        result.answers = NULL;
-        return result;
-    }
-
-    result.answers = malloc(sizeof(*result.answers));
-    talos_malloc_assert(result.answers);
-
-    result.answers[0] = malloc((sizeof **result.answers) * 256);
-    talos_malloc_assert(result.answers[0]);
-
-    styx_ipv4_to_string(ipstr, &address);
-    c_text_copy(strlen(ipstr) + 1, result.answers[0], ipstr);
-
-    result.status = DNS_OK;
-    result.nAns = 1;
-    return result;
-}
-
-DnsResult dns_resolve_iterative_root(const char *host)
-{
-    DnsResult result = { 0 };
+    boolean result = TRUE;
     int i = 0;
+    UNUSED(default_port);
+    UNUSED(do_ipv6);
 
-    if (host[0] == '/')
+    if (dns_name[0] == '/')
     {
-        return localhost();
+        return localhost(dest);
     }
 
-    if (!root_server_found && strcmp(host, "127.0.0.1") != 0)
+    if (!root_server_found && strcmp(dns_name, "127.0.0.1") != 0)
     {
         for (i = 0; i < RSI_COUNT; i++)
         {
@@ -297,131 +256,94 @@ DnsResult dns_resolve_iterative_root(const char *host)
         strcpy(current_root_ip, RootServers[i]);
         root_server_found = 1;
     }
-    result = dns_iterative_root_worker(host, T_A, current_root_ip, 0);
-    if (result.nAns <= 0)
-    {
+    result = dns_iterative_root_worker(dest, dns_name, T_A, current_root_ip, 0);
+    if (!result) {
         printf("Could not resolve!\n");
     }
     return result;
 }
 
 /* --------- UNIMPLEMENTED ---------- */
-DnsResult dns_resolve_iterative_local(const char *host)
+boolean dns_resolve_iterative_local_func(StyxNetworkAddress *dest, const char *dns_name, uint16 default_port, boolean *do_ipv6)
 {
-    DnsResult result = { 0 };
-    if (host[0] == '/')
+    if (dns_name[0] == '/')
     {
-        return localhost();
+        return localhost(dest);
     }
-    result.status = DNS_ERR_GENERIC;
-    result.nAns = 0;
-    result.answers = NULL;
-    return result;
+    UNUSED(default_port);
+    UNUSED(do_ipv6);
+    return FALSE;
 }
 
-static DnsResult localhost(void)
+static boolean localhost(StyxNetworkAddress *address)
 {
-    DnsResult result = { 0 };
-    char lh[] = "127.0.0.1";
+    address->ip.v4 = 0x7F000001;
 
-    result.answers = malloc(1 * (sizeof *result.answers));
-    talos_malloc_assert(result.answers);
-
-    result.answers[0] = malloc(256 * sizeof(**result.answers));
-    talos_malloc_assert(result.answers[0]);
-
-    c_text_copy(strlen(lh) + 1, result.answers[0], lh);
-
-    result.status = DNS_OK;
-    result.nAns = 1;
-    return result;
+    return TRUE;
 }
 
 /* Perform a DNS query by sending a packet */
-static DnsResult dns_iterative_root_worker(const char *host, uint16 query_type, char *ns_ip, uint depth)
+static boolean dns_iterative_root_worker(StyxNetworkAddress *out, const char *dns_name, uint16 query_type, const char *ns_ip, uint depth)
 {
-    DnsResult result;
     uint8 buf[65536] = {0};
     uint8 *qname, *reader;
     RES_RECORD answers[MAX_RECORDS] = {0};
     RES_RECORD auth[MAX_RECORDS] = {0};
     RES_RECORD addit[MAX_RECORDS] = {0};
     DNS_HEADER *dns = NULL;
-    VSocket s;
+    SHandle *h;
+    boolean r = FALSE, w = FALSE;
 
-    StyxSockaddrInet a = {0};
-    StyxSockaddrInet dest = {0};
+    StyxNetworkAddress dest_addr, sender_addr;
     size_t send_size;
     int bytes_recvd;
-
-    int i, stop;
+    int stop;
 
     if (depth > 10)
     {
-        printf("\x1b[31m[Loop Detected]\x1b[0m Maximum recursion depth exceeded for %s\n", host);
+        printf("\x1b[31m[Loop Detected]\x1b[0m Maximum recursion depth exceeded for %s\n", dns_name);
 
-        result.status = DNS_ERR_RECURSION_LIMIT;
-        result.nAns = 0;
-        result.answers = NULL;
-        return result;
+        return FALSE;
     }
 
-    printf("Starting iterative resolution for: %s\n", host);
+    printf("Starting iterative resolution for: %s\n", dns_name);
 
-    s = styx_socket_create(FALSE, 0);
+    h = styx_network_datagram_create(0, FALSE);
+    if (!h) {
+        printf("FUCK\n");
+        return FALSE;
+    }
 
-    dest.Ipv4.sin_family = AF_INET;
-    dest.Ipv4.sin_port = htons(53);
-    dest.Ipv4.sin_addr.s_addr = inet_addr(ns_ip);
+    dest_addr.ip.v4 = ntohl(inet_addr(ns_ip));
+    dest_addr.port = 53;
+    dest_addr.is_ipv6 = FALSE;
 
-    styx_socket_set_timeout(s, 5);
+    send_size = init_dns_header(buf, dns_name, query_type);
 
-    send_size = init_dns_header(buf, host, query_type);
+    printf("Querying NS: %s\n", ns_ip);
+
+    styx_pack_raw(h, buf, send_size, NULL);
+    if (styx_network_datagram_send(h, &dest_addr) < 0) {
+        talos_print_error("sendto failed");
+        dns_free_mem(dns, answers, auth, addit);
+        styx_free(h);
+        return FALSE;
+    }
+
+    bytes_recvd = styx_network_receive(h, &sender_addr);
+    if (bytes_recvd <= 0)
+    {
+        talos_print_error("recvfrom failed");
+        dns_free_mem(dns, answers, auth, addit);
+        styx_free(h);
+        return FALSE;
+    }
+
+    styx_unpack_raw(h, buf, bytes_recvd, NULL);
+    styx_free(h);
+
     dns = (DNS_HEADER *)buf;
     qname = &buf[sizeof(DNS_HEADER)];
-
-    printf("Querying NS: %s\n", inet_ntoa(dest.Ipv4.sin_addr));
-
-    if (sendto(s, (char *)buf, send_size, 0, (struct sockaddr *)&dest, sizeof(dest)) < 0)
-    {
-        talos_print_error("sendto failed");
-
-        dns_free_mem(dns, answers, auth, addit);
-
-        result.status = DNS_ERR_FAIL_SYSCALL;
-        result.nAns = 0;
-        result.answers = NULL;
-        return result;
-    }
-
-    /* Recv ans */
-    i = sizeof(dest);
-    do
-    {
-        bytes_recvd = recvfrom(s, (char *)buf, 65536, 0, (struct sockaddr *)&dest, (socklen_t *)&i);
-    } while (bytes_recvd < 0 && errno == EINTR);
-
-    styx_socket_destroy(s);
-
-    if (bytes_recvd < 0)
-    {
-        if (errno == EAGAIN)
-        {
-            printf("\x1b[33m[Timeout]\x1b[0m Recvieve from %s timed out.\n", inet_ntoa(dest.Ipv4.sin_addr));
-            result.status = DNS_ERR_TIMEOUT;
-        }
-        else
-        {
-            talos_print_error("recvfrom failed");
-            result.status = DNS_ERR_FAIL_SYSCALL;
-        }
-
-        dns_free_mem(dns, answers, auth, addit);
-
-        result.nAns = 0;
-        result.answers = NULL;
-        return result;
-    }
 
     if (ntohs(dns->ans_count) > MAX_RECORDS)  dns->ans_count = htons(MAX_RECORDS);
     if (ntohs(dns->auth_count) > MAX_RECORDS) dns->auth_count = htons(MAX_RECORDS);
@@ -443,21 +365,22 @@ static DnsResult dns_iterative_root_worker(const char *host, uint16 query_type, 
     print_response_contents((void *)dns, (void *)answers, (void *)auth, (void *)addit, (void *)&a);
 #endif
 
-    if (ntohs(dns->ans_count) > 0)
-        return handle_found_answers(dns, answers, auth, addit, query_type, depth);
+    if (ntohs(dns->ans_count) > 0) {
+        boolean res = handle_found_answers(out, dns, answers, auth, addit, query_type, depth);
+        dns_free_mem(dns, answers, auth, addit);
+        return res;
+    }
 
-    if (ntohs(dns->auth_count) > 0)
-        return process_auth_records(dns, answers, auth, addit, host, query_type, depth);
+    if (ntohs(dns->auth_count) > 0) {
+        boolean res =  process_auth_records(out, dns, answers, auth, addit, dns_name, query_type, depth);
+        dns_free_mem(dns, answers, auth, addit);
+        return res;
+    }
 
     printf("No answer or authority records found. Cannot resolve iteratively.\n");
-    print_response_contents((void *)dns, (void *)answers, (void *)auth, (void *)addit, (void *)&a);
-
     dns_free_mem(dns, answers, auth, addit);
 
-    result.status = DNS_ERR_GENERIC;
-    result.nAns = 0;
-    result.answers = NULL;
-    return result;
+    return FALSE;
 }
 
 static size_t init_dns_header(uint8 *buf, const char *host, uint16 query_type)
@@ -611,106 +534,95 @@ static void read_additional(DNS_HEADER *dns, RES_RECORD *addit, uint8 **reader, 
     }
 }
 
-static DnsResult handle_found_answers(DNS_HEADER *dns,
+static boolean handle_found_answers(StyxNetworkAddress *out,
+                                      DNS_HEADER *dns,
                                       RES_RECORD *answers,
                                       RES_RECORD *auth,
                                       RES_RECORD *addit,
                                       uint16 query_type, uint depth)
 {
-    DnsResult result = { 0 };
-    StyxSockaddrInet a = {0};
     char cname_target[256] = {0};
-    int ans_count;
+    int ans_count = ntohs(dns->ans_count);
     int i;
-
-    ans_count = ntohs(dns->ans_count);
+    StyxNetworkAddress *tail = out;
 
     switch (ntohs(answers[0].resource->type)) /* TODO: make sure final resource type is the same as the req type. */
     {
         case T_A:
             printf("Found A record.\n");
-            result.answers = malloc((sizeof *result.answers) * ans_count);
-            talos_malloc_assert(result.answers);
+            out->ip.v4 = *(long *)answers[0].rdata;
+            out->is_ipv6 = FALSE;
+            out->next = NULL;
 
             for (i = 0; i < ans_count; i++)
             {
-                long *p;
-                char *addr;
-                p = (long *)answers[i].rdata;
-                a.Ipv4.sin_addr.s_addr = (*p);
-                addr = inet_ntoa(a.Ipv4.sin_addr);
+                StyxNetworkAddress *node = malloc(sizeof(*node));
+                talos_malloc_assert(node);
+                memset(node, 0, sizeof(*node));
 
-                result.answers[i] = malloc(256 * sizeof(**result.answers));
-                talos_malloc_assert(result.answers[i]);
+                node->ip.v4 = *(long *)answers[i].rdata;
+                node->port = out->port;
+                node->is_ipv6 = FALSE;
+                node->next = NULL;
 
-                c_text_copy(strlen(addr) + 1, result.answers[i], addr);
+                tail->next = node;
+                tail = node;
             }
-
-            dns_free_mem(dns, answers, auth, addit);
-            result.status = DNS_OK;
-            result.nAns = ans_count;
-            return result;
+            return TRUE;
         break;
         case T_CNAME:
             c_text_copy(strlen((char *)answers[0].rdata) + 1, cname_target, (char *)answers[0].rdata);
             printf("Found CNAME alias: %s. Requerying...\n", answers[0].rdata);
             dns_free_mem(dns, answers, auth, addit);
-            return dns_iterative_root_worker(cname_target, query_type, current_root_ip, depth + 1);
+            return dns_iterative_root_worker(out, cname_target, query_type, current_root_ip, depth + 1);
         break;
         case T_AAAA:
             printf("Found AAAA record.\n");
-            result.answers = malloc(ans_count * sizeof(*result.answers));
-            talos_malloc_assert(result.answers);
+            memcpy(out->ip.v6, answers[0].rdata, 16);
+            out->is_ipv6 = TRUE;
+            out->next = NULL;
 
             for (i = 0; i < ans_count; i++)
             {
-                uint8 *p;
-                const char *r;
+                StyxNetworkAddress *node = malloc(sizeof(*node));
+                talos_malloc_assert(node);
+                memset(node, 0, sizeof(*node));
 
-                p = (uint8 *)answers[i].rdata;
-                memcpy(&a.Ipv6.sin6_addr, p, sizeof(struct in6_addr));
+                memcpy(node->ip.v6, answers[i].rdata, 16);
+                node->port = out->port;
+                node->is_ipv6 = TRUE;
+                node->next = NULL;
 
-                result.answers[i] = malloc(256 * sizeof(**result.answers));
-                talos_malloc_assert(result.answers[i]);
-
-                r = inet_ntop(AF_INET6, &a.Ipv6.sin6_addr, result.answers[i], INET6_ADDRSTRLEN);
-                if (r == NULL) strcpy(result.answers[i], "IPv6 Conversion Error");
+                tail->next = node;
+                tail = node;
             }
-
-            dns_free_mem(dns, answers, auth, addit);
-            result.status = DNS_OK;
-            result.nAns = ans_count;
-            return result;
+            return TRUE;
         break;
         default:
             printf("Unknown RR Type code : %d\n", ntohs(answers[0].resource->type));
-
-            dns_free_mem(dns, answers, auth, addit);
-            result.status = DNS_OK;
-            result.nAns = ans_count;
-            return result;
+            return FALSE;
         break;
     }
 }
 
-static DnsResult process_auth_records(DNS_HEADER *dns,
+static boolean process_auth_records(StyxNetworkAddress *out,
+                                      DNS_HEADER *dns,
                                       RES_RECORD *answers,
                                       RES_RECORD *auth,
                                       RES_RECORD *addit,
                                       const char *host, uint16 query_type, uint depth)
 {
-    DnsResult result = { 0 };
     char next_ns_name[256] = "\0";
     char next_ns_ip[16] = "\0";
 
-    uint i, j;
+    uint i;
     uint candidates_found = 0;
     uint rtt_rejections = 0;
 
     for (i = 0; i < ntohs(dns->auth_count); i++) {
         if (ntohs(auth[i].resource->type) == T_SOA) {
             printf("SOA Record: %s does not exist.\n", host);
-            goto cleanup_and_fail;
+            return FALSE;
         }
 
         if (ntohs(auth[i].resource->type) != T_NS) {
@@ -721,13 +633,14 @@ static DnsResult process_auth_records(DNS_HEADER *dns,
 
         if (find_ipv4_glue(addit, ntohs(dns->add_count), next_ns_name, next_ns_ip)) {
             candidates_found++;
-            if (try_ns_ip(next_ns_ip, host, query_type, depth, &result, &rtt_rejections)) {
+            if (try_ns_ip(out, next_ns_ip, host, query_type, depth, &rtt_rejections)) {
                 dns_free_mem(dns, answers, auth, addit);
-                return result;
+                return TRUE;
             }
         }
         else {
-            DnsResult ns_result;
+            StyxNetworkAddress ns_addr;
+            memset(&ns_addr, 0, sizeof(StyxNetworkAddress));
 
             if (strcmp(host, next_ns_name) == 0) {
                 printf("\x1b[31m[Abort]\x1b[0m Circular dependency: Need %s to resolve %s\n", next_ns_name, host);
@@ -735,49 +648,42 @@ static DnsResult process_auth_records(DNS_HEADER *dns,
             }
 
             printf("No glue record for %s. Recursively resolving NS IP...\n", next_ns_name);
-            ns_result = dns_resolve_iterative_root(next_ns_name);
-
-            if (ns_result.nAns > 0) {
-                for (j = 0; j < ns_result.nAns; j++) {
-                    c_text_copy(strlen(ns_result.answers[j]) + 1, next_ns_ip, ns_result.answers[j]);
+            if (dns_iterative_root_worker(&ns_addr, next_ns_name, T_A, current_root_ip, depth + 1)) {
+                StyxNetworkAddress *curr = &ns_addr;
+                while (curr) {
+                    struct in_addr in;
+                    in.s_addr = curr->ip.v4;
+                    c_text_copy(INET_ADDRSTRLEN, next_ns_ip, inet_ntoa(in));
                     candidates_found++;
 
-                    if (try_ns_ip(next_ns_ip, host, query_type, depth, &result, &rtt_rejections)) {
-                        DnsResult_free(&ns_result);
-                        dns_free_mem(dns, answers, auth, addit);
-                        return result;
+                    if (try_ns_ip(out, next_ns_ip, host, query_type, depth, &rtt_rejections)) {
+                        free_addresses(&ns_addr);
+                        return TRUE;
                     }
+                    curr = curr->next;
                 }
+                free_addresses(&ns_addr);
             }
-            DnsResult_free(&ns_result);
         }
     }
 
     if (candidates_found > 0 && candidates_found == rtt_rejections) {
         printf("\x1b[31m[DNS Rejected]\x1b[0m Failed to resolve %s: all %u nameservers exceed max RTT.\n", host, candidates_found);
-        result.status = DNS_ERR_RTT_EXHAUSTED;
     }
-    else {
-        result.status = DNS_ERR_GENERIC;
-    }
-cleanup_and_fail:
-    dns_free_mem(dns, answers, auth, addit);
-    result.nAns = 0;
-    result.answers = NULL;
-    return result;
+    return FALSE;
 }
 
 static boolean find_ipv4_glue(RES_RECORD *addit, int add_count, const char *ns_name, char *out_ip)
 {
     int j;
-    StyxSockaddrInet a = { 0 };
+    struct in_addr a;
 
     for (j = 0; j < add_count; j++)
     {
         if (strcmp((char *)addit[j].name, ns_name) == 0 && ntohs(addit[j].resource->type) == T_A) {
             long *p = (long *)addit[j].rdata;
-            a.Ipv4.sin_addr.s_addr = (*p);
-            strcpy(out_ip, inet_ntoa(a.Ipv4.sin_addr));
+            a.s_addr = *p;
+            strcpy(out_ip, inet_ntoa(a));
             printf("Found IPv4 glue record: %s\n", out_ip);
             return TRUE;
         }
@@ -785,7 +691,7 @@ static boolean find_ipv4_glue(RES_RECORD *addit, int add_count, const char *ns_n
     return FALSE;
 }
 
-static boolean try_ns_ip(const char *ns_ip, const char *host, uint16 query_type, uint depth, DnsResult *out_result, uint *rtt_rejections)
+static boolean try_ns_ip(StyxNetworkAddress *out, const char *ns_ip, const char *host, uint16 query_type, uint depth, uint *rtt_rejections)
 {
     if (strcmp(ns_ip, "127.0.0.1") == 0) {
         return FALSE;
@@ -801,17 +707,7 @@ static boolean try_ns_ip(const char *ns_ip, const char *host, uint16 query_type,
         return FALSE;
     }
 
-    *out_result = dns_iterative_root_worker(host, query_type, (char *)ns_ip, depth + 1);
-
-    if (out_result->nAns > 0) {
-        return TRUE;
-    }
-
-    if (out_result->status == DNS_ERR_RTT_EXHAUSTED) {
-        (*rtt_rejections)++;
-    }
-
-    return FALSE;
+    return dns_iterative_root_worker(out, host, query_type, ns_ip, depth + 1);
 }
 
 static void read_name(uint8 name[256], uint8 *reader, uint8 *buffer, int *count)
@@ -912,6 +808,18 @@ static int dns_printf(const char *format, ...)
     return ret;
 }
 
+static void free_addresses(StyxNetworkAddress *addr)
+{
+    StyxNetworkAddress *curr = addr->next;
+    if (!addr) return;
+    while (curr) {
+        StyxNetworkAddress *next = curr->next;
+        free(curr);
+        curr = next;
+    }
+    addr->next = NULL;
+}
+
 static void dns_free_mem(DNS_HEADER *dns, RES_RECORD *answers, RES_RECORD *auth, RES_RECORD *addit)
 {
     int ans_count = ntohs(dns->ans_count);
@@ -949,27 +857,6 @@ static void dns_free_mem(DNS_HEADER *dns, RES_RECORD *answers, RES_RECORD *auth,
     }
 }
 
-static boolean external_dns_is_blocked(void)
-{
-    DnsResult result = { 0 };
-    result = dns_iterative_root_worker("www.google.com", T_A, current_root_ip, 0);
-    if (result.nAns <= 0)
-    {
-        DnsResult_free(&result);
-        return TRUE;
-    }
-    DnsResult_free(&result);
-    return FALSE;
-}
-
-static void set_to_local_dns(void)
-{
-    char local_dns[16];
-    styx_local_dns_server_get(local_dns, sizeof(local_dns));
-    c_text_copy(strlen(local_dns) + 1, current_root_ip, local_dns);
-    return;
-}
-
 /* -------------- debug printing ------------------ */
 void print_response_info(void *dns_ptr)
 {
@@ -981,13 +868,14 @@ void print_response_info(void *dns_ptr)
     printf("%d Additional Records.\n\n", ntohs(dns->add_count));
 }
 
-void print_response_contents(void *dns_ptr, void *answers_ptr, void *auth_ptr, void *addit_ptr, void *a_ptr)
+void print_response_contents(void *dns_ptr, void *answers_ptr, void *auth_ptr, void *addit_ptr)
 {
     DNS_HEADER *dns = (DNS_HEADER *)dns_ptr;
     RES_RECORD *answers = (RES_RECORD *)answers_ptr;
     RES_RECORD *auth = (RES_RECORD *)auth_ptr;
     RES_RECORD *addit = (RES_RECORD *)addit_ptr;
-    StyxSockaddrInet a = *((StyxSockaddrInet *)a_ptr);
+    struct in_addr in4;
+    struct in6_addr in6;
 
     int i;
 
@@ -1003,8 +891,8 @@ void print_response_contents(void *dns_ptr, void *answers_ptr, void *auth_ptr, v
         char ipv6_str[INET6_ADDRSTRLEN];
             case T_A:
                 p = (long *)answers[i].rdata;
-                a.Ipv4.sin_addr.s_addr = (*p);
-                fprintf(stdout, "has IPv4 address : %s", inet_ntoa(a.Ipv4.sin_addr));
+                in4.s_addr = (*p);
+                fprintf(stdout, "has IPv4 address : %s", inet_ntoa(in4));
             break;
             case T_CNAME:
                 /* Canonical name for an alias */
@@ -1012,8 +900,8 @@ void print_response_contents(void *dns_ptr, void *answers_ptr, void *auth_ptr, v
             break;
             case T_AAAA:
                 p6 = (uint8 *)answers[i].rdata;
-                memcpy(&a.Ipv6.sin6_addr, p6, sizeof(struct in6_addr));
-                fprintf(stdout, "has IPv6 address: %s", inet_ntop(AF_INET6, &a.Ipv6.sin6_addr, ipv6_str, INET6_ADDRSTRLEN));
+                memcpy(&in6, p6, sizeof(struct in6_addr));
+                fprintf(stdout, "has IPv6 address: %s", inet_ntop(AF_INET6, &in6, ipv6_str, INET6_ADDRSTRLEN));
             break;
         }
 
@@ -1048,13 +936,13 @@ void print_response_contents(void *dns_ptr, void *answers_ptr, void *auth_ptr, v
         char ipv6_str[INET6_ADDRSTRLEN];
             case T_A:
                 p = (long *)addit[i].rdata;
-                a.Ipv4.sin_addr.s_addr = (*p);
-                fprintf(stdout, "has IPv4 address : %s", inet_ntoa(a.Ipv4.sin_addr));
+                in4.s_addr = (*p);
+                fprintf(stdout, "has IPv4 address : %s", inet_ntoa(in4));
             break;
             case T_AAAA:
                 p6 = (uint8 *)addit[i].rdata;
-                memcpy(&a.Ipv6.sin6_addr, p6, sizeof(struct in6_addr));
-                fprintf(stdout, "has IPv6 address : %s", inet_ntop(AF_INET6, &a.Ipv6.sin6_addr, ipv6_str, INET6_ADDRSTRLEN));
+                memcpy(&in6, p6, sizeof(struct in6_addr));
+                fprintf(stdout, "has IPv6 address : %s", inet_ntop(AF_INET6, &in6, ipv6_str, INET6_ADDRSTRLEN));
             break;
             default:
                 fprintf(stdout, "RR Type code %d", ntohs(addit[i].resource->type));

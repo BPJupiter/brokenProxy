@@ -1,7 +1,7 @@
 
 # The Broken Proxy
 
-I'm Frances Telfar, and this is my University of Auckland Summer Research Project supervised by Ulrich Speidel, in collaboration with the Catalyst project. This proxy is built to simulate macro-scale internet outages, currently at the cable level. Very much still in development.
+I'm Frances Telfar, and this is my University of Auckland Summer Research Project supervised by Ulrich Speidel, in collaboration with the Catalyst project. This proxy is built to simulate macro-scale internet outages, currently at the cable level.
 
 ## Settings Page
 
@@ -17,16 +17,16 @@ Windows: Build with MSVC
 
 Linux: Build with
 
-```$ cmake -S . -B build```
+``cmake -S . -B build``
 
-```$ cmake --build build```
+``cmake --build build``
 
 ## Curl commandline args
 
 For testing with curl, use the following cmdline arguments:
 
 ```
-$ curl -x "127.0.0.1:13406" <url>
+curl -x socks5h://127.0.0.1:13407 <url>
 ```
 
 ## Chromium commandline args
@@ -34,5 +34,5 @@ $ curl -x "127.0.0.1:13406" <url>
 For testing on Chromium, use the following cmdline arguments:
 
 ```
-$ chromium --proxy-server="127.0.0.1:13406" --user-data-dir="/tmp/chromium_proxy_session/"
+chromium --proxy-server="socks5://127.0.0.1:13407" --user-data-dir="/tmp/chromium_proxy_serssion" 
 ```

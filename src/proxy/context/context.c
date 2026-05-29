@@ -2,15 +2,16 @@
 
 #include "Clay/clay.h"
 #include "Europa/europa.h"
+#include "Styx/styx.h"
 #include "context.h"
 
 extern TracertResult traceroute(const char *ip);
 extern PingResult ping(const char *ip);
 
-extern DnsResult dns_resolve_recursive_local(const char *host);
-extern DnsResult dns_resolve_iterative_root(const char *host);
+extern boolean styx_network_address_lookup_default_func(StyxNetworkAddress *dest, const char *dns_name, uint16 default_port, boolean *do_ipv6);
+extern boolean dns_resolve_iterative_root_func(StyxNetworkAddress *dest, const char *dns_name, uint16 default_port, boolean *do_ipv6);
 /* -------- UNIMPLEMENTED ---------- */
-extern DnsResult dns_resolve_iterative_local(const char *host);
+extern boolean dns_resolve_iterative_local_func(StyxNetworkAddress *dest, const char *dns_name, uint16 default_port, boolean *do_ipv6);
 
 
 typedef struct SharedContext
@@ -19,7 +20,6 @@ typedef struct SharedContext
     double maxRtt;
 
     /* callbacks */
-    DnsResult (*dnsResolve_cb)(const char *hostname);
     TracertResult (*tracert_cb)(const char *ip);
     PingResult (*ping_cb)(const char *ip);
 } SharedContext;
@@ -30,7 +30,6 @@ static EAtomicInteger gActiveIndex;
 void sharedContext_init(void)
 {
     gContexts[0].maxRtt = 1000.0;
-    gContexts[0].dnsResolve_cb = NULL;
     gContexts[0].tracert_cb = NULL;
     gContexts[0].ping_cb = NULL;
 
@@ -78,6 +77,7 @@ boolean sharedContext_var_set_maxRtt(const double *value)
 
 boolean sharedContext_callback_set_dnsResolve(ResolveType type)
 {
+    /*
     boolean success = TRUE;
     EAtomicInteger active, inactive;
 
@@ -97,7 +97,7 @@ boolean sharedContext_callback_set_dnsResolve(ResolveType type)
         case RT_FULL:
             gContexts[inactive].dnsResolve_cb = dns_resolve_iterative_root;
         break;
-        case RT_LOCAL: /* UNIMPLEMENTED */
+        case RT_LOCAL:
             gContexts[inactive].dnsResolve_cb = dns_resolve_iterative_local;
         break;
         case RT_COUNT:
@@ -107,6 +107,28 @@ boolean sharedContext_callback_set_dnsResolve(ResolveType type)
     }
 
     europa_atomic_integer_write(gActiveIndex, inactive);
+    */
+    boolean success = TRUE;
+
+    switch (type)
+    {
+        case RT_NONE:
+            styx_network_address_lookup = NULL;
+        break;
+        case RT_QUICK:
+            styx_network_address_lookup = styx_network_address_lookup_default_func;
+        break;
+        case RT_FULL:
+            styx_network_address_lookup = dns_resolve_iterative_root_func;
+        break;
+        case RT_LOCAL:
+            styx_network_address_lookup = dns_resolve_iterative_local_func;
+        break;
+        case RT_COUNT:
+            styx_network_address_lookup = NULL;
+            success = FALSE;
+        break;
+    }
 
     return success;
 }
@@ -143,40 +165,16 @@ boolean sharedContext_callback_set_ping(boolean enabled)
     return success;
 }
 
-boolean sharedContext_callback_isEnabled_traceroute()
+boolean sharedContext_callback_isEnabled_traceroute(void)
 {
     EAtomicInteger active = europa_atomic_integer_read(gActiveIndex);
     return (NULL != gContexts[active].tracert_cb);
 }
 
-boolean sharedContext_callback_isEnabled_ping()
+boolean sharedContext_callback_isEnabled_ping(void)
 {
     EAtomicInteger active = europa_atomic_integer_read(gActiveIndex);
     return (NULL != gContexts[active].ping_cb);
-}
-
-boolean sharedContext_callback_execute_dnsResolve(DnsResult *dns_result, const char *hostname)
-{
-    DnsResult (*local_cb)(const char *) = NULL;
-    DnsResult callback_result = { 0 };
-    boolean success = TRUE;
-    EAtomicInteger active;
-
-    active = europa_atomic_integer_read(gActiveIndex);
-
-    local_cb = gContexts[active].dnsResolve_cb;
-
-    if (local_cb != NULL) {
-        callback_result = local_cb(hostname);
-        if (dns_result != NULL) {
-            *dns_result = callback_result;
-        }
-    }
-    else {
-        success = FALSE;
-    }
-
-    return success;
 }
 
 boolean sharedContext_callback_execute_traceroute(TracertResult *tracert_result, const char *ip)

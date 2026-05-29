@@ -24,13 +24,6 @@ typedef enum DnsStatus
     DNS_ERR_FAIL_SYSCALL
 } DnsStatus;
 
-typedef struct DnsResult
-{
-    DnsStatus status;
-    uint nAns;
-    char **answers;
-} DnsResult;
-
 typedef struct TracertResult
 {
     uint hopCount;
@@ -43,7 +36,6 @@ typedef struct PingResult
     double rtt;
 } PingResult;
 
-extern void DnsResult_free(DnsResult *dns_result);
 extern void TracertResult_free(TracertResult *tracert_result);
 /*extern void PingResult_free(PingResult *ping_result); */
 
@@ -60,7 +52,6 @@ extern boolean sharedContext_callback_set_ping(boolean enabled);
 extern boolean sharedContext_callback_isEnabled_traceroute(void);
 extern boolean sharedContext_callback_isEnabled_ping(void);
 
-extern boolean sharedContext_callback_execute_dnsResolve(DnsResult *dns_result, const char *hostname);
 extern boolean sharedContext_callback_execute_traceroute(TracertResult *tracert_result, const char *ip);
 extern boolean sharedContext_callback_execute_ping(PingResult *ping_result, const char *ip);
 
