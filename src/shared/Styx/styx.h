@@ -55,9 +55,9 @@ extern uint64   styx_file_position_set(SHandle *handle);
 /* -------- Memory Buffers --------
 Handles the creation and management of in memory FIFO channels. */
 
-extern SHandle *styx_buffer_create(void);
-extern void    *styx_buffer_get(SHandle *handle, uint32 *size);
-extern void     styx_buffer_set(SHandle *handle, void *data, uint32 size);
+extern SHandle *styx_buffer_create(void); /* Creates a handle to a Styx FIFO Memory buffer. */
+extern void    *styx_buffer_get(SHandle *handle, uint32 *size); /* Gives the user read direct memory access to the packed data. If the handle is set to debug mode it will contain debug header information. */
+extern void     styx_buffer_set(SHandle *handle, void *data, uint32 size); /* Lets the user give a pointer to "data" of "size" number of bytes that will be added to the buffer. */
 
 /* -------- Handle Utils --------
 */

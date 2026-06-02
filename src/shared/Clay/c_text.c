@@ -146,6 +146,14 @@ boolean c_text_compare(char *text_a, char *text_b)
     return text_a[i] == text_b[i];
 }
 
+boolean c_text_compare_case_insensitive(char *text_a, char *text_b)
+{
+    uint i;
+    for (i = 0; (text_a[i] & 0x1F) == (text_b[i] & 0x1F) && text_a[i] != 0; i++)
+        ;
+    return (text_a[i] & 0x1F) == (text_b[i] & 0x1F);
+}
+
 void c_text_replaceall(char *text, char find, char replace)
 {
     uint i;

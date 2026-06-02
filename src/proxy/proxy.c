@@ -80,6 +80,12 @@ enum socks_status {
 typedef uint midx;
 
 typedef enum {
+	MT_PING,
+	MT_TRACEROUTE,
+	MT_COUNT
+} MeasurementType;
+
+typedef enum {
 	MF_NIL = (1 << 0),
 	MF_PING = (1 << 1),
 	MF_TRACEROUTE = (1 << 2),
@@ -107,8 +113,12 @@ typedef struct {
 	} address; /* objective*/
 	char domain[256]; /* objective */
 	boolean is_ipv6; /* objective */
-	float rtt; /* subjective */
-	time_t timestamp; /* objective */
+	float rtt_min; /* subjective */
+	float rtt_avg;
+	float rtt_max;
+	float rtt_stddev;
+	uint8 rtt_samples;
+	time_t timestamp[MT_COUNT];
 
 	midx hops[32]; /* objective */
 	uint hop_count; /* objective */
@@ -134,10 +144,12 @@ typedef struct {
 	IpMeasurement	ip_measurements[MAX_MEASUREMENTS];
 	boolean			used[MAX_MEASUREMENTS]; /* may want to move away from C89 to allow for 1 bit array ? Or just use an int array with bitmasking */
 	midx			next_empty_slot; /* 0 slot is nil */
-	midx (*add)(IpMeasurement measurement);
-	void (*rem)(midx idx);
-	IpMeasurement *(*get)(midx idx);
+	
 } Measurements;
+
+midx measurement_add(IpMeasurement measurement);
+void meausrement_rem(midx idx);
+IpMeasurement *measurement_get(midx idx);
 
 static int proxy_printf(const char *format, ...);
 #define printf proxy_printf

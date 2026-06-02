@@ -151,6 +151,16 @@ extern void exit_crash(uint i);
 
 #endif
 
+/* -------- Hashtable -------- */
+
+typedef struct cHashTable cHashTable;
+
+extern cHashTable *c_hashtable_init(size_t key_size, size_t data_size, uint64 (*hash_func)(const void *), boolean (*eq_func)(const void *, const void *));
+extern void c_hashtable_free(cHashTable *ht);
+extern boolean c_hashtable_insert(cHashTable *ht, const void *key, void *value);
+extern boolean c_hashtable_delete(cHashTable *ht, const void *key);
+extern boolean c_hashtable_get(cHashTable *ht, const void *key, void *out_value);
+
 /* -------- RNG --------
  * Fast pseudo random number generators useful for things like graphics
  */
@@ -177,6 +187,7 @@ extern uint     c_find_next_word(char *text);
 extern boolean  c_find_word_compare(char *text_a, char *text_b);
 extern uint     c_text_copy(uint length, char *dest, const char *source);
 extern boolean  c_text_compare(char *text_a, char *text_b);
+extern boolean  c_text_compare_case_insensitive(char *text_a, char *text_b);
 extern void     c_text_replaceall(char *text, char find, char replace);
 extern char 	*c_text_copy_allocate(char *source);
 extern uint     c_word_copy(uint length, char *dest, char *source);
@@ -204,3 +215,4 @@ extern uint     ctext_to_bits(uint64 *bits, char *text); /* Converts 14 byte str
 #endif
 
 #endif /* CLAY_H */
+

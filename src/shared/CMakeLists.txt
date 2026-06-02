@@ -1,6 +1,7 @@
 add_library(bpj_core STATIC
 	"Clay/c_mem_debug.c"
 	"Clay/c_text.c"
+	"Clay/c_hashtable.c"
 	"Europa/e_db_vedis.c"
 	"Europa/e_dir.c"
 	"Europa/e_threads.c"
