@@ -7,10 +7,9 @@
 
 #include "Clay/clay.h"
 #include "Styx/styx.h"
-#include "Talos/talos.h"
 
-#include "verify/verify.h"
-#include "context.h"
+//#include "verify/verify.h"
+//#include "context.h"
 
 static int dns_printf(const char *format, ...);
 #define printf dns_printf
@@ -240,6 +239,24 @@ typedef struct {
 typedef struct {
     uint8 address[16];
 } RdataAAAA;
+
+typedef enum {
+    SUPPORTED_TYPE_A,
+    SUPPORTED_TYPE_NS,
+    SUPPORTED_TYPE_CNAME,
+    SUPPORTED_TYPE_SOA,
+    SUPPORTED_TYPE_PTR,
+    SUPPORTED_TYPE_MX,
+    SUPPORTED_TYPE_AAAA
+} SupportedDnsTypes;
+
+const size_t dns_type_size[] = {sizeof(RdataA),
+                                sizeof(RdataNS),
+                                sizeof(RdataCNAME),
+                                sizeof(RdataSOA),
+                                sizeof(RdataPTR),
+                                sizeof(RdataMX),
+                                sizeof(RdataAAAA)};
 
 typedef struct
 {
@@ -928,6 +945,125 @@ static boolean buffer_write_dnsrecord(BytePacketBuffer *buffer, const DnsRecord 
     return TRUE;
 }
 
+static void print_answers(DnsPacket packet)
+{
+    uint32 seconds;
+    uint i;
+    struct in_addr in4;
+    struct in6_addr in6;
+
+    printf("Answer Records : %d \n", packet.header.ancount);
+    for (i = 0; i < packet.header.ancount; i++)
+    {
+        seconds = packet.answers[i].ttl;
+        printf("Name : %s ", packet.answers[i].name);
+
+        switch (packet.answers[i].type)
+        {
+        long *p;
+        uint8 *p6;
+        char ipv6_str[INET6_ADDRSTRLEN];
+            case DNS_TYPE_A:
+                p = (long *)packet.answers[i].rdata;
+                in4.s_addr = (*p);
+                fprintf(stdout, "has IPv4 address : %s", inet_ntoa(in4));
+            break;
+            case DNS_TYPE_CNAME:
+                /* Canonical name for an alias */
+                fprintf(stdout, "has alias name : %s", packet.answers[i].rdata);
+            break;
+            case DNS_TYPE_AAAA:
+                p6 = (uint8 *)packet.answers[i].rdata;
+                memcpy(&in6, p6, sizeof(struct in6_addr));
+                fprintf(stdout, "has IPv6 address: %s", inet_ntop(AF_INET6, &in6, ipv6_str, INET6_ADDRSTRLEN));
+            break;
+        }
+        if (seconds >= 60 * 60) {
+            fprintf(stdout, " for %d hours", seconds / (60 * 60));
+        }
+        else if (seconds >= 60) {
+            fprintf(stdout, " for %d minutes", seconds / 60);
+        }
+        else {
+            fprintf(stdout, " for %d seconds", seconds);
+        }
+
+        fprintf(stdout, "\n");
+    }
+}
+
+static void print_authorities(DnsPacket packet)
+{
+    uint32 seconds;
+    uint i;
+    printf("Authoritative Records : %d \n", packet.header.nscount);
+    for (i = 0; i < packet.header.nscount; i++) {
+        seconds = packet.authorities[i].ttl;
+        printf("Name : %s ", packet.authorities[i].name);
+        if (packet.authorities[i].type == DNS_TYPE_NS) {
+            fprintf(stdout, "has nameserver : %s", packet.authorities[i].rdata);
+        }
+        else {
+            fprintf(stdout, "RR Type code %d", packet.authorities[i].type);
+        }
+
+        if (seconds >= 60 * 60) {
+            fprintf(stdout, " for %d hours", seconds / (60 * 60));
+        }
+        else if (seconds >= 60) {
+            fprintf(stdout, " for %d minutes", seconds / 60);
+        }
+        else {
+            fprintf(stdout, " for %d seconds", seconds);
+        }
+        fprintf(stdout, "\n");
+    }
+}
+
+static void print_additional(DnsPacket packet)
+{
+    uint32 seconds;
+    uint i;
+    struct in_addr in4;
+    struct in6_addr in6;
+    printf("Additional Records : %d \n", packet.header.arcount);
+    for (i = 0; i < packet.header.arcount; i++) {
+        seconds = packet.resources[i].ttl;
+        printf("Name : %s ", packet.resources[i].name);
+        switch (packet.resources[i].type)
+        {
+        long *p;
+        uint8 *p6;
+        char ipv6_str[INET6_ADDRSTRLEN];
+            case DNS_TYPE_A:
+                p = (long *)packet.resources[i].rdata;
+                in4.s_addr = (*p);
+                fprintf(stdout, "has IPv4 address : %s", inet_ntoa(in4));
+            break;
+            case DNS_TYPE_AAAA:
+                p6 = (uint8 *)packet.resources[i].rdata;
+                memcpy(&in6, p6, sizeof(struct in6_addr));
+                fprintf(stdout, "has IPv6 address : %s", inet_ntop(AF_INET6, &in6, ipv6_str, INET6_ADDRSTRLEN));
+            break;
+            default:
+                fprintf(stdout, "RR Type code %d", (packet.resources[i].type));
+            break;
+        }
+
+        if (seconds >= 60 * 60) {
+            fprintf(stdout, " for %d hours", seconds / (60 * 60));
+        }
+        else if (seconds >= 60) {
+            fprintf(stdout, " for %d minutes", seconds / 60);
+        }
+        else {
+            fprintf(stdout, " for %d seconds", seconds);
+        }
+
+        fprintf(stdout, "\n");
+    }
+}
+
 static boolean buffer_read_dnspacket(BytePacketBuffer *buffer, DnsPacket *data)
 {
     uint i;
@@ -1079,9 +1215,9 @@ static boolean lookup(DnsPacket *out, const DnsName qname, const DnsType qtype, 
 
     buffer_write_dnspacket(&req_buffer, &netbound);
     styx_pack_raw(handle, req_buffer.buf, sizeof(res_buffer.buf), NULL);
-    styx_network_datagram_send(handle, &server);
+    styx_network_datagram_send(handle, &server); 
 
-    styx_network_receive(handle, &server);
+    styx_network_receive(handle, NULL);
     styx_unpack_raw(handle, res_buffer.buf, sizeof(res_buffer.buf), NULL);
     buffer_read_dnspacket(&res_buffer, out);
 
@@ -1128,53 +1264,93 @@ static boolean recursive_lookup(DnsPacket *out, DnsName qname, DnsType qtype, St
 
 static boolean handle_query(SHandle *handle)
 {
-    BytePacketBuffer req_buffer = {0};
+    BytePacketBuffer req_buffer = {0}, res_buffer = {0};
+    DnsPacket request = {0}, packet = {0};
+    StyxNetworkAddress src;
+    uint i;
 
-    //styx_network_receive(handle, )
+    StyxNetworkAddress server;
+    inet_aton(RootServers[C], &server.ip.v4);
+    server.port = 53;
+    server.next = NULL;
+    server.is_ipv6 = FALSE;
+
+    styx_network_receive(handle, &src);
+    styx_unpack_raw(handle, req_buffer.buf, sizeof(req_buffer.buf), NULL);
+    buffer_read_dnspacket(&req_buffer, &request);
+
+    packet.header.id = request.header.id;
+    packet.header.flags |= DNS_FLAG_RD;
+    packet.header.flags |= DNS_FLAG_RA;
+    packet.header.flags |= DNS_FLAG_QR;
+
+    if (request.header.qdcount > 0) {
+        DnsQuestion question;
+        DnsPacket result;
+        memcpy(&question, &request.questions[0], sizeof(DnsQuestion));
+        printf("Recieved question: %s, %hu, %hu\n", question.qname, question.qtype, question.qclass);
+
+        if (recursive_lookup(&result, question.qname, question.qtype, server)) {
+            packet.header.qdcount += 1;
+            memcpy(&packet.questions[0], &question, sizeof(DnsQuestion));
+            packet.header.flags |= DNS_FLAG_RCODE & result.header.flags;
+
+            print_answers(result);
+            for (i = 0; i < result.header.ancount; i++) {
+                packet.header.ancount += 1;
+                memcpy(&packet.answers[i], &result.answers[i], sizeof(DnsRecord));
+            }
+
+            print_authorities(result);
+            for (i = 0; i < result.header.nscount; i++) {
+                packet.header.nscount += 1;
+                memcpy(&packet.authorities[i], &result.authorities[i], sizeof(DnsRecord));
+            }
+
+            print_additional(result);
+            for (i = 0; i < result.header.arcount; i++) {
+                packet.header.arcount += 1;
+                memcpy(&packet.authorities[i], &result.authorities[i], sizeof(DnsPacket));
+            }
+        }
+        else {
+            packet.header.flags |= DNS_FLAG_RCODE & DNS_RCODE_SERVFAIL;
+        }
+    }
+    else {
+        packet.header.flags |= DNS_FLAG_RCODE & DNS_RCODE_FORMERR;
+    }
+
+    buffer_write_dnspacket(&res_buffer, &packet);
+    styx_pack_raw(handle, res_buffer.buf, sizeof(res_buffer.buf), NULL);
+    styx_network_datagram_send(handle, &src);
+    return TRUE;
 }
 
-boolean dns_resolve_iterative_root_func(StyxNetworkAddress *dest, const char *dns_name, uint16 default_port, boolean *do_ipv6)
+static int dns_printf(const char *format, ...)
 {
-    static boolean root_server_found = FALSE;
-    boolean result = TRUE;
-    int i = 0;
-    UNUSED(default_port);
-    UNUSED(do_ipv6);
+    va_list args;
+    int ret;
+    char msg[1024] = "\x1b[34m[DNS]\x1b[0m ";
+    strcat(msg, format);
 
-    if (dns_name[0] == '/')
-    {
-        return localhost(dest);
-    }
+    va_start(args, format);
 
-    create_rr_cache();
+    ret = vprintf(msg, args);
 
-    if (!root_server_found && strcmp(dns_name, "127.0.0.1") != 0)
-    {
-        for (i = 0; i < RSI_COUNT; i++)
-        {
-            if (!verify_latency(RootServers[i]))
-            {
-                printf("%s exceeded max latency! Changing root server\n", RootServers[i]);
-                continue;
-            }
-            else if (!verify_cable(RootServers[i]))
-            {
-                printf("%s uses a disabled cable! Changing root server\n", RootServers[i]);
-                continue;
-            }
-            /** Seems like UoA wifi only blocks some root DNS servers?
-            * i.e. Root server A is blocked. Root server M is not.
-            * Need more sophisticated way to see if local wifi will block DNS request packets to a given root server?
-            */
-            else
-                break;
+    va_end(args);
+
+    return ret;
+}
+
+
+int main(void)
+{
+    SHandle *handle = styx_network_datagram_create(2053, FALSE);
+
+    for (;;) {
+        if (!handle_query(handle)) {
+            printf("An error has occurred!\n");
         }
-        strcpy(current_root_ip, RootServers[i]);
-        root_server_found = 1;
     }
-    result = dns_iterative_root_worker(dest, dns_name, DNS_TYPE_A, current_root_ip, 0);
-    if (!result) {
-        printf("Could not resolve!\n");
-    }
-    return result;
 }

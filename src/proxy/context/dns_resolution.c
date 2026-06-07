@@ -2,8 +2,14 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
-#include <arpa/inet.h>
 #include <sys/types.h>
+
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <Ws2tcpip.h>
+#else
+#include <arpa/inet.h>
+#endif
 
 #include "Clay/clay.h"
 #include "Styx/styx.h"
@@ -194,7 +200,7 @@ struct {
 // 64-bit FNV-1a Hash function for strings
 uint64 fnv1a_hash(const void *key) {
     const char *str = (const char *)key;
-    uint64_t hash = 14695981039346656037ULL;
+    uint64 hash = 14695981039346656037ULL;
     while (*str) {
         hash ^= (unsigned char)*str++;
         hash *= 1099511628211ULL;

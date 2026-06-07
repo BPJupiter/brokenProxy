@@ -6,7 +6,8 @@
 #include "Europa/europa.h"
 
 #if defined _WIN32
-/*#include <winsock2.h>*/
+#include <winsock2.h>
+#include <Ws2tcpip.h>
 #include <iphlpapi.h>
 #pragma comment(lib, "WSock32.lib")
 #pragma comment(lib, "IPHLPAPI.lib")
@@ -447,8 +448,8 @@ SHandle *styx_network_stream_wait_for_connection(SHandle *listener, StyxNetworkA
 #if defined _WIN32
 			{
 				unsigned long one = 1UL;
-				if (ioctlsocket(socket, FIOBIO, &one) != 0) {
-					styxSocketDestroy(socket);
+				if (ioctlsocket(socket, FIONBIO, &one) != 0) {
+					styx_socket_destroy(socket);
 					return NULL;
 				}
 			}

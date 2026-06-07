@@ -13,6 +13,23 @@
 #define BIT_DELETED 0xFE
 #define CAPACITY (1 << 16)
 
+#if defined(_MSC_VER)
+#include <windows.h>
+#include <intrin.h>
+uint32 __inline ctz(uint32 value)
+{
+    DWORD trailing_zero = 0;
+    if (_BitScanForward(&trailing_zero, value)) {
+        return trailing_zero;
+    }
+    else {
+        return 32;
+    }
+}
+#else
+#define ctz(x) __builtin_ctz(x)
+#endif
+
 struct cHashTable {
     uint32 size;
     uint32 capacity;
@@ -99,7 +116,7 @@ static boolean c_hashtable_resize(cHashTable *table)
                 }
 #endif
                 if (mask_empty > 0) {
-                    int offset = __builtin_ctz(mask_empty);
+                    int offset = ctz(mask_empty);
                     size_t insert_idx = (index + offset) & (new_capacity - 1);
 
                     memcpy(&new_slots[insert_idx * stride], old_slot_ptr, stride);
@@ -213,7 +230,7 @@ boolean c_hashtable_insert(cHashTable *table, const void *key, void *value)
 
         candidates = mask_matches;
         while (candidates > 0) {
-            int offset = __builtin_ctz(candidates);
+            int offset = ctz(candidates);
             size_t slot_idx = (index + offset) & (table->capacity - 1);
             uint8 *slot_ptr = &table->slots[slot_idx * stride];
 
@@ -225,7 +242,7 @@ boolean c_hashtable_insert(cHashTable *table, const void *key, void *value)
         }
 
         if (first_deleted_idx == -1 && mask_deleted > 0) {
-            int offset = __builtin_ctz(mask_deleted);
+            int offset = ctz(mask_deleted);
             first_deleted_idx = (index + offset) & (table->capacity - 1);
         }
 
@@ -235,7 +252,7 @@ boolean c_hashtable_insert(cHashTable *table, const void *key, void *value)
             if (first_deleted_idx != -1) {
                 insert_idx = first_deleted_idx;
             } else {
-                int offset = __builtin_ctz(mask_empty);
+                int offset = ctz(mask_empty);
                 insert_idx = (index + offset) & (table->capacity - 1);
             }
 
@@ -285,7 +302,7 @@ boolean c_hashtable_delete(cHashTable *table, const void *key)
 
         candidates = mask_matches;
         while (candidates > 0) {
-            int offset = __builtin_ctz(candidates);
+            int offset = ctz(candidates);
             size_t slot_idx = (index + offset) & (table->capacity - 1);
             uint8 *slot_ptr = &table->slots[slot_idx * stride];
 
@@ -338,7 +355,7 @@ boolean c_hashtable_get(cHashTable *table, const void *key, void *out_value)
 
         candidates = mask_matches;
         while (candidates > 0) {
-            int offset = __builtin_ctz(candidates);
+            int offset = ctz(candidates);
             size_t slot_idx = (index + offset) & (table->capacity - 1);
             uint8 *slot_ptr = &table->slots[slot_idx * stride];
 

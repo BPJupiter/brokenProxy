@@ -1,7 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <threads.h>
 
 #include "Clay/clay.h"
 #include "styx.h"

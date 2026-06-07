@@ -108,7 +108,7 @@ edirent *readdir(DIR *dir)
 
 void *europa_path_watch(char *path, boolean subfolders)
 {
-    /* return FindFirstChangeNotificationW(path, subfolders, FILE_NOTIFY_CHANGE_FILE_NAME); */
+    return FindFirstChangeNotificationW(path, subfolders, FILE_NOTIFY_CHANGE_FILE_NAME);
 }
 
     #define DIR_ROOT_PATH "/"

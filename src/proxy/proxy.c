@@ -11,10 +11,15 @@
 #include "verify/verify.h"
 #include "memory_usage.h"
 
-#include <arpa/inet.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <errno.h>
+
+#if defined(_WIN32)
+#include <WS2tcpip.h>
+#else
+#include <arpa/inet.h>
+#endif
 
 #define BUFFER_SIZE (1 << 16)
 #define UDP_HEADER_IPV4_LEN 10

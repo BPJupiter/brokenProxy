@@ -39,8 +39,8 @@ Handles the creation and management of UDP datagrams. */
 
 extern boolean (*styx_network_address_lookup)(StyxNetworkAddress *dest, const char *dns_name, uint16 default_port, boolean *do_ipv6);
 extern boolean  styx_network_address_compare   (StyxNetworkAddress *a, StyxNetworkAddress *b);
-extern SHandle *styx_network_datagram_create   (uint16 port, boolean ipv6);
-extern int      styx_network_datagram_send     (SHandle *handle, StyxNetworkAddress *to);
+extern SHandle *styx_network_datagram_create   (uint16 port, boolean ipv6); /* Opens a port for receiving and sending UDP traffic on a specific port */
+extern int      styx_network_datagram_send     (SHandle *handle, StyxNetworkAddress *to); /* Sends the data collected in handle to the IP address specified in "to" */
 extern int      styx_network_receive          (SHandle *handle, StyxNetworkAddress *from);
 
 /* -------- File Management --------
