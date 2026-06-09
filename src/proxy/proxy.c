@@ -162,6 +162,7 @@ static int proxy_printf(const char *format, ...);
 static void setup_signals(void);
 static void proxy_settings_init(void);
 static void proxy_reload_settings(void);
+static boolean proxy_dns_resolve(const char *target_domain, StyxNetworkAddress *addr_out);
 static void thread_handler(void *arg);
 static void handle_client(SHandle *client_handle);
 static void handle_tcp_connect(SHandle *client_handle);
@@ -320,7 +321,7 @@ bad:
 	return;
 }
 
-static boolean target_addr_get_from_buffer(SHandle *client_handle, StyxNetworkAddress *target_addr, char *target_ip_str, char *target_domain)
+static boolean parse_addr_from_buffer(SHandle *client_handle, StyxNetworkAddress *target_addr, char *target_domain)
 {
 	uint i;
 	uint8 atyp;
@@ -333,6 +334,7 @@ static boolean target_addr_get_from_buffer(SHandle *client_handle, StyxNetworkAd
 			target_addr->is_ipv6 = FALSE;
 			target_addr->ip.v4 = styx_unpack_uint32(client_handle, "DST.ADDR");
 			target_addr->port = styx_unpack_uint16(client_handle, "DST.PORT");
+			target_domain[0] = '\0';
 		break;
 		case DOMAIN:
 		{
@@ -344,23 +346,12 @@ static boolean target_addr_get_from_buffer(SHandle *client_handle, StyxNetworkAd
 			target_domain[domain_len] = '\0';
 
 			target_addr->port = styx_unpack_uint16(client_handle, "DST.PORT");
-
-			if (!styx_network_address_lookup(target_addr, target_domain, target_addr->port, NULL)) {
-				printf("DNS resolution failed for domain: %s\n", target_domain);
-				return FALSE;
-			}
 		}
 		break;
 		default:
 			printf("Unsupported ATYP: 0x%02x\n", atyp);
 			return FALSE;
 		break;
-	}
-	if (target_addr->is_ipv6) {
-		inet_ntop(AF_INET6, &target_addr->ip.v6, target_ip_str, INET6_ADDRSTRLEN);
-	}
-	else {
-		inet_ntop(AF_INET, &target_addr->ip.v4, target_ip_str, INET_ADDRSTRLEN);
 	}
 	return TRUE;
 }
@@ -380,8 +371,16 @@ static void handle_tcp_connect(SHandle *client_handle)
 
 	sharedContext_var_get_maxRtt(&rtt_cutoff);
 
-	if (!target_addr_get_from_buffer(client_handle, &target_addr, target_ip_str, target_domain)) {
+	if (!parse_addr_from_buffer(client_handle, &target_addr, target_domain)) {
 		goto bad;
+	}
+
+	if (strlen(target_domain) > 0) {
+		if (!proxy_dns_resolve(target_domain, &target_addr)) {
+			printf("Could not resolve %s\n", target_domain);
+			/* TODO */
+			return;
+		}
 	}
 
 	printf("App requested connection to: %s:%d\n", target_domain, target_addr.port);
@@ -569,6 +568,133 @@ static void handle_udp_associate(SHandle *client_handle)
 cleanup:
 	styx_free(proxy_handle);
 	styx_free(client_handle);
+}
+
+/* Treat all IP addresses as strings with an identifier for INET vs INET6? */
+static boolean proxy_dns_resolve(const char *target_domain, StyxNetworkAddress *addr_out)
+{
+	enum {
+		A = 0,
+		B,
+		C,
+		D,
+		E,
+		F,
+		G,
+		H,
+		I,
+		J,
+		K,
+		L,
+		M,
+		ROOTSERVER_COUNT
+	};
+
+	const char root_server_names[][256] = {
+		"a.root-servers.net",
+		"b.root-servers.net",
+		"c.root-servers.net",
+		"d.root-servers.net",
+		"e.root-servers.net",
+		"f.root-servers.net",
+		"g.root-servers.net",
+		"h.root-servers.net",
+		"i.root-servers.net",
+		"j.root-servers.net",
+		"k.root-servers.net",
+		"l.root-servers.net",
+		"m.root-servers.net"
+	};
+
+	const char root_server_ips[][16] = {
+		"198.41.0.4",     /* A */
+		"170.247.170.2",  /* B */
+		"192.33.4.12",    /* C */
+		"199.7.91.13",    /* D */
+		"192.203.230.10", /* E */
+		"192.5.5.241",    /* F */
+		"192.112.36.4",   /* G */
+		"198.97.190.53",  /* H */
+		"192.36.148.17",  /* I */
+		"192.58.128.30",  /* J */
+		"193.0.14.129",   /* K */
+		"199.7.83.42",    /* L */
+		"202.12.27.33",   /* M */
+	};
+
+	static int depth = 0;
+	boolean answer_found = FALSE;
+	heph_ctx *ctx = NULL;
+	heph_state state;
+	double max_rtt;
+
+	boolean root_found = FALSE;
+	uint i = 0, j = 0;
+	for (i = 0; i < ROOTSERVER_COUNT; i++) {
+		if (verify_latency(root_server_ips[i])) {
+			root_found = TRUE;
+			break;
+		}
+	}
+	
+	printf("Starting iterative resolution for [%s]\n", target_domain);
+	depth++;
+	
+	if (!root_found) {
+		/* TODO */
+		return FALSE;
+	}
+
+	if (depth > 10) {
+		return FALSE;
+	}
+
+	sharedContext_var_get_maxRtt(&max_rtt);
+
+	heph_ctx *ctx = heph_dns_init(target_domain, root_server_ips[i], max_rtt);
+	c_text_copy(strlen(root_server_names[i]) + 1, ctx->current_ns_name, root_server_names[i]);
+
+	while (!answer_found) {
+		printf("Querying NS [%s] [%s]\n", ctx->current_ns_name, ctx->current_ns_ip);
+		heph_state state = heph_dns_step(ctx);
+
+		switch (heph_state)
+		{
+			case HEPH_STATE_ANSWERS_FOUND:
+				printf("[%s] resolved to [%s]\n", target_domain, ctx->answer_ip);
+				answer_found = TRUE;
+			break;
+			case HEPH_STATE_STEP_READY:
+				printf("NS [%s] found with glue [%s] Iterating...\n", ctx->current_ns_name, ctx->current_ns_ip);
+				do {
+					if (!verify_cable(ctx->current_ns_ip)) {
+						break;
+					}
+					if (!verify_latency(ctx->current_ns_ip)) {
+						break;
+					}
+				} while (heph_dns_rotate_ns(ctx));
+			break;
+			case HEPH_STATE_NOGLUE:
+			{
+				StyxNetworkAddress out = {0};
+				char ns[INET_ADDRSTRLEN];
+				printf("NS [%s] found without glue. Resolving IP...\n");
+				proxy_dns_resolve(ctx->current_ns_name, &out);
+				inet_ntop(AF_INET, &out.ip.v4, ns, INET_ADDRSTRLEN);
+				heph_dns_provide_glue(ctx, ns);
+			}
+			break;
+			case HEPH_STATE_NXDOMAIN:
+				printf("Domain [%s] does not exist.\n", heph_ctx->target_domain);
+				return FALSE;
+			break;
+			case HEPH_STATE_ERROR:
+				printf("Heph DNS resolution encountered an error!\n");
+				return FALSE;
+			break;
+		}
+	}
 }
 
 static void reload_config(void)
