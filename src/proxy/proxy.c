@@ -204,7 +204,7 @@ int proxy_start(uint16 port)
 		}
 		if (client_handle) {
 			EuropaThread thread;
-			if ((thread = europa_thread_create(thread_handler, (void *)(long)client_handle, NULL)) < 0) {
+			if ((thread = europa_thread_create(thread_handler, client_handle, NULL)) < 0) {
 				printf("Failed to create new thread.\n");
 				styx_free(client_handle);
 			}
@@ -248,11 +248,10 @@ static void proxy_reload_settings(void)
 
 static void thread_handler(void *arg)
 {
-	SHandle *client_handle = (SHandle *)arg;
 #ifdef ENABLE_BACKTRACE_PRINTING
 	printf("%s\n", __FUNCTION__);
 #endif	
-	handle_client(client_handle);
+	handle_client((SHandle *)arg);
 	return;
 }
 
