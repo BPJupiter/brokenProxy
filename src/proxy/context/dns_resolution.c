@@ -2,14 +2,14 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
-#include <sys/types.h>
 
 #if defined(_WIN32)
-#define WIN32_LEAN_AND_MEAN
-#include <Ws2tcpip.h>
+#  define WIN32_LEAN_AND_MEAN
+#  include <ws2tcpip.h>
 #else
-#include <arpa/inet.h>
+#  include <arpa/inet.h>
 #endif
+#include <sys/types.h>
 
 #include "Clay/clay.h"
 #include "Styx/styx.h"
@@ -48,10 +48,20 @@ typedef struct
 #define DNS_FLAG_CD     0x0010
 #define DNS_FLAG_RCODE  0x000F
 
+typedef struct
+{
+    uint8 *mname;
+    uint8 *rname;
+    uint serial;
+    uint refresh;
+    uint retry;
+    uint expire;
+    uint minimum;
+} SOA_DATA;
+
 /* Constant sized fields of query structure */
 typedef struct
 {
-    uint8 *qname;
     uint16 qtype;
     uint16 qclass;
 } QUERY;
@@ -75,37 +85,39 @@ typedef struct
     uint8 *rdata;
 } RES_RECORD;
 
-typedef struct {
-    R_DATA header;
-    uint32 ip4;
-} A_RDATA;
-
-typedef struct {
-    R_DATA header;
-    char nameserver[256];
-} NS_RDATA;
-
-typedef struct {
-    R_DATA header;
-    char cname[256];
-} CNAME_RDATA;
-
+/* Structure of a query */
 typedef struct
 {
-    R_DATA header;
-    uint8 *mname;
-    uint8 *rname;
-    uint serial;
-    uint refresh;
-    uint retry;
-    uint expire;
-    uint minimum;
-} SOA_RDATA;
+    char *name;
+    QUERY *ques;
+} QUESTION;
 
-typedef struct {
-    R_DATA header;
-    uint8 ip6[16];
-} AAAA_RDATA;
+static boolean dns_iterative_root_worker(StyxNetworkAddress *dest, const char *dns_name, uint16 query_type, const char *current_ns_ip, uint depth); /* Confusing naming; Function is recursive in the programming sense. Overall resolves DNS through the iterative resolution process. */
+static size_t init_dns_header(uint8 *buf, const char *host, uint16 query_type);
+static void read_answers(DNS_HEADER *dns, RES_RECORD *answers, uint8 **reader, uint8 *buf, int *stop);
+static void read_authorities(DNS_HEADER *dns, RES_RECORD *auth, uint8 **reader, uint8 *buf, int *stop);
+static void read_additional(DNS_HEADER *dns, RES_RECORD *addit, uint8 **reader, uint8 *buf, int *stop);
+static boolean handle_found_answers(StyxNetworkAddress *out,
+                                      DNS_HEADER *dns,
+                                      RES_RECORD *answers,
+                                      RES_RECORD *auth,
+                                      RES_RECORD *addit,
+                                      uint16 query_type, uint depth);
+static boolean process_auth_records(StyxNetworkAddress *out,
+                                      DNS_HEADER *dns,
+                                      RES_RECORD *answers,
+                                      RES_RECORD *auth,
+                                      RES_RECORD *addit,
+                                      const char *host, uint16 query_type, uint depth);
+static boolean find_ipv4_glue(RES_RECORD *addit, int add_count, const char *ns_name, char *out_ip);
+static boolean try_ns_ip(StyxNetworkAddress *out, const char *ns_ip, const char *host, uint16 query_type, uint depth, uint *rtt_rejections);
+static boolean localhost(StyxNetworkAddress *address);
+static void  change_to_dns_name_format(uint8 *, const char *);
+static void read_name(uint8 name[256], uint8 *, uint8 *, int *);
+static void  dns_free_mem(DNS_HEADER *dns, RES_RECORD *answers, RES_RECORD *auth, RES_RECORD *addit);
+static void free_addresses(StyxNetworkAddress *addr);
+
+void print_response_contents(void *dns_ptr, void *answers_ptr, void *auth_ptr, void *addit_ptr);
 
 char RootServers[][16] = {
     "198.41.0.4",     /* A */
@@ -155,80 +167,10 @@ typedef enum RootServerIndex
 
 #define MAX_RECORDS 20
 
-static void create_rr_cache(void);
-static boolean dns_iterative_root_worker(StyxNetworkAddress *dest, const char *dns_name, uint16 query_type, const char *current_ns_ip, uint depth); /* Confusing naming; Function is recursive in the programming sense. Overall resolves DNS through the iterative resolution process. */
-static size_t init_dns_header(uint8 *buf, const char *host, uint16 query_type);
-static void read_answers(DNS_HEADER *dns, RES_RECORD *answers, uint8 **reader, uint8 *buf, int *stop);
-static void read_authorities(DNS_HEADER *dns, RES_RECORD *auth, uint8 **reader, uint8 *buf, int *stop);
-static void read_additional(DNS_HEADER *dns, RES_RECORD *addit, uint8 **reader, uint8 *buf, int *stop);
-static boolean handle_found_answers(StyxNetworkAddress *out,
-                                      DNS_HEADER *dns,
-                                      RES_RECORD *answers,
-                                      RES_RECORD *auth,
-                                      RES_RECORD *addit,
-                                      uint16 query_type, uint depth);
-static boolean process_auth_records(StyxNetworkAddress *out,
-                                      DNS_HEADER *dns,
-                                      RES_RECORD *answers,
-                                      RES_RECORD *auth,
-                                      RES_RECORD *addit,
-                                      const char *host, uint16 query_type, uint depth);
-static boolean find_ipv4_glue(RES_RECORD *addit, int add_count, const char *ns_name, char *out_ip);
-static boolean try_ns_ip(StyxNetworkAddress *out, const char *ns_ip, const char *host, uint16 query_type, uint depth, uint *rtt_rejections);
-static boolean localhost(StyxNetworkAddress *address);
-static void  change_to_dns_name_format(uint8 *, const char *);
-static void read_name(uint8 name[256], uint8 *, uint8 *, int *);
-static void  dns_free_mem(DNS_HEADER *dns, RES_RECORD *answers, RES_RECORD *auth, RES_RECORD *addit);
-static void free_addresses(StyxNetworkAddress *addr);
-
-void print_response_info(DNS_HEADER *dns_ptr);
-void print_response_contents(DNS_HEADER *dns_ptr, RES_RECORD *answers_ptr, RES_RECORD *auth_ptr, RES_RECORD *addit_ptr);
-
 int dns_server_count = 16;
 
 char current_root_ip[16];
 int root_server_found = 0;
-
-struct {
-    cHashTable *a;
-    cHashTable *ns;
-    cHashTable *cname;
-    cHashTable *soa;
-    cHashTable *aaaa;
-} RRHashTable;
-
-// 64-bit FNV-1a Hash function for strings
-uint64 fnv1a_hash(const void *key) {
-    const char *str = (const char *)key;
-    uint64 hash = 14695981039346656037ULL;
-    while (*str) {
-        hash ^= (unsigned char)*str++;
-        hash *= 1099511628211ULL;
-    }
-    return hash;
-}
-
-// Equality function for inline null-terminated strings
-boolean string_eq(const void *k1, const void *k2) {
-    return strcmp((const char *)k1, (const char *)k2) == 0;
-}
-
-static void create_rr_cache(void)
-{
-    static boolean cache_created = FALSE;
-
-    if (cache_created) {
-        return;
-    }
-
-    RRHashTable.a       = c_hashtable_init(256, sizeof(A_RDATA), fnv1a_hash, string_eq);
-    RRHashTable.ns      = c_hashtable_init(256, sizeof(NS_RDATA), fnv1a_hash, string_eq);
-    RRHashTable.cname   = c_hashtable_init(256, sizeof(CNAME_RDATA), fnv1a_hash, string_eq);
-    RRHashTable.soa     = c_hashtable_init(256, sizeof(SOA_RDATA), fnv1a_hash, string_eq);
-    RRHashTable.aaaa    = c_hashtable_init(256, sizeof(AAAA_RDATA), fnv1a_hash, string_eq);
-
-    cache_created = TRUE;
-}
 
 boolean dns_resolve_iterative_root_func(StyxNetworkAddress *dest, const char *dns_name, uint16 default_port, boolean *do_ipv6)
 {
@@ -241,8 +183,6 @@ boolean dns_resolve_iterative_root_func(StyxNetworkAddress *dest, const char *dn
     {
         return localhost(dest);
     }
-
-    create_rr_cache();
 
     if (!root_server_found && strcmp(dns_name, "127.0.0.1") != 0)
     {
@@ -361,6 +301,10 @@ static boolean dns_iterative_root_worker(StyxNetworkAddress *out, const char *dn
     if (ntohs(dns->auth_count) > MAX_RECORDS) dns->auth_count = htons(MAX_RECORDS);
     if (ntohs(dns->add_count) > MAX_RECORDS)  dns->add_count = htons(MAX_RECORDS);
 
+#ifdef DNS_DEBUG
+    print_response_info((void *)dns);
+#endif
+
     /* move ahead of dns header and query field */
     reader = &buf[sizeof(DNS_HEADER) + (strlen((const char *)qname) + 1) + sizeof(QUERY)];
     stop = 0;
@@ -369,10 +313,8 @@ static boolean dns_iterative_root_worker(StyxNetworkAddress *out, const char *dn
     read_authorities(dns, auth, &reader, buf, &stop);
     read_additional(dns, addit, &reader, buf, &stop);
 
-#define DNS_DEBUG
 #ifdef DNS_DEBUG
-    print_response_info(dns);
-    print_response_contents(dns, answers, auth, addit);
+    print_response_contents((void *)dns, (void *)answers, (void *)auth, (void *)addit, (void *)&a);
 #endif
 
     if (ntohs(dns->ans_count) > 0) {
@@ -422,7 +364,6 @@ static size_t init_dns_header(uint8 *buf, const char *host, uint16 query_type)
 static void read_answers(DNS_HEADER *dns, RES_RECORD *answers, uint8 **reader, uint8 *buf, int *stop)
 {
     int i, j;
-
     for (i = 0; i < ntohs(dns->ans_count); i++)
     {
         read_name(answers[i].name, *reader, buf, stop);
@@ -432,7 +373,7 @@ static void read_answers(DNS_HEADER *dns, RES_RECORD *answers, uint8 **reader, u
         *reader = *reader + sizeof(R_DATA);
 
         UNUSED(answers[i].resource->ttl);
-        /* NOTE: We may want to do DNS caching here.
+        /* NOTE(frances): We may want to do DNS chaching here.
          * We will want to store the entire DNS lookup chain for a single answer record
          * so that we can check the DNS lookup for outage criteria.
          */
@@ -480,11 +421,11 @@ static void read_authorities(DNS_HEADER *dns, RES_RECORD *auth, uint8 **reader, 
         auth[i].resource = (R_DATA *)*reader;
         *reader += sizeof(R_DATA);
 
-        /* NOTE: We may want to do DNS caching here.
+        UNUSED(auth[i].resource->ttl);
+        /* NOTE(frances): We may want to do DNS chaching here.
          * We will want to store the entire DNS lookup chain for a single answer record
          * so that we can check the DNS lookup for outage criteria.
          */
-        UNUSED(auth[i].resource->ttl);
 
         switch (ntohs(auth[i].resource->type))
         {
@@ -527,11 +468,11 @@ static void read_additional(DNS_HEADER *dns, RES_RECORD *addit, uint8 **reader, 
         addit[i].resource = (R_DATA *)*reader;
         *reader += sizeof(R_DATA);
 
-        /* NOTE: We may want to do DNS caching here.
+        UNUSED(addit[i].resource->ttl);
+        /* NOTE(frances): We may want to do DNS chaching here.
          * We will want to store the entire DNS lookup chain for a single answer record
          * so that we can check the DNS lookup for outage criteria.
          */
-        UNUSED(addit[i].resource->ttl);
 
         switch (ntohs(addit[i].resource->type))
         {
@@ -887,9 +828,9 @@ static void dns_free_mem(DNS_HEADER *dns, RES_RECORD *answers, RES_RECORD *auth,
 }
 
 /* -------------- debug printing ------------------ */
-void print_response_info(DNS_HEADER *dns_ptr)
+void print_response_info(void *dns_ptr)
 {
-    DNS_HEADER *dns = dns_ptr;
+    DNS_HEADER *dns = (DNS_HEADER *)dns_ptr;
     printf("The response contains : \n");
     printf("%d Questions.\n", ntohs(dns->q_count));
     printf("%d Answers.\n", ntohs(dns->ans_count));
@@ -897,12 +838,12 @@ void print_response_info(DNS_HEADER *dns_ptr)
     printf("%d Additional Records.\n\n", ntohs(dns->add_count));
 }
 
-void print_response_contents(DNS_HEADER *dns_ptr, RES_RECORD *answers_ptr, RES_RECORD *auth_ptr, RES_RECORD *addit_ptr)
+void print_response_contents(void *dns_ptr, void *answers_ptr, void *auth_ptr, void *addit_ptr)
 {
-    DNS_HEADER *dns = dns_ptr;
-    RES_RECORD *answers = answers_ptr;
-    RES_RECORD *auth = auth_ptr;
-    RES_RECORD *addit = addit_ptr;
+    DNS_HEADER *dns = (DNS_HEADER *)dns_ptr;
+    RES_RECORD *answers = (RES_RECORD *)answers_ptr;
+    RES_RECORD *auth = (RES_RECORD *)auth_ptr;
+    RES_RECORD *addit = (RES_RECORD *)addit_ptr;
     struct in_addr in4;
     struct in6_addr in6;
 
