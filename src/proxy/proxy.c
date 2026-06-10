@@ -123,7 +123,7 @@ typedef struct {
 	float rtt_max;
 	float rtt_stddev;
 	uint8 rtt_samples;
-	time_t timestamp[MT_COUNT];
+	time_t measurement_last_performed[MT_COUNT];
 
 	midx hops[32]; /* objective */
 	uint hop_count; /* objective */
