@@ -10,6 +10,4 @@ ANOTHER OPTION:
 
 sshuttle with DNS forwarding mode:
 
-sshuttle --dns -r user@nectar-instance 0.0.0.0/0
-
-
+sshuttle --dns -r user@nectar-instance --ssh-cmd 'ssh -i /path/to/key' 0.0.0.0/0
