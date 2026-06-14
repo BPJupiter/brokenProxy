@@ -1,7 +1,14 @@
 
 # The Broken Proxy
 
-I'm Frances Telfar, and this is my University of Auckland Summer Research Project supervised by Ulrich Speidel, in collaboration with the Catalyst project. This proxy is built to simulate macro-scale internet outages, currently at the cable level.
+This started as a University of Auckland Summer Research Project supervised by Ulrich Speidel, in collaboration with the VULGEO project. This proxy is built to simulate macro-scale internet outages.
+
+## License
+
+This project is licnsed under the **PolyForm Noncommercial License 1.0.0**.
+You Are free to use, modify, and distribute this software for non-commercial, academic, and researched purposes. **Commercial use is strictly prohibited** without prior written permission.
+For commercial licensing inquiries, please contact: [Frances Telfar: atel215@aucklanduni.ac.nz]
+See the [LICENSE](LICENSE) for more details.
 
 ## Settings Page
 
