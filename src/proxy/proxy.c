@@ -24,7 +24,7 @@
 #define BUFFER_SIZE (1 << 16)
 #define UDP_HEADER_IPV4_LEN 10
 #define IP_SIZE 4
-#define MAX_CLIENTS 8
+#define MAX_CLIENTS 256
 #define PROJECT_ROOT_FOLDER_NAME "brokenProxy"
 
 uint16 proxy_port = 0;
@@ -73,6 +73,18 @@ enum socks_status {
 	UNSUPPORTED_CMD = 0x07,
 	UNSUPPORTED_ADDRESS = 0x08
 };
+
+typedef struct {
+	SHandle *client;
+	SHandle *target;
+	boolean active;	
+} HandlePair;
+
+typedef struct {
+	HandlePair pairs[MAX_CLIENTS];
+	uint count;
+	void *lock_mutex;
+} HandleSet;
 
 /* 
 * The below is a brainstorm for how I want to restructure my measurement data structure to:
@@ -156,6 +168,8 @@ midx measurement_add(IpMeasurement measurement);
 void meausrement_rem(midx idx);
 IpMeasurement *measurement_get(midx idx);
 
+/* END OF BRAINSTORMING!!!! */
+
 static int proxy_printf(const char *format, ...);
 #define printf proxy_printf
 
@@ -167,6 +181,8 @@ static void handle_client(SHandle *client_handle);
 static void handle_tcp_connect(SHandle *client_handle);
 static int transfer_data(SHandle *from_handle, SHandle *to_handle);
 static void handle_udp_associate(SHandle *tcp_client_handle);
+static void register_handle_pair(SHandle *client, SHandle *target);
+static void pipe_handle_data_thread(void *arg);
 
 static void reload_config(void);
 
@@ -175,13 +191,23 @@ static void _shutdown(int signum);
 
 //#define ENABLE_BACKTRACE_PRINTING
 
+static volatile HandleSet g_handle_set;
+
 int proxy_start(uint16 port)
 {
+	EThreadPool thread_pool;
 	SHandle *server_handle, *client_handle;
 	int opt = 1;
 #ifdef ENABLE_BACKTRACE_PRINTING
 	printf("%s\n", __FUNCTION__);
 #endif
+
+	thread_pool = europa_threadpool_init(8);
+	g_handle_set.lock_mutex = europa_mutex_create(); /* TODO: destroy somewhere */
+	if (!europa_threadpool_add_work(thread_pool, pipe_handle_data_thread, NULL)) {
+		printf("Couldn't launch pipe thread!\n");
+		exit(1);
+	}
 
 	setup_signals();
 	proxy_port = port;
@@ -203,16 +229,12 @@ int proxy_start(uint16 port)
 			proxy_reload_settings();
 		}
 		if (client_handle) {
-			EuropaThread thread;
-			if ((thread = europa_thread_create(thread_handler, client_handle, NULL)) < 0) {
+			if (!europa_threadpool_add_work(thread_pool, thread_handler, client_handle)) {
 				printf("Failed to create new thread.\n");
-				styx_free(client_handle);
-			}
-			else {
-				europa_thread_detach(thread);
 			}
 		}
 	}
+	europa_threadpool_destroy(thread_pool);
 	styx_free(server_handle);
 
 	return 0;
@@ -390,11 +412,13 @@ static void handle_tcp_connect(SHandle *client_handle)
 		printf("Request RTT Exceeded %.2lf ms! Packet dropped!\n", rtt_cutoff);
 		rep = TTL_EXPIRED;
 	}
+
 	if (!verify_cable(target_ip_str)) {
 		printf("Request uses disabled cable! Packet dropped!\n");
 		rep = NETWORK_UNREACHABLE;
 	}
 
+	printf("=================\n");
 	target_handle = styx_network_stream_ip_create(target_addr);
 	if (target_handle == NULL) {
 		printf("Failed to connect to target.\n");
@@ -415,30 +439,7 @@ static void handle_tcp_connect(SHandle *client_handle)
 
 	printf("Connection established.\n");
 
-	handles[0] = client_handle;
-	handles[1] = target_handle;
-	read_ready[0] = FALSE;
-	read_ready[1] = FALSE;
-	while (1) {
-		read_ready[0] = TRUE;
-		read_ready[1] = TRUE;	
-		if (styx_network_wait(handles, read_ready, NULL, 2, 100000) < 0) {
-			break;
-		}
-		if (read_ready[0]) {
-			if (transfer_data(client_handle, target_handle) < 0) {
-				break;
-			}
-		}
-		if (read_ready[1]) {
-			if (transfer_data(target_handle, client_handle) < 0) {
-				break;
-			}
-		}
-	}
-	printf("Connection to %s is closed.\n", target_domain);
-	styx_free(client_handle);
-	styx_free(target_handle);
+	register_handle_pair(client_handle, target_handle);
 	return;
 bad:
 	if (client_handle) {
@@ -470,6 +471,10 @@ static int transfer_data(SHandle *from_handle, SHandle *to_handle)
 
 static void handle_udp_associate(SHandle *client_handle)
 {
+	return;
+	/* TODO(frances): FIX ME */
+
+	/*
 	uint8 buffer[65535];
 	SHandle *proxy_handle;
 	StyxNetworkAddress bind_addr, peer_addr, sender_addr;
@@ -569,6 +574,81 @@ static void handle_udp_associate(SHandle *client_handle)
 cleanup:
 	styx_free(proxy_handle);
 	styx_free(client_handle);
+	*/
+}
+
+static void register_handle_pair(SHandle *client, SHandle *target)
+{
+	uint i;
+	europa_mutex_lock(g_handle_set.lock_mutex);
+	for (i = 0; i < MAX_CLIENTS; i++) {
+		if (!g_handle_set.pairs[i].active) {
+			g_handle_set.pairs[i].client = client;
+			g_handle_set.pairs[i].target = target;
+			g_handle_set.pairs[i].active = TRUE;
+			g_handle_set.count++;
+			printf("successfully registered!\n");
+			break;
+		}
+	}
+	europa_mutex_unlock(g_handle_set.lock_mutex);
+}
+
+static void pipe_handle_data_thread(void *arg)
+{
+	UNUSED(arg);
+	for (;;) {
+		SHandle *handles[MAX_CLIENTS * 2];
+		boolean closed, ready[MAX_CLIENTS * 2];
+		uint i, n = 0;
+
+		europa_mutex_lock(g_handle_set.lock_mutex);
+		for (i = 0; i < MAX_CLIENTS; i++) {
+			if (!g_handle_set.pairs[i].active) {
+				continue;
+			}
+
+			handles[n] 		= g_handle_set.pairs[i].client;
+			handles[n + 1] 	= g_handle_set.pairs[i].target;
+			ready[n] = ready[n + 1] = TRUE;
+			n += 2;
+		}
+
+		europa_mutex_unlock(g_handle_set.lock_mutex);
+
+		if (n == 0) {
+			europa_sleepi(0, 1000000);
+			continue;
+		}
+
+		printf("Im here first!\n");
+		styx_network_wait(handles, ready, NULL, n, 100000);
+		printf(" I got past here ! \n");
+
+		europa_mutex_lock(g_handle_set.lock_mutex);
+
+		n = 0;
+		for (i = 0; i < MAX_CLIENTS; i++) {
+			if (!g_handle_set.pairs[i].active) {
+				continue;
+			}
+			closed = FALSE;
+
+			if (ready[n]) closed |= transfer_data(g_handle_set.pairs[i].client,
+													g_handle_set.pairs[i].target) < 0;
+			if (ready[n + 1]) closed |= transfer_data(g_handle_set.pairs[i].target,
+														g_handle_set.pairs[i].client) < 0;
+
+			if (closed) {
+				styx_free(g_handle_set.pairs[i].client);
+				styx_free(g_handle_set.pairs[i].target);
+				g_handle_set.pairs[i].active = FALSE;
+				g_handle_set.count--;
+			}
+			n += 2;
+		}
+		europa_mutex_unlock(g_handle_set.lock_mutex);
+	}
 }
 
 static void reload_config(void)

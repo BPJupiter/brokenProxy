@@ -764,7 +764,7 @@ int styx_network_wait(SHandle **handles, boolean *read, boolean *write, uint han
 			}
 		}
 	}
-	return microseconds;
+	return res;
 }
 
 size_t styx_network_stream_receive(SHandle *handle, uint8 *buffer, size_t length)
