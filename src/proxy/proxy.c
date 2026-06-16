@@ -150,7 +150,7 @@ typedef struct {
 	} reachability;
 } IpMeasurement;
 
-/* SQL QUESTION:
+/* Frances:
  * Do I even bother with this? Given how fast an SQLite in-memory database can be.
  * Turns out there is the SQLite Online Backup API that allows syncing between in-memory and on-disk databases.
  * Multi-producer, single consumer queue. Dozens of reader threads, one writer thread, reader threads queue data for the writer thread to batch.
@@ -418,7 +418,6 @@ static void handle_tcp_connect(SHandle *client_handle)
 		rep = NETWORK_UNREACHABLE;
 	}
 
-	printf("=================\n");
 	target_handle = styx_network_stream_ip_create(target_addr);
 	if (target_handle == NULL) {
 		printf("Failed to connect to target.\n");
@@ -587,7 +586,6 @@ static void register_handle_pair(SHandle *client, SHandle *target)
 			g_handle_set.pairs[i].target = target;
 			g_handle_set.pairs[i].active = TRUE;
 			g_handle_set.count++;
-			printf("successfully registered!\n");
 			break;
 		}
 	}
@@ -621,9 +619,7 @@ static void pipe_handle_data_thread(void *arg)
 			continue;
 		}
 
-		printf("Im here first!\n");
 		styx_network_wait(handles, ready, NULL, n, 100000);
-		printf(" I got past here ! \n");
 
 		europa_mutex_lock(g_handle_set.lock_mutex);
 
