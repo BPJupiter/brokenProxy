@@ -3,6 +3,10 @@
 #ifndef STYX_H
 #define STYX_H
 
+#ifdef _WIN32
+#  define FD_SETSIZE 1024
+#endif
+
 typedef struct StyxNetworkAddress
 {
     union {

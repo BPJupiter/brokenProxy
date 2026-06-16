@@ -4,33 +4,30 @@
 #include <stdio.h>
 #include "Clay/clay.h"
 
-#ifdef _WIN32
-    #define WIN32_LEAN_AND_MEAN
-    #include <windows.h>
-typedef HANDLE EuropaThread;
-#else
-    #include <pthread.h>
-    #include <unistd.h>
-typedef pthread_t EuropaThread;
-#endif
 
 /* -------- Multi Threading -------- */
 
-extern void *europa_mutex_create(void);                 /* Creates a mutex. Unlocked upon creation */
+extern void     *europa_mutex_create(void);         /* Creates a mutex. Unlocked upon creation */
 extern void     europa_mutex_lock(void *mutex);     /* Lock mutex. If mutex already locked, thread will wait until unlock so it can lock */
-extern boolean  europa_mutex_lock_try(void *mutex);     /* Thread will attempt to lock mutex. if mutex already locked, returns FALSE and fails. If mutex unlocked, it locks and returns TRUE */
-extern void     europa_mutex_unlock(void *mutex);     /* unlocks mutex */
-extern void     europa_mutex_destroy(void *mutex);     /* destroys mutex */
+extern boolean  europa_mutex_lock_try(void *mutex); /* Thread will attempt to lock mutex. if mutex already locked, returns FALSE and fails. If mutex unlocked, it locks and returns TRUE */
+extern void     europa_mutex_unlock(void *mutex);   /* unlocks mutex */
+extern void     europa_mutex_destroy(void *mutex);  /* destroys mutex */
 
-extern void *europa_signal_create(void);             /* Creates a signal blocker */
+extern void     *europa_signal_create(void);             /* Creates a signal blocker */
 extern void     europa_signal_destroy(void *signal);     /* Destroys signal blocker */
 extern boolean  europa_signal_wait(void *signal, void *mutex);     /* Sets thread to wait on blocker for another thread to activate it */
 extern boolean  europa_signal_activate(void *signal);     /* Activates blocker so one or more threads waiting on the signal will be released */
 extern boolean  europa_signal_activate_all(void *signal);     /* Activates blocker so that all threads waiting on a signal will be released */
-extern EuropaThread europa_thread_create(void (*func)(void *data), void *data, char *name);     /* Launches thread executing func pointer with data as args. Once function returns, thread is deleted. */
-extern void     europa_thread_join(EuropaThread thread);
-extern void     europa_thread_detach(EuropaThread thread);
+extern void     europa_thread(void (*func)(void *data), void *data, char *name); /* Launches a thread that will execute the funtion pointer. The void pointer will be given as a parameter. The thread is detached upon creation and is deleted once it returns. */
 
+typedef struct ThreadPool *EThreadPool;
+extern EThreadPool europa_threadpool_init(uint num_threads); /* Initialize threadpool. Function will not return until all threads have initialized successfully. */
+extern boolean     europa_threadpool_add_work(EThreadPool tp, void (*func)(void *), void *args); /* Add work to the job queue. If you want to add to work a function with more than one arguments then you can implement this with a pointer to a structure */
+extern void        europa_threadpool_wait(EThreadPool tp); /* Wait for all queued jobs to finish, both queued and currently running. Once the queue is empty and all work is completed, the calling thread will continue. */
+extern void        europa_threadpool_pause(EThreadPool tp); /* All threads paused whether idle or waiting. While the pool is paused, new work can be queued */
+extern void        europa_threadpool_resume(EThreadPool tp); /* Unpauses all threads if they are paused; does nothing if they are not paused. */
+extern void        europa_threadpool_destroy(EThreadPool tp); /* Waits for currently active threads to finish and then 'kill' the whole thread pool to free up memory. */
+extern uint        europa_threadpool_num_working(EThreadPool tp); /* Show the number of currently working threads. */
 
 /* -------- Atomics -------- */
 
