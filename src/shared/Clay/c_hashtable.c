@@ -70,7 +70,7 @@ static uint64 get_secure_hash(const cHashTable *table, const void *key)
 
 static boolean c_hashtable_resize(cHashTable *table)
 {
-	uint8 *new_ctrl, *new_slots;
+    uint8 *new_ctrl, *new_slots;
     uint32 new_capacity = table->capacity * 2;
     size_t stride = table->key_size + table->data_size;
     size_t i;

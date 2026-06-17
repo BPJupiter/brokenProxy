@@ -1,7 +1,7 @@
 if(MSVC)
-	add_compile_options(/W3)
+    add_compile_options(/W3)
 else()
-	add_compile_options(-w)
+    add_compile_options(-w)
 endif()
 
 add_library(cjson STATIC cjson/cJSON.c)

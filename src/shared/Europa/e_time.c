@@ -136,7 +136,7 @@ void europa_time_epoch_current(int64 *seconds, uint64 *fractions)
     SystemTime.wSecond = 0;
     SystemTime.wMilliseconds = 0;
     SystemTime.wDayOfWeek = 0;
-   //		FileTimeToSystemTime(&FileTime.st, &SystemTime);
+   //        FileTimeToSystemTime(&FileTime.st, &SystemTime);
     if(loaded)
     {
         void *dll;
@@ -160,7 +160,7 @@ void europa_time_epoch_current(int64 *seconds, uint64 *fractions)
         e_GetSystemTimePreciseAsFileTime(&FileTime.st);
     else
         GetSystemTimeAsFileTime(&FileTime.st);
-   //	SystemTimeToFileTime(&SystemTime, &FileTime.st);
+   //    SystemTimeToFileTime(&SystemTime, &FileTime.st);
     printf("File time %llu %llu\n", FileTime.st.dwLowDateTime, FileTime.st.dwHighDateTime);
     printf("64 bit value %llu\n", FileTime.ui);
     FileTimeToSystemTime(&FileTime.st, &SystemTime);

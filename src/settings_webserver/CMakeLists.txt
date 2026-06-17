@@ -1,5 +1,5 @@
 add_executable(settings_webserver
-	"main.c"
+    "main.c"
  "response_codes.h" "webserver.c" "webserver.h")
 
 target_include_directories(settings_webserver PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")

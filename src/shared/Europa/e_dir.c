@@ -336,7 +336,7 @@ boolean europa_path_volume_stats(char *path, size_t *block_size, size_t *free_si
             *used_size = bs * (uint64)(total_clusters - free_clusters);
         if(total_size != NULL)
             *total_size = bs * (uint64)total_clusters;
-/*		printf("%s %u %u %u", drive, (uint)bs,
+/*        printf("%s %u %u %u", drive, (uint)bs,
                             (uint)(bs * (uint64)free_clusters / (uint64)(1024 * 1024)),
                             (uint)(bs * (uint64)total_clusters / (uint64)(1024 * 1024)));
  */     return TRUE;
@@ -356,7 +356,7 @@ boolean europa_path_volume_stats(char *path, size_t *block_size, size_t *free_si
 boolean europa_path_volume_stats(char *path, size_t *block_size, size_t *free_size, size_t *used_size, size_t *total_size)
 {
     UNUSED(path); UNUSED(block_size); UNUSED(free_size); UNUSED(used_size); UNUSED(total_size);
-/*	struct statvfs buf;
+/*    struct statvfs buf;
     if(0 == statvfs(path, &buf))
     {
  * block_size = buf.f_bsize;

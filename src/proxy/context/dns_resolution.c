@@ -190,8 +190,8 @@ boolean dns_resolve_iterative_root_func(StyxNetworkAddress *dest, const char *dn
         {
             if (!verify_latency(RootServers[i]))
             {
-				printf("%s exceeded max latency! Changing root server\n", RootServers[i]);
-				continue;
+                printf("%s exceeded max latency! Changing root server\n", RootServers[i]);
+                continue;
             }
             else if (!verify_cable(RootServers[i]))
             {
@@ -203,7 +203,7 @@ boolean dns_resolve_iterative_root_func(StyxNetworkAddress *dest, const char *dn
             * Need more sophisticated way to see if local wifi will block DNS request packets to a given root server?
             */
             else
-				break;
+                break;
         }
         strcpy(current_root_ip, RootServers[i]);
         root_server_found = 1;
@@ -401,7 +401,7 @@ static void read_answers(DNS_HEADER *dns, RES_RECORD *answers, uint8 **reader, u
                 talos_malloc_assert(answers[i].rdata);
                 read_name(answers[i].rdata, *reader, buf, stop);
                 *reader += *stop;
-			break;
+            break;
             default:
                 answers[i].rdata = NULL;
                 *reader += ntohs(answers[i].resource->data_len);

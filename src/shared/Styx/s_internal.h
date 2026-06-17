@@ -28,7 +28,7 @@ typedef enum {
 } STypes;
 
 typedef struct {
-	union {
+    union {
         uint32 v4;
         uint8 v6[16]; 
     } ip;
@@ -54,8 +54,8 @@ typedef struct {
     boolean connected;
 } SHandle;
 
-extern uint 	styx_unpack_buffer_get(SHandle *handle);
-extern boolean 	styx_pack_buffer_clear(SHandle *handle);
-extern void 	styx_handle_clear(SHandle *handle, uint type);
-extern size_t 	styx_network_stream_receive(SHandle *handle, uint8 *buffer, size_t length);
-extern size_t 	styx_network_stream_send(SHandle *handle, uint8 *buffer, size_t length);
+extern uint     styx_unpack_buffer_get(SHandle *handle);
+extern boolean     styx_pack_buffer_clear(SHandle *handle);
+extern void     styx_handle_clear(SHandle *handle, uint type);
+extern size_t     styx_network_stream_receive(SHandle *handle, uint8 *buffer, size_t length);
+extern size_t     styx_network_stream_send(SHandle *handle, uint8 *buffer, size_t length);

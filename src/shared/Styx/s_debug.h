@@ -5,7 +5,7 @@ extern void styx_restart_marker_reset_internal(SHandle *handle, char *file, uint
 
 #ifdef STYX_DEBUG
 
-extern void  	styx_pack_uint8_internal(SHandle *handle, uint8 value, char *name, char *file, uint line);
+extern void      styx_pack_uint8_internal(SHandle *handle, uint8 value, char *name, char *file, uint line);
 extern void     styx_pack_int8_internal(SHandle *handle, int8 value, char *name, char *file, uint line);
 extern void     styx_pack_uint16_internal(SHandle *handle, uint16 value, char *name, char *file, uint line);
 extern void     styx_pack_int16_internal(SHandle *handle, int16 value, char *name, char *file, uint line);
@@ -65,7 +65,7 @@ extern uint64   styx_unpack_raw_internal(SHandle *handle, uint8 *buffer, uint64 
 
 #else
 
-extern void  	styx_pack_uint8_internal(SHandle *handle, uint8 value);
+extern void      styx_pack_uint8_internal(SHandle *handle, uint8 value);
 extern void     styx_pack_int8_internal(SHandle *handle, int8 value);
 extern void     styx_pack_uint16_internal(SHandle *handle, uint16 value);
 extern void     styx_pack_int16_internal(SHandle *handle, int16 value);

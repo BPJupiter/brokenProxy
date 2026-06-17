@@ -183,18 +183,18 @@ typedef struct Sytm Sytm;
 struct syiovec
 {
 #if defined (__WINNT__)
-	/* Same fields type and offset as WSABUF structure defined one winsock2 header */
-	unsigned long nLen;
-	char *pBase;
+    /* Same fields type and offset as WSABUF structure defined one winsock2 header */
+    unsigned long nLen;
+    char *pBase;
 #else
-	void *pBase;
-	unsigned long nLen;
+    void *pBase;
+    unsigned long nLen;
 #endif
 };
 struct SyString
 {
-	const char *zString;  /* Raw string (may not be null terminated) */
-	unsigned int nByte;   /* Raw string length */
+    const char *zString;  /* Raw string (may not be null terminated) */
+    unsigned int nByte;   /* Raw string length */
 };
 /* Time structure. */
 struct Sytm
@@ -213,65 +213,65 @@ struct Sytm
 };
 /* Convert a tm structure (struct tm *) found in <time.h> to a Sytm structure */
 #define STRUCT_TM_TO_SYTM(pTM, pSYTM) \
-	(pSYTM)->tm_hour = (pTM)->tm_hour;\
-	(pSYTM)->tm_min	 = (pTM)->tm_min;\
-	(pSYTM)->tm_sec	 = (pTM)->tm_sec;\
-	(pSYTM)->tm_mon	 = (pTM)->tm_mon;\
-	(pSYTM)->tm_mday = (pTM)->tm_mday;\
-	(pSYTM)->tm_year = (pTM)->tm_year + 1900;\
-	(pSYTM)->tm_yday = (pTM)->tm_yday;\
-	(pSYTM)->tm_wday = (pTM)->tm_wday;\
-	(pSYTM)->tm_isdst = (pTM)->tm_isdst;\
-	(pSYTM)->tm_gmtoff = 0;\
-	(pSYTM)->tm_zone = 0;
+    (pSYTM)->tm_hour = (pTM)->tm_hour;\
+    (pSYTM)->tm_min     = (pTM)->tm_min;\
+    (pSYTM)->tm_sec     = (pTM)->tm_sec;\
+    (pSYTM)->tm_mon     = (pTM)->tm_mon;\
+    (pSYTM)->tm_mday = (pTM)->tm_mday;\
+    (pSYTM)->tm_year = (pTM)->tm_year + 1900;\
+    (pSYTM)->tm_yday = (pTM)->tm_yday;\
+    (pSYTM)->tm_wday = (pTM)->tm_wday;\
+    (pSYTM)->tm_isdst = (pTM)->tm_isdst;\
+    (pSYTM)->tm_gmtoff = 0;\
+    (pSYTM)->tm_zone = 0;
 
 /* Convert a SYSTEMTIME structure (LPSYSTEMTIME: Windows Systems only ) to a Sytm structure */
 #define SYSTEMTIME_TO_SYTM(pSYSTIME, pSYTM) \
-	 (pSYTM)->tm_hour = (pSYSTIME)->wHour;\
-	 (pSYTM)->tm_min  = (pSYSTIME)->wMinute;\
-	 (pSYTM)->tm_sec  = (pSYSTIME)->wSecond;\
-	 (pSYTM)->tm_mon  = (pSYSTIME)->wMonth - 1;\
-	 (pSYTM)->tm_mday = (pSYSTIME)->wDay;\
-	 (pSYTM)->tm_year = (pSYSTIME)->wYear;\
-	 (pSYTM)->tm_yday = 0;\
-	 (pSYTM)->tm_wday = (pSYSTIME)->wDayOfWeek;\
-	 (pSYTM)->tm_gmtoff = 0;\
-	 (pSYTM)->tm_isdst = -1;\
-	 (pSYTM)->tm_zone = 0;
+     (pSYTM)->tm_hour = (pSYSTIME)->wHour;\
+     (pSYTM)->tm_min  = (pSYSTIME)->wMinute;\
+     (pSYTM)->tm_sec  = (pSYSTIME)->wSecond;\
+     (pSYTM)->tm_mon  = (pSYSTIME)->wMonth - 1;\
+     (pSYTM)->tm_mday = (pSYSTIME)->wDay;\
+     (pSYTM)->tm_year = (pSYSTIME)->wYear;\
+     (pSYTM)->tm_yday = 0;\
+     (pSYTM)->tm_wday = (pSYSTIME)->wDayOfWeek;\
+     (pSYTM)->tm_gmtoff = 0;\
+     (pSYTM)->tm_isdst = -1;\
+     (pSYTM)->tm_zone = 0;
 
 /* Dynamic memory allocation methods. */
 struct SyMemMethods 
 {
-	void * (*xAlloc)(unsigned int);          /* [Required:] Allocate a memory chunk */
-	void * (*xRealloc)(void *, unsigned int); /* [Required:] Re-allocate a memory chunk */
-	void   (*xFree)(void *);                 /* [Required:] Release a memory chunk */
-	unsigned int  (*xChunkSize)(void *);     /* [Optional:] Return chunk size */
-	int    (*xInit)(void *);                 /* [Optional:] Initialization callback */
-	void   (*xRelease)(void *);              /* [Optional:] Release callback */
-	void  *pUserData;                        /* [Optional:] First argument to xInit() and xRelease() */
+    void * (*xAlloc)(unsigned int);          /* [Required:] Allocate a memory chunk */
+    void * (*xRealloc)(void *, unsigned int); /* [Required:] Re-allocate a memory chunk */
+    void   (*xFree)(void *);                 /* [Required:] Release a memory chunk */
+    unsigned int  (*xChunkSize)(void *);     /* [Optional:] Return chunk size */
+    int    (*xInit)(void *);                 /* [Optional:] Initialization callback */
+    void   (*xRelease)(void *);              /* [Optional:] Release callback */
+    void  *pUserData;                        /* [Optional:] First argument to xInit() and xRelease() */
 };
 /* Out of memory callback signature. */
 typedef int (*ProcMemError)(void *);
 /* Mutex methods. */
 struct SyMutexMethods 
 {
-	int (*xGlobalInit)(void);		/* [Optional:] Global mutex initialization */
-	void  (*xGlobalRelease)(void);	/* [Optional:] Global Release callback () */
-	SyMutex * (*xNew)(int);	        /* [Required:] Request a new mutex */
-	void  (*xRelease)(SyMutex *);	/* [Optional:] Release a mutex  */
-	void  (*xEnter)(SyMutex *);	    /* [Required:] Enter mutex */
-	int (*xTryEnter)(SyMutex *);    /* [Optional:] Try to enter a mutex */
-	void  (*xLeave)(SyMutex *);	    /* [Required:] Leave a locked mutex */
+    int (*xGlobalInit)(void);        /* [Optional:] Global mutex initialization */
+    void  (*xGlobalRelease)(void);    /* [Optional:] Global Release callback () */
+    SyMutex * (*xNew)(int);            /* [Required:] Request a new mutex */
+    void  (*xRelease)(SyMutex *);    /* [Optional:] Release a mutex  */
+    void  (*xEnter)(SyMutex *);        /* [Required:] Enter mutex */
+    int (*xTryEnter)(SyMutex *);    /* [Optional:] Try to enter a mutex */
+    void  (*xLeave)(SyMutex *);        /* [Required:] Leave a locked mutex */
 };
 #if defined (_MSC_VER) || defined (__MINGW32__) ||  defined (__GNUC__) && defined (__declspec)
-#define SX_APIIMPORT	__declspec(dllimport)
-#define SX_APIEXPORT	__declspec(dllexport)
+#define SX_APIIMPORT    __declspec(dllimport)
+#define SX_APIEXPORT    __declspec(dllexport)
 #else
-#define	SX_APIIMPORT
-#define	SX_APIEXPORT
+#define    SX_APIIMPORT
+#define    SX_APIEXPORT
 #endif
 /* Standard return values from Symisc public interfaces */
-#define SXRET_OK       0      /* Not an error */	
+#define SXRET_OK       0      /* Not an error */    
 #define SXERR_MEM      (-1)   /* Out of memory */
 #define SXERR_IO       (-2)   /* IO error */
 #define SXERR_EMPTY    (-3)   /* Empty field */
@@ -291,7 +291,7 @@ struct SyMutexMethods
 #define SXERR_NOTIMPLEMENTED  (-17) /* Operation not implemented */
 #define SXERR_EOF      (-18) /* End of input */
 #define SXERR_PERM     (-19) /* Permission error */
-#define SXERR_NOOP     (-20) /* No-op */	
+#define SXERR_NOOP     (-20) /* No-op */    
 #define SXERR_FORMAT   (-21) /* Invalid format */
 #define SXERR_NEXT     (-22) /* Not an error */
 #define SXERR_OS       (-23) /* System call return an error */
@@ -319,8 +319,8 @@ struct SyMutexMethods
 #define VEDIS_IOERR    SXERR_IO      /* IO error */
 #define VEDIS_CORRUPT  SXERR_CORRUPT /* Corrupt pointer */
 #define VEDIS_LOCKED   SXERR_LOCKED  /* Forbidden Operation */ 
-#define VEDIS_BUSY	 SXERR_BUSY    /* The database file is locked */
-#define VEDIS_DONE	 SXERR_DONE    /* Operation done */
+#define VEDIS_BUSY     SXERR_BUSY    /* The database file is locked */
+#define VEDIS_DONE     SXERR_DONE    /* Operation done */
 #define VEDIS_PERM     SXERR_PERM    /* Permission error */
 #define VEDIS_NOTIMPLEMENTED SXERR_NOTIMPLEMENTED /* Method not implemented by the underlying Key/Value storage engine */
 #define VEDIS_NOTFOUND SXERR_NOTFOUND /* No such record */
@@ -609,26 +609,26 @@ typedef void * vedis_kv_handle;
 typedef struct vedis_kv_io vedis_kv_io;
 struct vedis_kv_io
 {
-	vedis_kv_handle  pHandle;     /* Vedis handle passed as the first parameter to the
-									 * method defined below.
-									 */
-	vedis_kv_methods *pMethods;   /* Underlying storage engine */
-	/* Pager methods */
-	int (*xGet)(vedis_kv_handle,pgno,vedis_page **);
-	int (*xLookup)(vedis_kv_handle,pgno,vedis_page **);
-	int (*xNew)(vedis_kv_handle,vedis_page **);
-	int (*xWrite)(vedis_page *);
-	int (*xDontWrite)(vedis_page *);
-	int (*xDontJournal)(vedis_page *);
-	int (*xDontMkHot)(vedis_page *);
-	int (*xPageRef)(vedis_page *);
-	int (*xPageUnref)(vedis_page *);
-	int (*xPageSize)(vedis_kv_handle);
-	int (*xReadOnly)(vedis_kv_handle);
-	unsigned char * (*xTmpPage)(vedis_kv_handle);
-	void (*xSetUnpin)(vedis_kv_handle,void (*xPageUnpin)(void *)); 
-	void (*xSetReload)(vedis_kv_handle,void (*xPageReload)(void *));
-	void (*xErr)(vedis_kv_handle,const char *);
+    vedis_kv_handle  pHandle;     /* Vedis handle passed as the first parameter to the
+                                     * method defined below.
+                                     */
+    vedis_kv_methods *pMethods;   /* Underlying storage engine */
+    /* Pager methods */
+    int (*xGet)(vedis_kv_handle,pgno,vedis_page **);
+    int (*xLookup)(vedis_kv_handle,pgno,vedis_page **);
+    int (*xNew)(vedis_kv_handle,vedis_page **);
+    int (*xWrite)(vedis_page *);
+    int (*xDontWrite)(vedis_page *);
+    int (*xDontJournal)(vedis_page *);
+    int (*xDontMkHot)(vedis_page *);
+    int (*xPageRef)(vedis_page *);
+    int (*xPageUnref)(vedis_page *);
+    int (*xPageSize)(vedis_kv_handle);
+    int (*xReadOnly)(vedis_kv_handle);
+    unsigned char * (*xTmpPage)(vedis_kv_handle);
+    void (*xSetUnpin)(vedis_kv_handle,void (*xPageUnpin)(void *)); 
+    void (*xSetReload)(vedis_kv_handle,void (*xPageReload)(void *));
+    void (*xErr)(vedis_kv_handle,const char *);
 };
 /*
  * Key/Value Cursor Object.
@@ -688,15 +688,15 @@ struct vedis_kv_methods
   int (*xConfig)(vedis_kv_engine *,int op,va_list ap);
   int (*xOpen)(vedis_kv_engine *,pgno);
   int (*xReplace)(
-	  vedis_kv_engine *,
-	  const void *pKey,int nKeyLen,
-	  const void *pData,vedis_int64 nDataLen
-	  ); 
+      vedis_kv_engine *,
+      const void *pKey,int nKeyLen,
+      const void *pData,vedis_int64 nDataLen
+      ); 
     int (*xAppend)(
-	  vedis_kv_engine *,
-	  const void *pKey,int nKeyLen,
-	  const void *pData,vedis_int64 nDataLen
-	  );
+      vedis_kv_engine *,
+      const void *pKey,int nKeyLen,
+      const void *pData,vedis_int64 nDataLen
+      );
   void (*xCursorInit)(vedis_kv_cursor *);
   int (*xSeek)(vedis_kv_cursor *,const void *pKey,int nByte,int iPos); /* Mandatory */
   int (*xFirst)(vedis_kv_cursor *);
@@ -754,7 +754,7 @@ VEDIS_APIEXPORT int vedis_kv_store_fmt(vedis *pStore,const void *pKey,int nKeyLe
 VEDIS_APIEXPORT int vedis_kv_append_fmt(vedis *pStore,const void *pKey,int nKeyLen,const char *zFormat,...);
 VEDIS_APIEXPORT int vedis_kv_fetch(vedis *pStore,const void *pKey,int nKeyLen,void *pBuf,vedis_int64 /* in|out */*pBufLen);
 VEDIS_APIEXPORT int vedis_kv_fetch_callback(vedis *pStore,const void *pKey,
-	                    int nKeyLen,int (*xConsumer)(const void *,unsigned int,void *),void *pUserData);
+                        int nKeyLen,int (*xConsumer)(const void *,unsigned int,void *),void *pUserData);
 VEDIS_APIEXPORT int vedis_kv_config(vedis *pStore,int iOp,...);
 VEDIS_APIEXPORT int vedis_kv_delete(vedis *pStore,const void *pKey,int nKeyLen);
 
@@ -774,7 +774,7 @@ VEDIS_APIEXPORT int vedis_context_kv_store_fmt(vedis_context *pCtx,const void *p
 VEDIS_APIEXPORT int vedis_context_kv_append_fmt(vedis_context *pCtx,const void *pKey,int nKeyLen,const char *zFormat,...);
 VEDIS_APIEXPORT int vedis_context_kv_fetch(vedis_context *pCtx,const void *pKey,int nKeyLen,void *pBuf,vedis_int64 /* in|out */*pBufLen);
 VEDIS_APIEXPORT int vedis_context_kv_fetch_callback(vedis_context *pCtx,const void *pKey,
-	                    int nKeyLen,int (*xConsumer)(const void *,unsigned int,void *),void *pUserData);
+                        int nKeyLen,int (*xConsumer)(const void *,unsigned int,void *),void *pUserData);
 VEDIS_APIEXPORT int vedis_context_kv_delete(vedis_context *pCtx,const void *pKey,int nKeyLen);
 
 /* Command Execution Context Interfaces */
