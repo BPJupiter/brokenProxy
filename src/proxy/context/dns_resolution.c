@@ -520,7 +520,7 @@ static boolean handle_found_answers(StyxNetworkAddress *out,
     {
         case T_A:
             printf("Found A record.\n");
-            out->ip.v4 = *(long *)answers[0].rdata;
+            out->ip.v4 = htonl(*(uint32 *)answers[0].rdata);
             out->is_ipv6 = FALSE;
             out->next = NULL;
 
@@ -530,7 +530,7 @@ static boolean handle_found_answers(StyxNetworkAddress *out,
                 talos_malloc_assert(node);
                 memset(node, 0, sizeof(*node));
 
-                node->ip.v4 = *(long *)answers[i].rdata;
+                node->ip.v4 = htonl(*(uint32 *)answers[i].rdata);
                 node->port = out->port;
                 node->is_ipv6 = FALSE;
                 node->next = NULL;

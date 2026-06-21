@@ -361,7 +361,7 @@ SHandle *styx_network_stream_ip_create(StyxNetworkAddress ip)
         memset(&address_in, 0, sizeof(address_in));
         address_in.sin_family = AF_INET;
         address_in.sin_port = htons(ip.port);
-        address_in.sin_addr.s_addr = ip.ip.v4;    
+        address_in.sin_addr.s_addr = htonl(ip.ip.v4);
 
         res = connect(socket, (struct sockaddr *)&address_in, sizeof(address_in));
     }

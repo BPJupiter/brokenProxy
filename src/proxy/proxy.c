@@ -178,7 +178,7 @@ static void proxy_settings_init(void);
 static void proxy_reload_settings(void);
 static void thread_handler(void *arg);
 static void handle_client(SHandle *client_handle);
-static void handle_tcp_connect(SHandle *client_handle);
+static boolean target_addr_get_from_buffer(SHandle *client_handle, StyxNetworkAddress *target_addr, char *target_ip_str, char *target_domain);
 static int transfer_data(SHandle *from_handle, SHandle *to_handle);
 static void handle_udp_associate(SHandle *tcp_client_handle);
 static void register_handle_pair(SHandle *client, SHandle *target);
@@ -310,10 +310,62 @@ static void handle_client(SHandle *client_handle)
 
     switch (command)
     {
-        case CONNECT:
+        case CONNECT: {
+            SHandle *target_handle = NULL;
+            StyxNetworkAddress target_addr;
+            double rtt_cutoff;
+            uint8 rep = OK;
+
+            char target_ip_str[64];
+            char target_domain[256];
+
             printf("App requested TCP Connection.\n");
-            handle_tcp_connect(client_handle);
-        break;
+            sharedContext_var_get_maxRtt(&rtt_cutoff);
+
+            if (!target_addr_get_from_buffer(client_handle, &target_addr, target_ip_str, target_domain)) {
+                if (client_handle) styx_free(client_handle);
+                if (target_handle) styx_free(target_handle);
+                return;
+            }
+
+            printf("TCP connection target: %s:%d (%s:%d)\n", target_domain, target_addr.port, target_ip_str, target_addr.port);
+
+            if (!verify_latency(target_ip_str)) {
+                printf("Request RTT Exceeded %.2lf ms! Packet dropped!\n", rtt_cutoff);
+                rep = TTL_EXPIRED;
+            }
+
+            if (!verify_cable(target_ip_str)) {
+                printf("Request uses disabled cable! Packet dropped!\n");
+                rep = NETWORK_UNREACHABLE;
+            }
+
+            target_handle = styx_network_stream_ip_create(target_addr);
+            if (target_handle == NULL) {
+                printf("Failed to connect to target.\n");
+                rep = GENERAL_FAILURE;
+            }
+
+            styx_pack_uint8(client_handle, VERSION5, "VERSION5");
+            styx_pack_uint8(client_handle, rep, "REP");
+            styx_pack_uint8(client_handle, 0x00, "RSV");
+            styx_pack_uint8(client_handle, IPV4, "ATYP");
+            styx_pack_uint32(client_handle, target_addr.ip.v4, "BND.ADDR");
+            styx_pack_uint16(client_handle, target_addr.port, "BND.PORT");
+            styx_network_stream_send_force(client_handle);
+
+            if (rep != OK) {
+                if (client_handle) styx_free(client_handle);
+                if (target_handle) styx_free(target_handle);
+                return;
+            }
+
+            printf("Connection established.\n");
+
+            register_handle_pair(client_handle, target_handle);
+            return;
+            break;
+        }
         case UDP_ASSOCIATE:
             printf("App requested UDP Association.\n");
             handle_udp_associate(client_handle);
@@ -367,7 +419,9 @@ static boolean target_addr_get_from_buffer(SHandle *client_handle, StyxNetworkAd
         inet_ntop(AF_INET6, &target_addr->ip.v6, target_ip_str, INET6_ADDRSTRLEN);
     }
     else {
-        inet_ntop(AF_INET, &target_addr->ip.v4, target_ip_str, INET_ADDRSTRLEN);
+        struct in_addr a;
+        a.s_addr = htonl(target_addr->ip.v4);
+        inet_ntop(AF_INET, &a, target_ip_str, INET_ADDRSTRLEN);
     }
     return TRUE;
 }
