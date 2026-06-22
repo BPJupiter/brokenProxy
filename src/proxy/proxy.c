@@ -27,10 +27,6 @@
 #define MAX_CLIENTS 256
 #define PROJECT_ROOT_FOLDER_NAME "brokenProxy"
 
-uint16 proxy_port = 0;
-extern volatile sig_atomic_t g_reload_settings;
-void *g_settings_mutex = NULL;
-
 enum socks {
     RESERVED = 0x00,
     VERSION4 = 0x04,
@@ -170,22 +166,18 @@ IpMeasurement *measurement_get(midx idx);
 
 /* END OF BRAINSTORMING!!!! */
 
-static int proxy_printf(const char *format, ...);
-#define printf proxy_printf
+uint16 proxy_port = 0;
+void *g_settings_mutex = NULL;
+extern volatile sig_atomic_t g_reload_settings;
+static volatile HandleSet g_handle_set;
 
-static void setup_signals(void);
-static void proxy_settings_init(void);
-static void proxy_reload_settings(void);
-static void thread_handler(void *arg);
-static void handle_client(SHandle *client_handle);
+static void client_thread(SHandle *client_handle);
 static boolean target_addr_get_from_buffer(SHandle *client_handle, StyxNetworkAddress *target_addr, char *target_ip_str, char *target_domain);
 static int transfer_data(SHandle *from_handle, SHandle *to_handle);
-static void register_handle_pair(SHandle *client, SHandle *target);
 static void pipe_handle_data_thread(void *arg);
 
+static int logln(const char *format, ...);
 static void reload_config(void);
-
-static volatile HandleSet g_handle_set;
 
 int proxy_start(uint16 port)
 {
@@ -195,32 +187,41 @@ int proxy_start(uint16 port)
     thread_pool = europa_threadpool_init(8);
     g_handle_set.lock_mutex = europa_mutex_create(); /* TODO: destroy somewhere */
     if (!europa_threadpool_add_work(thread_pool, pipe_handle_data_thread, NULL)) {
-        printf("Couldn't launch pipe thread!\n");
+        logln("FATAL: Couldn't launch pipe thread!");
         exit(1);
     }
 
-    setup_signals();
+#ifndef _WIN32
+    signal(SIGPIPE, SIG_IGN);
+#endif
     proxy_port = port;
 
     server_handle = styx_network_stream_address_create(NULL, proxy_port, FALSE);
     if (!server_handle) {
-        printf("Could not create server_handle\n");
+        logln("FATAL: Could not create server_handle!");
         exit(1);
     }
 
-    proxy_settings_init();
+    if (!g_settings_mutex) g_settings_mutex = europa_mutex_create();
+    europa_mutex_lock(g_settings_mutex);
+    reload_config();
+    europa_mutex_unlock(g_settings_mutex);
+    logln("Settings applied");
 
-    printf("SOCKS5 Proxy listening on port: %d...\n", proxy_port);
+    logln("SOCKS5 Proxy listening on port: %d", proxy_port);
 
     while (1) {
         client_handle = styx_network_stream_wait_for_connection(server_handle, NULL);
         if (g_reload_settings) {
             g_reload_settings = 0;
-            proxy_reload_settings();
+            europa_mutex_lock(g_settings_mutex);
+            reload_config();
+            europa_mutex_unlock(g_settings_mutex);
+            logln("Settings reloaded successfully");
         }
         if (client_handle) {
-            if (!europa_threadpool_add_work(thread_pool, thread_handler, client_handle)) {
-                printf("Failed to create new thread.\n");
+            if (!europa_threadpool_add_work(thread_pool, client_thread, client_handle)) {
+                logln("Failed to create new thread");
             }
         }
     }
@@ -235,36 +236,7 @@ void proxy_shutdown(void)
 
 }
 
-static void setup_signals(void)
-{
-#ifndef _WIN32
-    signal(SIGPIPE, SIG_IGN);
-#endif
-}
-
-static void proxy_settings_init(void)
-{
-    if (!g_settings_mutex) {
-        g_settings_mutex = europa_mutex_create();
-    }
-    proxy_reload_settings();
-}
-
-static void proxy_reload_settings(void)
-{
-    europa_mutex_lock(g_settings_mutex);
-    reload_config();
-    europa_mutex_unlock(g_settings_mutex);
-    printf("Settings reloaded.\n");
-}
-
-static void thread_handler(void *arg)
-{
-    handle_client((SHandle *)arg);
-    return;
-}
-
-static void handle_client(SHandle *client_handle)
+static void client_thread(SHandle *client_handle)
 {
     uint8 version, nmethods, command;
     boolean r = FALSE, w = FALSE;
@@ -290,7 +262,7 @@ static void handle_client(SHandle *client_handle)
     styx_pack_uint8(client_handle, VERSION5, "VERSION5");
     styx_pack_uint8(client_handle, NOAUTH, "NOAUTH");
     if (styx_network_stream_send_force(client_handle) != 2) {
-        printf("Failed to send SOCKS5 resp\n");
+        logln("Failed to send SOCKS5 response");
         goto bad;
     }
 
@@ -318,7 +290,7 @@ static void handle_client(SHandle *client_handle)
             char target_ip_str[64];
             char target_domain[256];
 
-            printf("App requested TCP Connection.\n");
+            logln("App requested TCP Connection");
             sharedContext_var_get_maxRtt(&rtt_cutoff);
 
             if (!target_addr_get_from_buffer(client_handle, &target_addr, target_ip_str, target_domain)) {
@@ -327,21 +299,21 @@ static void handle_client(SHandle *client_handle)
                 return;
             }
 
-            printf("TCP connection target: %s:%d (%s:%d)\n", target_domain, target_addr.port, target_ip_str, target_addr.port);
+            logln("TCP connection target: %s:%d (%s:%d)", target_domain, target_addr.port, target_ip_str, target_addr.port);
 
             if (!verify_latency(target_ip_str)) {
-                printf("Request RTT Exceeded %.2lf ms! Packet dropped!\n", rtt_cutoff);
+                logln("Request RTT Exceeded %.2lf ms! Packet dropped!", rtt_cutoff);
                 rep = TTL_EXPIRED;
             }
 
             if (!verify_cable(target_ip_str)) {
-                printf("Request uses disabled cable! Packet dropped!\n");
+                logln("Request uses disabled cable! Packet dropped!");
                 rep = NETWORK_UNREACHABLE;
             }
 
             target_handle = styx_network_stream_ip_create(target_addr);
             if (target_handle == NULL) {
-                printf("Failed to connect to target.\n");
+                logln("Failed to connect to target!");
                 rep = GENERAL_FAILURE;
             }
 
@@ -359,19 +331,29 @@ static void handle_client(SHandle *client_handle)
                 return;
             }
 
-            printf("Connection established.\n");
+            logln("Connection established");
 
-            register_handle_pair(client_handle, target_handle);
+            europa_mutex_lock(g_handle_set.lock_mutex);
+            for (i = 0; i < MAX_CLIENTS; i++) {
+                if (!g_handle_set.pairs[i].active) {
+                    g_handle_set.pairs[i].client = client_handle;
+                    g_handle_set.pairs[i].target = target_handle;
+                    g_handle_set.pairs[i].active = TRUE;
+                    g_handle_set.count++;
+                    break;
+                }
+            }
+            europa_mutex_unlock(g_handle_set.lock_mutex);
             return;
             break;
         }
         case UDP_ASSOCIATE:
-            printf("App requested UDP Association.\n");
+            logln("App requested UDP Association");
             /* TODO: Fix me */
-            printf("This UDP Association is unsupported!.\n");
+            logln("This UDP Association is unsupported!");
         break;
         default:
-            printf("Unsupported SOCKS command: 0x%02x\n", command);
+            logln("Unsupported SOCKS command: 0x%02x!", command);
         break;
     }
 bad:
@@ -408,13 +390,13 @@ static boolean target_addr_get_from_buffer(SHandle *client_handle, StyxNetworkAd
             target_addr->port = styx_unpack_uint16(client_handle, "DST.PORT");
 
             if (!styx_network_address_lookup(target_addr, target_domain, target_addr->port, NULL)) {
-                printf("DNS resolution failed for domain: %s\n", target_domain);
+                logln("DNS resolution failed for domain: %s!", target_domain);
                 return FALSE;
             }
         }
         break;
         default:
-            printf("Unsupported ATYP: 0x%02x\n", atyp);
+            logln("Unsupported ATYP: 0x%02x!", atyp);
             return FALSE;
         break;
     }
@@ -445,22 +427,6 @@ static int transfer_data(SHandle *from_handle, SHandle *to_handle)
     styx_network_stream_send_force(to_handle);
 
     return bytes_written;
-}
-
-static void register_handle_pair(SHandle *client, SHandle *target)
-{
-    uint i;
-    europa_mutex_lock(g_handle_set.lock_mutex);
-    for (i = 0; i < MAX_CLIENTS; i++) {
-        if (!g_handle_set.pairs[i].active) {
-            g_handle_set.pairs[i].client = client;
-            g_handle_set.pairs[i].target = target;
-            g_handle_set.pairs[i].active = TRUE;
-            g_handle_set.count++;
-            break;
-        }
-    }
-    europa_mutex_unlock(g_handle_set.lock_mutex);
 }
 
 static void pipe_handle_data_thread(void *arg)
@@ -552,7 +518,7 @@ static void reload_config(void)
         const char *error_ptr = cJSON_GetErrorPtr();
         if (error_ptr != NULL)
         {
-            printf("CJSON Error: %s: line %d file %s\n", error_ptr, __LINE__, __FILE__);
+            logln("CJSON Error: %s: line %d file %s", error_ptr, __LINE__, __FILE__);
         }
         cJSON_Delete(json);
         return;
@@ -577,7 +543,7 @@ static void reload_config(void)
             || !cJSON_IsBool(locDNSEnabled))
         )
     {
-        printf("Error: JSON structure invalid!\n");
+        logln("Error: JSON structure invalid!");
         cJSON_Delete(json);
         return;
     }
@@ -591,17 +557,19 @@ static void reload_config(void)
     return;
 }
 
-static int proxy_printf(const char *format, ...)
+static int logln(const char *format, ...)
 {
+    /* TODO: thread safety; stdout locking */
     va_list args;
-    char msg[1024] = "\x1b[35m[Proxy]\x1b[0m ";
     int ret;
 
-    strcat(msg, format);
+    fputs("\x1b[35m[Proxy]\x1b[0m ", stdout);
 
     va_start(args, format);
-    ret = vprintf(msg, args);
+    ret = vprintf(format, args);
     va_end(args);
+
+    putchar('\n');
     fflush(stdout);
 
     return ret;
