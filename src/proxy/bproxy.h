@@ -3,11 +3,14 @@
 
 #include "Clay/clay.h"
 
-int bp_start(uint16 port);
-int bp_block_ip_address(const char *ip);
-int bp_allow_ip_address(const char *ip);
-boolean bp_ip_address_is_blocked(const char *ip);
-void proxy_shutdown(void);
-void bp_shutdown(void);
+typedef struct BProxyHandle BProxyHandle;
+
+extern BProxyHandle *bp_init(uint16 port);
+extern int           bp_start(BProxyHandle *proxy);
+extern int     bp_cntl(int optype, int arg);
+extern int     bp_block_ip_address(const char *ip);
+extern int     bp_allow_ip_address(const char *ip);
+extern boolean bp_ip_address_is_blocked(const char *ip);
+extern void    bp_shutdown(BProxyHandle *proxy);
 
 #endif

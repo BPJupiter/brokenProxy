@@ -71,16 +71,35 @@ enum socks_status {
 };
 
 typedef struct {
-    SHandle *client;
-    SHandle *target;
-    boolean active;    
-} HandlePair;
+    struct {
+        SHandle *client;
+        SHandle *target;
+        boolean active;
+    } pairs[MAX_CLIENTS];
+    uint count;
+    void *mutex;
+} HandleSet;
 
 typedef struct {
-    HandlePair pairs[MAX_CLIENTS];
-    uint count;
-    void *lock_mutex;
-} HandleSet;
+    uint32 dns_type;
+
+    boolean do_max_rtt;
+    uint32 max_rtt_ns;
+
+    boolean do_traceroute;
+    boolean do_max_hop_rtt;
+    uint32 max_hop_rtt_ns;
+
+    void *mutex;
+} BProxySettings;
+
+typedef struct BPHandle {
+    BProxySettings settings;
+    HandleSet handles;
+    EThreadPool threadpool;
+    SHandle *server_handle;
+    uint16 port;
+} BProxyHandle;
 
 /* 
 * The below is a brainstorm for how I want to restructure my measurement data structure to:
@@ -166,10 +185,7 @@ IpMeasurement *measurement_get(midx idx);
 
 /* END OF BRAINSTORMING!!!! */
 
-uint16 proxy_port = 0;
-void *g_settings_mutex = NULL;
 extern volatile sig_atomic_t g_reload_settings;
-static volatile HandleSet g_handle_set;
 
 static void client_thread(SHandle *client_handle);
 static boolean target_addr_get_from_buffer(SHandle *client_handle, StyxNetworkAddress *target_addr, char *target_ip_str, char *target_domain);
@@ -179,13 +195,35 @@ static void pipe_handle_data_thread(void *arg);
 static int logln(const char *format, ...);
 static void reload_config(void);
 
-int bp_start(uint16 port)
+BProxyHandle *bp_init(uint16 port);
 {
-    EThreadPool thread_pool;
-    SHandle *server_handle, *client_handle;
+    BProxyHandle *proxy = malloc(sizeof(BProxyHandle));
+    proxy->threadpool = europa_threadpool_init(8);
+    proxy->handles.mutex = europa_mutex_create();
+    proxy->settings.mutex = europa_mutex_create();
+    proxy->port = port;
+    proxy->server_handle = styx_network_stream_address_create(NULL, proxy->port, FALSE);
+    if (!server_handle) {
+        logln("FATAL: Could not init server_handle!");
+        return NULL;
+    return proxy;
+}
 
-    thread_pool = europa_threadpool_init(8);
-    g_handle_set.lock_mutex = europa_mutex_create(); /* TODO: destroy somewhere */
+void bp_destroy(BProxyHandle *proxy)
+{
+    if (proxy) {
+        styx_free(proxy->server_handle);
+        europa_mutex_destroy(proxy->settings.mutex);
+        europa_mutex_destroy(proxy->handles.mutex);
+        europa_threadpool_destroy(proxy->threadpool);
+        free(proxy);
+    }
+}
+
+int bp_start(BProxyHandle *proxy)
+{
+    SHandle *client_handle;
+
     if (!europa_threadpool_add_work(thread_pool, pipe_handle_data_thread, NULL)) {
         logln("FATAL: Couldn't launch pipe thread!");
         exit(1);
@@ -194,13 +232,6 @@ int bp_start(uint16 port)
 #ifndef _WIN32
     signal(SIGPIPE, SIG_IGN);
 #endif
-    proxy_port = port;
-
-    server_handle = styx_network_stream_address_create(NULL, proxy_port, FALSE);
-    if (!server_handle) {
-        logln("FATAL: Could not create server_handle!");
-        exit(1);
-    }
 
     if (!g_settings_mutex) g_settings_mutex = europa_mutex_create();
     europa_mutex_lock(g_settings_mutex);
@@ -229,11 +260,6 @@ int bp_start(uint16 port)
     styx_free(server_handle);
 
     return 0;
-}
-
-void bp_shutdown(void)
-{
-
 }
 
 static void client_thread(SHandle *client_handle)
@@ -338,7 +364,7 @@ static void client_thread(SHandle *client_handle)
 
             logln("Connection established");
 
-            europa_mutex_lock(g_handle_set.lock_mutex);
+            europa_mutex_lock(g_handle_set.mutex);
             for (i = 0; i < MAX_CLIENTS; i++) {
                 if (!g_handle_set.pairs[i].active) {
                     g_handle_set.pairs[i].client = client_handle;
@@ -348,7 +374,7 @@ static void client_thread(SHandle *client_handle)
                     break;
                 }
             }
-            europa_mutex_unlock(g_handle_set.lock_mutex);
+            europa_mutex_unlock(g_handle_set.mutex);
             return;
             break;
         }
@@ -442,7 +468,7 @@ static void pipe_handle_data_thread(void *arg)
         boolean closed, ready[MAX_CLIENTS * 2];
         uint i, n = 0;
 
-        europa_mutex_lock(g_handle_set.lock_mutex);
+        europa_mutex_lock(g_handle_set.mutex);
         for (i = 0; i < MAX_CLIENTS; i++) {
             if (!g_handle_set.pairs[i].active) {
                 continue;
@@ -454,7 +480,7 @@ static void pipe_handle_data_thread(void *arg)
             n += 2;
         }
 
-        europa_mutex_unlock(g_handle_set.lock_mutex);
+        europa_mutex_unlock(g_handle_set.mutex);
 
         if (n == 0) {
             europa_sleepi(0, 1000000);
@@ -463,7 +489,7 @@ static void pipe_handle_data_thread(void *arg)
 
         styx_network_wait(handles, ready, NULL, n, 100000);
 
-        europa_mutex_lock(g_handle_set.lock_mutex);
+        europa_mutex_lock(g_handle_set.mutex);
 
         n = 0;
         for (i = 0; i < MAX_CLIENTS; i++) {
@@ -485,7 +511,7 @@ static void pipe_handle_data_thread(void *arg)
             }
             n += 2;
         }
-        europa_mutex_unlock(g_handle_set.lock_mutex);
+        europa_mutex_unlock(g_handle_set.mutex);
     }
 }
 
