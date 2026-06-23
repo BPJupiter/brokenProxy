@@ -1,4 +1,4 @@
-#include "proxy.h"
+#include "bproxy.h"
 
 #include "Clay/clay.h"
 #include "Europa/europa.h"
@@ -179,7 +179,7 @@ static void pipe_handle_data_thread(void *arg);
 static int logln(const char *format, ...);
 static void reload_config(void);
 
-int proxy_start(uint16 port)
+int bp_start(uint16 port)
 {
     EThreadPool thread_pool;
     SHandle *server_handle, *client_handle;
@@ -231,7 +231,7 @@ int proxy_start(uint16 port)
     return 0;
 }
 
-void proxy_shutdown(void)
+void bp_shutdown(void)
 {
 
 }
@@ -304,6 +304,11 @@ static void client_thread(SHandle *client_handle)
             if (!verify_latency(target_ip_str)) {
                 logln("Request RTT Exceeded %.2lf ms! Packet dropped!", rtt_cutoff);
                 rep = TTL_EXPIRED;
+            }
+
+            if (!verify_traceroute_ips(target_ip_str)) {
+                logln("Request passes through disabled ip! Packet dropped!");
+                rep = NETWORK_UNREACHABLE;
             }
 
             if (!verify_cable(target_ip_str)) {

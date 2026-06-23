@@ -13,7 +13,7 @@
 #include "Europa/europa.h"
 #include "context/context.h"
 #include "data/datastore.h"
-#include "proxy.h"
+#include "bproxy.h"
 
 #define PROXY_PORT 13407
 
@@ -82,7 +82,7 @@ int main(int argc, char **argv)
     sharedContext_init();
     datastore_init();
 
-    proxy_start(proxy_port);
+    bp_start(proxy_port);
 
     datastore_destroy();
     c_debug_mem_print(0);

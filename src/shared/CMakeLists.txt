@@ -6,6 +6,7 @@ add_library(bpj_core STATIC
     "Europa/e_dir.c"
     "Europa/e_threads.c"
     "Europa/e_time.c"
+    "Europa/e_settings.c"
     "Styx/s_buffer.c"
     "Styx/s_network.c"
     "Styx/s_pack.c"

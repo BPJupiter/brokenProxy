@@ -74,3 +74,8 @@ boolean verify_cable(const char *ip)
 
     return TRUE;
 }
+
+boolean verify_traceroute_ips(const char *dest_ip)
+{
+    return TRUE;
+}

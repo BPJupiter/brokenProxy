@@ -55,6 +55,21 @@ extern void europa_process_shutdown(int pid); /* graceful */
 extern void europa_process_terminate(int pid); /* kills immediately */
 extern void europa_process_reload(int pid);
 
+/* -------- Settings Storage --------
+   XML settings system. An application can both set and get a settings value. If an application is using any of the "get" functions requesting a non-existent setting, then the setting will be automatically created using the given default value. */
+
+extern boolean europa_setting_boolean_get(const char *setting, boolean default_value, const char *comment); /* Get boolean setting. The function will return default_value if the setting is not available, and create the setting in the setting list. */
+extern void    europa_setting_boolean_set(const char *setting, boolean value, const char *comment);
+extern int     europa_setting_integer_get(const char *setting, int default_value, const char *comment);
+extern void    europa_setting_integer_set(const char *setting, int value, const char *comment);
+extern double  europa_setting_double_get(const char *setting, double default_value, const char *comment);
+extern void    europa_setting_double_set(const char *setting, double value, const char *comment);
+extern char   *europa_setting_text_get(const char *setting, char *default_text, const char *comment);
+extern void    europa_setting_text_set(const char *setting, char *text, const char *comment);
+extern void    europa_settings_save(const char *file_name);
+extern void    europa_settings_load(const char *file_name);
+extern boolean europa_setting_probe(const char *setting);
+
 /* -------- File Traversal -------- */
 
 #ifdef __WIN32

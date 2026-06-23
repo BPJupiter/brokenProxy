@@ -7,7 +7,7 @@
 
     "verify/v_measurement.c"
     
-    "proxy.c"
+    "bproxy.c"
     "main.c"
  )
 
