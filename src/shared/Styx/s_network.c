@@ -191,7 +191,7 @@ boolean styx_network_address_lookup_default_func(StyxNetworkAddress *address, co
     }
 
 #if defined _WIN32
-    if (styx_socket_init_win32()) {
+    if (!styx_socket_init_win32()) {
         return FALSE;
     }
 #endif

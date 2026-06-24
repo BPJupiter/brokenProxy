@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <signal.h>
+#include <time.h>
 #include "Europa/europa.h"
 
 #ifdef _WIN32
@@ -189,7 +190,7 @@ void europa_thread(void (*func)(void *data), void *data, char *name)
     thread_param->data = data;
 
     thread_h = CreateThread(NULL, 0, e_win32_thread, thread_param, 0, &info.dwThreadID);
-    CloseHandle(thead_h);
+    CloseHandle(thread_h);
 }
 
 #else
@@ -384,7 +385,7 @@ void europa_threadpool_destroy(ThreadPool *tp)
 
     while (tp->num_threads_alive) {
         bsem_post_all(tp->jobqueue.has_jobs);
-        sleep(1);
+        europa_sleepi(0, 1000000);
     }
 
     jobqueue_destroy(&tp->jobqueue);

@@ -59,6 +59,7 @@ void handle_reload(int sig)
 
 int main(int argc, char **argv)
 {
+    BProxyHandle *proxy;
     int proxy_port = PROXY_PORT;
 
     if (argc > 1)
@@ -82,7 +83,9 @@ int main(int argc, char **argv)
     sharedContext_init();
     datastore_init();
 
-    bp_start(proxy_port);
+    proxy = bp_init(proxy_port);
+    bp_start(proxy);
+    bp_destroy(proxy);
 
     datastore_destroy();
     c_debug_mem_print(0);
