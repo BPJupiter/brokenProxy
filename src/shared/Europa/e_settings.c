@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 
 #include "Clay/clay.h"
 
@@ -40,6 +41,14 @@ static void init_setting(void)
         return;
     init = TRUE;
 
+    EuropaGlobalSettings.array = malloc((sizeof *EuropaGlobalSettings.array) * 128);
+    EuropaGlobalSettings.count = 0;
+    EuropaGlobalSettings.version = 1;
+}
+
+static void clear_setting(void)
+{
+    free(EuropaGlobalSettings.array);
     EuropaGlobalSettings.array = malloc((sizeof *EuropaGlobalSettings.array) * 128);
     EuropaGlobalSettings.count = 0;
     EuropaGlobalSettings.version = 1;
@@ -87,7 +96,6 @@ boolean europa_setting_boolean_get(const char *setting, boolean default_value, c
 {
     EuropaSetting *s;
     char *text;
-    uint i;
     init_setting();
     s = europa_setting_get(setting);
     if (s == NULL) {
@@ -98,11 +106,10 @@ boolean europa_setting_boolean_get(const char *setting, boolean default_value, c
     else if (s->type != EUROPA_ST_BOOLEAN) {
         text = s->data.text;
         s->data.toggle = default_value;
-        for (i = 0; text[i] != 0 && i <= SETTINGS_NAME_LENGTH; i++);
-        if (text[i] != 0) {
-            if (text[i] == 'T' || text[i] == 't')
+        if (text[0] != 0) {
+            if (text[0] == 'T' || text[0] == 't')
                 s->data.toggle = TRUE;
-            if (text[i] == 'F' || text[i] == 'f' || (text[i] > '0' && text[i] <= '9'))
+            if (text[0] == 'F' || text[0] == 'f' || (text[0] > '0' && text[0] <= '9'))
                 s->data.toggle = FALSE;
         }
         free(text);
@@ -120,6 +127,9 @@ void europa_setting_boolean_set(const char *setting, boolean value, const char *
     s = europa_setting_get(setting);
     if (s == NULL)
         s = europa_add_setting(setting, comment);
+    else if (s->type == EUROPA_ST_UNDEFINED || s->type == EUROPA_ST_TEXT) {
+        free(s->data.text);
+    }
     s->data.toggle = value;
     if (comment != NULL)
         s->comment = comment;
@@ -152,11 +162,13 @@ int europa_setting_integer_get(const char *setting, int default_value, const cha
 void europa_setting_integer_set(const char *setting, int value, const char *comment)
 {
     EuropaSetting *s;
-    char *text;
     init_setting();
     s = europa_setting_get(setting);
     if (s == NULL)
         s = europa_add_setting(setting, comment);
+    else if (s->type == EUROPA_ST_UNDEFINED || s->type == EUROPA_ST_TEXT) {
+        free(s->data.text);
+    }
     s->data.integer = value;
     s->type = EUROPA_ST_INTEGER;
     if (comment != NULL)
@@ -193,11 +205,13 @@ double europa_setting_double_get(const char *setting, double default_value, cons
 void europa_setting_double_set(const char *setting, double value, const char *comment)
 {
     EuropaSetting *s;
-    char *text;
     init_setting();
     s = europa_setting_get(setting);
     if (s == NULL)
         s = europa_add_setting(setting, comment);
+    else if (s->type == EUROPA_ST_UNDEFINED || s->type == EUROPA_ST_TEXT) {
+        free(s->data.text);
+    }
     s->data.real = value;
     s->type = EUROPA_ST_DOUBLE;
     if (comment != NULL)
@@ -235,6 +249,9 @@ void europa_setting_text_set(const char *setting, char *text, const char *commen
     s = europa_setting_get(setting);
     if (s == NULL)
         s = europa_add_setting(setting, comment);
+    else if (s->type == EUROPA_ST_UNDEFINED || s->type == EUROPA_ST_TEXT) {
+        free(s->data.text);
+    }
     for (i = 0; text[i] != 0; i++);
     t = malloc((sizeof *t) * (i + 1));
     for (i = 0; text[i] != 0; i++)
@@ -361,4 +378,10 @@ void europa_settings_test(void)
     europa_setting_double_get("DOUBLE", 3.14, "This is a double precision floating point.");
     europa_setting_text_get("TEXT", "Hello, Sailor!", "This is some text");
     europa_settings_save("settings.xml");
+    europa_settings_load("settings2.xml");
+    europa_setting_boolean_get("BOOLEAN2", FALSE, "This is a switch 2!");
+    europa_setting_integer_get("INTEGER2", 5221, "This is an integer number 2.");
+    europa_setting_double_get("DOUBLE2", 3.141, "This is a double precision floating point 2.");
+    europa_setting_text_get("TEXT2", "Hello, Sailor2!", "This is some text2");
+    europa_settings_save("settings2.xml");
 }

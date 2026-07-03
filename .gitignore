@@ -1,21 +1,11 @@
+settings.xml
 # C extensions
 # Object files
 *.o
 *.obj
 
 # build dir
-build/
-bin/
-
-# static libraries
-*.a
-*.lib
-
-# Shared libraries
-*.so
-*.so.*
-*.dylib
-*.dll
+Debug/
 
 # Executables
 *.exe

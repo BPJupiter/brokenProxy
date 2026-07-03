@@ -5,10 +5,7 @@
 #include "Styx/styx.h"
 #include "Talos/talos.h"
 
-#include "cjson/cJSON.h"
-
-#include "context/context.h"
-#include "verify/verify.h"
+#include "network_tools.h"
 #include "memory_usage.h"
 
 #include <signal.h>
@@ -81,16 +78,10 @@ typedef struct {
 } HandleSet;
 
 typedef struct {
-    uint32 dns_type;
-
-    boolean do_max_rtt;
-    uint32 max_rtt_ns;
-
+    boolean do_ping;
     boolean do_traceroute;
-    boolean do_max_hop_rtt;
-    uint32 max_hop_rtt_ns;
-
-    void *mutex;
+    boolean use_local_dns;
+    uint32 max_rtt_ns;
 } BProxySettings;
 
 typedef struct BProxyHandle {
@@ -98,115 +89,40 @@ typedef struct BProxyHandle {
     HandleSet handles;
     EThreadPool threadpool;
     SHandle *server_handle;
+    char *settings_filename;
     uint16 port;
 } BProxyHandle;
 
-/* 
-* The below is a brainstorm for how I want to restructure my measurement data structure to:
-* 1. Increase ease of use
-* 2. Reduce data duplication
-* 3. Easily map to SQL entries
-*/
-
-#define MAX_MEASUREMENTS (1 << 16)
-typedef uint midx;
-
-typedef enum {
-    MT_PING,
-    MT_TRACEROUTE,
-    MT_COUNT
-} MeasurementType;
-
-typedef enum {
-    MF_NIL = (1 << 0),
-    MF_PING = (1 << 1),
-    MF_TRACEROUTE = (1 << 2),
-    MF_MAX_FLAGS = (1 << 31)
-} MeasurementFlags;
-
-typedef enum {
-    RB_NIL = 0,
-    RB_DNS,
-    RB_HOP,
-    RB_HOST
-} ReachabilityBlame;
-
-typedef enum {
-    RT_NIL = 0,
-    RT_CABLE_BROKEN,
-    RT_EXCEEDS_MAX_LATENCY,
-    RT_REACHABLE
-} ReachabilityType;
-
-typedef struct {
-    union {
-        uint32 v4;
-        uint8 v6[16];
-    } address; /* objective*/
-    char domain[256]; /* objective */
-    boolean is_ipv6; /* objective */
-    float rtt_min; /* subjective */
-    float rtt_avg;
-    float rtt_max;
-    float rtt_stddev;
-    uint8 rtt_samples;
-    time_t measurement_last_performed[MT_COUNT];
-
-    midx hops[32]; /* objective */
-    uint hop_count; /* objective */
-
-    MeasurementFlags measurements_performed; /* objective */
-    struct {
-        ReachabilityType type;
-        struct {
-            ReachabilityBlame reason;
-            midx host;
-        } blame;
-    } reachability;
-} IpMeasurement;
-
-/* Frances:
- * Do I even bother with this? Given how fast an SQLite in-memory database can be.
- * Turns out there is the SQLite Online Backup API that allows syncing between in-memory and on-disk databases.
- * Multi-producer, single consumer queue. Dozens of reader threads, one writer thread, reader threads queue data for the writer thread to batch.
- * SQLite WAL mode?
- * Would end up puttings this in data/data.h
-*/
-typedef struct {
-    IpMeasurement    ip_measurements[MAX_MEASUREMENTS];
-    boolean            used[MAX_MEASUREMENTS]; /* may want to move away from C89 to allow for 1 bit array ? Or just use an int array with bitmasking */
-    midx            next_empty_slot; /* 0 slot is nil */
-    
-} Measurements;
-
-midx measurement_add(IpMeasurement measurement);
-void meausrement_rem(midx idx);
-IpMeasurement *measurement_get(midx idx);
-
-/* END OF BRAINSTORMING!!!! */
-
-extern volatile sig_atomic_t g_reload_settings;
-
 static void client_thread(SHandle *client_handle);
-static boolean target_addr_get_from_buffer(SHandle *client_handle, StyxNetworkAddress *target_addr, char *target_ip_str, char *target_domain);
+static boolean target_addr_get_from_buffer(BProxyHandle *proxy, SHandle *client_handle, StyxNetworkAddress *target_addr, char *target_ip_str, char *target_domain);
 static int transfer_data(SHandle *from_handle, SHandle *to_handle);
 static void pipe_handle_data_thread(void *arg);
 
 static int logln(const char *format, ...);
-static void reload_config(void);
+static void reload_config(BProxyHandle *proxy);
 
-BProxyHandle *bp_init(uint16 port)
+BProxyHandle *bp_init(uint16 port, const char *settings_filename)
 {
     BProxyHandle *proxy = calloc(1, sizeof(BProxyHandle));
     proxy->threadpool = europa_threadpool_init(8);
     proxy->handles.mutex = europa_mutex_create();
-    proxy->settings.mutex = europa_mutex_create();
+    proxy->settings_filename = malloc(strlen(settings_filename) + 1);
+    strcpy(proxy->settings_filename, settings_filename);
     proxy->port = port;
     proxy->server_handle = styx_network_stream_address_create(NULL, proxy->port, FALSE);
     if (!proxy->server_handle) {
         logln("FATAL: Could not init server_handle!");
-        return NULL;
+        exit(1);
     }
+    if (!europa_threadpool_add_work(proxy->threadpool, pipe_handle_data_thread, proxy)) {
+        logln("FATAL: Couldn't launch pipe thread!");
+        exit(1);
+    }
+#ifndef _WIN32
+    signal(SIGPIPE, SIG_IGN);
+#endif
+    reload_config(proxy);
+    logln("SOCKS5 Proxy setup on port: %d", proxy->port);
     return proxy;
 }
 
@@ -214,40 +130,17 @@ void bp_destroy(BProxyHandle *proxy)
 {
     if (proxy) {
         styx_free(proxy->server_handle);
-        europa_mutex_destroy(proxy->settings.mutex);
+        free(proxy->settings_filename);
         europa_mutex_destroy(proxy->handles.mutex);
         europa_threadpool_destroy(proxy->threadpool);
         free(proxy);
     }
 }
 
-int bp_start(BProxyHandle *proxy)
+int bp_start_blocking(BProxyHandle *proxy)
 {
-    if (!europa_threadpool_add_work(proxy->threadpool, pipe_handle_data_thread, proxy)) {
-        logln("FATAL: Couldn't launch pipe thread!");
-        exit(1);
-    }
-
-#ifndef _WIN32
-    signal(SIGPIPE, SIG_IGN);
-#endif
-
-    europa_mutex_lock(proxy->settings.mutex);
-    reload_config();
-    europa_mutex_unlock(proxy->settings.mutex);
-    logln("Settings applied");
-
-    logln("SOCKS5 Proxy listening on port: %d", proxy->port);
-
     while (1) {
         SHandle *client_handle = styx_network_stream_wait_for_connection(proxy->server_handle, NULL);
-        if (g_reload_settings) {
-            g_reload_settings = 0;
-            europa_mutex_lock(proxy->settings.mutex);
-            reload_config();
-            europa_mutex_unlock(proxy->settings.mutex);
-            logln("Settings reloaded successfully");
-        }
         if (client_handle) {
             void **args = malloc(sizeof(void *) * 2);
             args[0] = proxy;
@@ -259,6 +152,26 @@ int bp_start(BProxyHandle *proxy)
     }
 
     return 0;
+}
+
+boolean bp_update(BProxyHandle *proxy)
+{
+    SHandle *client_handle = styx_network_stream_wait_for_connection(proxy->server_handle, NULL);
+    if (client_handle) {
+        void **args = malloc(sizeof(void *) * 2);
+        args[0] = proxy;
+        args[1] = client_handle;
+        if (!europa_threadpool_add_work(proxy->threadpool, client_thread, args)) {
+            logln("Failed to create new thread");
+        }
+        return TRUE;
+    }
+    return FALSE;
+}
+
+void bp_reload_settings(BProxyHandle *proxy)
+{
+    reload_config(proxy);
 }
 
 static void client_thread(void **args)
@@ -311,16 +224,14 @@ static void client_thread(void **args)
         case CONNECT: {
             SHandle *target_handle = NULL;
             StyxNetworkAddress target_addr;
-            double rtt_cutoff;
             uint8 rep = OK;
 
             char target_ip_str[64];
             char target_domain[256];
 
             logln("App requested TCP Connection");
-            sharedContext_var_get_maxRtt(&rtt_cutoff);
 
-            if (!target_addr_get_from_buffer(client_handle, &target_addr, target_ip_str, target_domain)) {
+            if (!target_addr_get_from_buffer(proxy, client_handle, &target_addr, target_ip_str, target_domain)) {
                 if (client_handle) styx_free(client_handle);
                 if (target_handle) styx_free(target_handle);
                 goto end;
@@ -328,14 +239,18 @@ static void client_thread(void **args)
 
             logln("TCP connection target: %s:%d (%s:%d)", target_domain, target_addr.port, target_ip_str, target_addr.port);
 
-            if (!verify_latency(target_ip_str)) {
-                logln("Request RTT Exceeded %.2lf ms! Packet dropped!", rtt_cutoff);
-                rep = TTL_EXPIRED;
+            if (proxy->settings.do_ping) {
+                if (!verify_latency(target_ip_str, proxy->settings.max_rtt_ns)) {
+                    logln("Request RTT Exceeded %d ms! Packet dropped!", proxy->settings.max_rtt_ns / 1000000);
+                    rep = TTL_EXPIRED;
+                }
             }
 
-            if (!verify_traceroute_ips(target_ip_str)) {
-                logln("Request passes through disabled ip! Packet dropped!");
-                rep = NETWORK_UNREACHABLE;
+            if (proxy->settings.do_traceroute) {
+                if (!verify_traceroute_ips(target_ip_str)) {
+                    logln("Request passes through disabled ip! Packet dropped!");
+                    rep = NETWORK_UNREACHABLE;
+                }
             }
 
             if (!verify_cable(target_ip_str)) {
@@ -393,7 +308,7 @@ end:
     return;
 }
 
-static boolean target_addr_get_from_buffer(SHandle *client_handle, StyxNetworkAddress *target_addr, char *target_ip_str, char *target_domain)
+static boolean target_addr_get_from_buffer(BProxyHandle *proxy, SHandle *client_handle, StyxNetworkAddress *target_addr, char *target_ip_str, char *target_domain)
 {
     /* TODO: DNS shouldn't happen here;
        DNS should happen in its own function
@@ -422,7 +337,15 @@ static boolean target_addr_get_from_buffer(SHandle *client_handle, StyxNetworkAd
 
             target_addr->port = styx_unpack_uint16(client_handle, "DST.PORT");
 
-            if (!styx_network_address_lookup(target_addr, target_domain, target_addr->port, NULL)) {
+            boolean dns_failed = FALSE;
+            if (proxy->settings.use_local_dns) {
+                if (!styx_network_address_lookup(target_addr, target_domain, target_addr->port, NULL)) dns_failed = TRUE;
+            }
+            else {
+                if (!dns_resolve_iterative_root_func(target_addr, target_domain, target_addr->port, NULL, proxy->settings.max_rtt_ns)) dns_failed = TRUE;
+            }
+
+            if (dns_failed) {
                 logln("DNS resolution failed for domain: %s!", target_domain);
                 return FALSE;
             }
@@ -518,77 +441,16 @@ static void pipe_handle_data_thread(BProxyHandle *proxy)
     }
 }
 
-static void reload_config(void)
+static void reload_config(BProxyHandle *proxy)
 {
-    FILE *fp;
-    char buffer[BUFFER_SIZE];
-    cJSON *json;
-    cJSON *settings;
-
-    cJSON *pingObj;
-    cJSON *tracertObj;
-    cJSON *localDNSObj;
-
-    cJSON *pingEnabled;
-    cJSON *maxLatency;
-
-    cJSON *trEnabled;
-
-    cJSON *locDNSEnabled;
-
-    fp = europa_project_root_fopen(PROJECT_ROOT_FOLDER_NAME, "settings/settings.json", "rb");
-    if (fp == NULL)
-    {
-        talos_print_error("Error opening settings.json file!");
-        return;
+    if (!europa_settings_load(proxy->settings_filename)) {
+        printf("Creating settings file %s\n", proxy->settings_filename);
     }
-
-    fread(buffer, 1, sizeof(buffer), fp);
-    fclose(fp);
-
-    json = cJSON_Parse(buffer);
-    if (json == NULL)
-    {
-        const char *error_ptr = cJSON_GetErrorPtr();
-        if (error_ptr != NULL)
-        {
-            logln("CJSON Error: %s: line %d file %s", error_ptr, __LINE__, __FILE__);
-        }
-        cJSON_Delete(json);
-        return;
-    }
-
-    settings = cJSON_GetObjectItemCaseSensitive(json, "settings");
-    pingObj = cJSON_GetObjectItemCaseSensitive(settings, "ping");
-    tracertObj = cJSON_GetObjectItemCaseSensitive(settings, "traceroute");
-    localDNSObj = cJSON_GetObjectItemCaseSensitive(settings, "localDNS");
-    maxLatency = cJSON_GetObjectItemCaseSensitive(pingObj, "maxLatency");
-    pingEnabled = cJSON_GetObjectItemCaseSensitive(pingObj, "pingEnabled");
-    trEnabled = cJSON_GetObjectItemCaseSensitive(tracertObj, "trEnabled");
-    locDNSEnabled = cJSON_GetObjectItemCaseSensitive(localDNSObj, "locDNSEnabled");
-
-    if (!cJSON_IsObject(settings)
-        || (!cJSON_IsObject(pingObj)
-            || !cJSON_IsNumber(maxLatency)
-            || !cJSON_IsBool(pingEnabled))
-        || (!cJSON_IsObject(tracertObj)
-            || !cJSON_IsBool(trEnabled))
-        || (!cJSON_IsObject(localDNSObj)
-            || !cJSON_IsBool(locDNSEnabled))
-        )
-    {
-        logln("Error: JSON structure invalid!");
-        cJSON_Delete(json);
-        return;
-    }
-
-    sharedContext_var_set_maxRtt(&maxLatency->valuedouble);
-    sharedContext_callback_set_ping(cJSON_IsTrue(pingEnabled));
-    sharedContext_callback_set_traceroute(cJSON_IsTrue(trEnabled));
-    sharedContext_callback_set_dnsResolve(!cJSON_IsTrue(locDNSEnabled));
-
-    cJSON_Delete(json);
-    return;
+    proxy->settings.do_ping = europa_setting_boolean_get("DO_PING", TRUE, "Do a ping measurement on every address touched by the Proxy.");
+    proxy->settings.do_traceroute = europa_setting_boolean_get("DO_TRACEROUTE", FALSE, "Do a traceroute on every address touched by the Proxy.");
+    proxy->settings.use_local_dns = europa_setting_boolean_get("USE_LOCAL_DNS", FALSE, "Use the local system DNS resolver rather than the Proxy's iterative one.");
+    proxy->settings.max_rtt_ns = europa_setting_integer_get("MAX_LATENCY", 200, "Drop connections measured to have a latency greater than this value. Requires DO_PING or DO_TRACEROUTE to be enabled.") * 1000000;
+    europa_settings_save(proxy->settings_filename);
 }
 
 static int logln(const char *format, ...)

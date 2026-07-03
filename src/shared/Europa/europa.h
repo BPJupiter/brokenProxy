@@ -9,6 +9,10 @@
 #  include <windows.h>
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 /* -------- Multi Threading -------- */
 
@@ -72,7 +76,7 @@ extern void    europa_setting_double_set(const char *setting, double value, cons
 extern char   *europa_setting_text_get(const char *setting, char *default_text, const char *comment);
 extern void    europa_setting_text_set(const char *setting, char *text, const char *comment);
 extern void    europa_settings_save(const char *file_name);
-extern void    europa_settings_load(const char *file_name);
+extern boolean europa_settings_load(const char *file_name);
 extern boolean europa_setting_probe(const char *setting);
 
 /* -------- File Traversal -------- */
@@ -112,15 +116,8 @@ extern uint8 *europa_path_load(char *path, size_t *size);    /* Loads a file int
 
 extern FILE *europa_project_root_fopen(const char *root_folder_name, const char *filename, char *perms);
 
-/* -------- Database -------- */
-
-typedef void EDBHandle;
-
-extern EDBHandle *europa_database_open(const char *filename);
-extern void      europa_database_close(EDBHandle **database);
-
-extern boolean europa_database_store(EDBHandle *database, const void *key, int key_length, const void *data, uint64 data_length);
-extern boolean europa_database_fetch(EDBHandle *database, const void *key, int key_length, void *buffer, uint64 *buffer_size);
-extern boolean europa_database_delete(EDBHandle *database, const void *key, int key_length);
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* EUROPA_H */

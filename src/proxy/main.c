@@ -21,8 +21,6 @@ volatile sig_atomic_t g_reload_settings = 0;
 
 void handle_shutdown(int sig)
 {
-    printf("\nGraceful shutdown initiated (Signal %d)\n", sig);
-
     sharedContext_destroy();
     datastore_destroy();
     c_debug_mem_print(0);

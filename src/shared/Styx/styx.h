@@ -29,6 +29,10 @@ typedef enum {
 
 #include "s_internal.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* -------- TCP Networking --------
 Handles the creation and management of TCP streams. */
 
@@ -41,7 +45,7 @@ extern boolean  styx_network_stream_connected          (SHandle *handle);
 /* -------- UDP Networking --------
 Handles the creation and management of UDP datagrams. */
 
-extern boolean (*styx_network_address_lookup)(StyxNetworkAddress *dest, const char *dns_name, uint16 default_port, boolean *do_ipv6);
+extern boolean  styx_network_address_lookup(StyxNetworkAddress *dest, const char *dns_name, uint16 default_port, boolean *do_ipv6);
 extern boolean  styx_network_address_compare   (StyxNetworkAddress *a, StyxNetworkAddress *b);
 extern SHandle *styx_network_datagram_create   (uint16 port, boolean ipv6); /* Opens a port for receiving and sending UDP traffic on a specific port */
 extern int      styx_network_datagram_send     (SHandle *handle, StyxNetworkAddress *to); /* Sends the data collected in handle to the IP address specified in "to" */
@@ -111,5 +115,8 @@ extern uint64   styx_unpack_raw   (SHandle *handle, uint8 *buffer, uint64 buffer
 
 #include "s_debug.h"
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* STYX_H */

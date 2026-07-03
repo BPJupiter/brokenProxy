@@ -1,13 +1,1 @@
-tunnel over ssh:
-
-ssh -w 0:0 ubuntu@nectar
-
-Creates routed IP tunnel. Route DNS traffic through it.
-Requires root access...
-PermitTunnel yes
-
-ANOTHER OPTION:
-
-sshuttle with DNS forwarding mode:
-
-sshuttle --dns -r user@nectar-instance --ssh-cmd 'ssh -i /path/to/key' 0.0.0.0/0
+make europa_settings work with handles rather than being global.

@@ -9,7 +9,7 @@
 #include <winsock2.h>
 #include <Ws2tcpip.h>
 #include <iphlpapi.h>
-#pragma comment(lib, "WSock32.lib")
+#pragma comment(lib, "Ws2_32.lib")
 #pragma comment(lib, "IPHLPAPI.lib")
 typedef unsigned int uint;
 #else
@@ -29,17 +29,6 @@ typedef unsigned int uint;
 #endif
 
 #include "styx.h"
-
-boolean styx_network_address_lookup_default_func(StyxNetworkAddress *dest, const char *dns_name, uint16 default_port, boolean *do_ipv6);
-
-boolean
-(*styx_network_address_lookup)
-(
-    StyxNetworkAddress *dest,
-    const char *dns_name,
-    uint16 default_port,
-    boolean *do_ipv6
-) = styx_network_address_lookup_default_func;
 
 void styx_socket_destroy(VSocket socket)
 {
@@ -176,7 +165,7 @@ static VSocket styx_socket_create(boolean stream, uint16 port, boolean ipv6)
     return s;
 }
 
-boolean styx_network_address_lookup_default_func(StyxNetworkAddress *address, const char *dns_name, uint16 default_port, boolean *do_ipv6)
+boolean styx_network_address_lookup(StyxNetworkAddress *address, const char *dns_name, uint16 default_port, boolean *do_ipv6)
 {
     char host[256];
     char port_str[16];

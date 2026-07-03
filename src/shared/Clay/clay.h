@@ -2,56 +2,56 @@
 #define CLAY_H
 
 #if defined(_MSC_VER)
-#ifndef _CRT_SECURE_NO_WARNINGS
-#define _CRT_SECURE_NO_WARNINGS
-#endif
-#define WIN32_LEAN_AND_MEAN
-#pragma warning(disable:4996)
-#pragma warning(disable:4703)
-#pragma warning(disable:4996)
-/*#pragma warning(disable:4664)*/
-#pragma warning(disable:4305)
-#pragma warning(disable:4244)
-/*#pragma warning(disable:4101)*/
-#pragma warning(error:4013)
-/*#pragma warning(error:4020)*/
-#pragma warning(error:4716)
-#pragma warning(error:4554)
-#pragma warning(error:4553)
-#pragma warning(error:4334)
-#pragma warning(error:4431) /* implicit int type */
+#  ifndef _CRT_SECURE_NO_WARNINGS
+#    define _CRT_SECURE_NO_WARNINGS
+#  endif
+#  define WIN32_LEAN_AND_MEAN
+#  pragma warning(disable:4996)
+#  pragma warning(disable:4703)
+#  pragma warning(disable:4996)
+/*#  pragma warning(disable:4664)*/
+#  pragma warning(disable:4305)
+#  pragma warning(disable:4244)
+/*#  pragma warning(disable:4101)*/
+#  pragma warning(error:4013)
+/*#  pragma warning(error:4020)*/
+#  pragma warning(error:4716)
+#  pragma warning(error:4554)
+#  pragma warning(error:4553)
+#  pragma warning(error:4334)
+#  pragma warning(error:4431) /* implicit int type */
 /* FIX ME */
-/*#pragma warning(error:4047)*/
+/*#  pragma warning(error:4047)*/
 /* Forces printf functions to have a string literal as first argument. */
-/*#pragma warning(error:4774)*/
+/*#  pragma warning(error:4774)*/
 /*C4255*/
-/*#pragma warning(push, 4)*/
+/*#  pragma warning(push, 4)*/
 #endif
 
 /*#pragma warning( disable : 4507 34; once : 4385; error : 164 )*/
 
 #if !defined(TYPES_H)
-#define TYPES_H
+#  define TYPES_H
 
-#ifndef NULL
-#ifdef __cplusplus
-#define NULL 0
-#else
-#define NULL ((void *)0)
-#endif
+#  ifndef NULL
+#    ifdef __cplusplus
+#    define NULL 0
+#  else
+#    define NULL ((void *)0)
+#  endif
 #endif
 
 #if !defined(TRUE)
-#define TRUE 1
+#  define TRUE 1
 #endif
 #if !defined(FALSE)
-#define FALSE 0
+#  define FALSE 0
 #endif
 #if defined _WIN32
-#define WIN32_LEAN_AND_MEAN
+#  define WIN32_LEAN_AND_MEAN
 typedef unsigned int uint;
 #else
-#include <sys/types.h>
+#  include <sys/types.h>
 #endif
 #if !defined(VERSE_TYPES)
 typedef signed char int8;
@@ -85,25 +85,29 @@ typedef float freal;
 #define CLAY_IS_BIG_ENDIAN (*(short *)"\0\xff" < 0x100)
 
 #if defined(DEBUG) || defined (_DEBUG)
-#define CLAY_DEBUG_BUILD
+#  define CLAY_DEBUG_BUILD
 #endif
 
 #ifndef CLAY_DEBUG_BUILD
-#define CLAY_RELEASE_BUILD
+#  define CLAY_RELEASE_BUILD
 #endif
 
 #if !defined(C_NO_MEMORY_DEBUG)
 /* turns on the memory debugging system */
-#define C_MEMORY_DEBUG
+#  define C_MEMORY_DEBUG
 /*#define C_MEMORY_PRINT */
 #endif
 #if !defined(C_EXIT_CRASH)
 /* turns on  the crash on exit */
-/*#define C_EXIT_CRASH*/ 
+/*#  define C_EXIT_CRASH*/ 
 #endif
 
 #include <stdlib.h>
 #include <stdio.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* ----- Debugging -----
  * If C_MEMORY_DEBUG is enabled, the memory debugging system will create macros that replace malloc, free, and realloc, and allows the system to keep track of and report where memory is being allocated, how much and if the memory is being freed. This is very useful for finding memory leaks in large applications. The system can also over allocate memory and fill it with a magic number and can therefore detect if the application writes outside of the allocated memory.
@@ -128,31 +132,31 @@ extern void     c_no_debug_free(void *buf); /* Introduced as some libraries requ
 
 #ifdef C_MEMORY_DEBUG
 
-#define malloc(n) c_debug_mem_malloc(n, __FILE__, __LINE__)
-#define realloc(n, m) c_debug_mem_realloc(n, m, __FILE__, __LINE__)
-#define free(n) c_debug_mem_free(n, __FILE__, __LINE__)
+#  define malloc(n) c_debug_mem_malloc(n, __FILE__, __LINE__)
+#  define realloc(n, m) c_debug_mem_realloc(n, m, __FILE__, __LINE__)
+#  define free(n) c_debug_mem_free(n, __FILE__, __LINE__)
 
-#define fopen(n, m) c_debug_mem_fopen(n, m, __FILE__, __LINE__)
-#define fclose(n) c_debug_mem_fclose(n, __FILE__, __LINE__)
+#  define fopen(n, m) c_debug_mem_fopen(n, m, __FILE__, __LINE__)
+#  define fclose(n) c_debug_mem_fclose(n, __FILE__, __LINE__)
 
 #else
-#ifndef C_MEMORY_INTERNAL
+#  ifndef C_MEMORY_INTERNAL
 
-#define c_debug_memory_init(n, m, k)
-#define c_debug_mem_comment(n, m)
-#define c_debug_mem_print(n)
-#define c_debug_mem_reset()
-#define c_debug_mem_consumption() 0
-#define c_debug_mem_query(n, m, k, l)
-#define c_debug_memory()
+#    define c_debug_memory_init(n, m, k)
+#    define c_debug_mem_comment(n, m)
+#    define c_debug_mem_print(n)
+#    define c_debug_mem_reset()
+#    define c_debug_mem_consumption() 0
+#    define c_debug_mem_query(n, m, k, l)
+#    define c_debug_memory()
 
-#endif
+#  endif
 #endif
 
 #ifdef C_EXIT_CRASH
 
 extern void exit_crash(uint i);
-#define exit(n) exit_crash(n)
+#  define exit(n) exit_crash(n)
 
 #endif
 
@@ -216,6 +220,10 @@ extern void     c_text_obfuscate_print(char *in_buffer);
 
 extern void     c_bits_to_text(uint64 bits, char *text); /* Generates a 13 byte string that is easy for a human to repeat. Terminated, needs 14 characters. */
 extern uint     ctext_to_bits(uint64 *bits, char *text); /* Converts 14 byte string into a 64 bit value. Returns the number of bytes read, returns 0 if failure */
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 

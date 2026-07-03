@@ -5,6 +5,8 @@
 #define C_NO_MEMORY_DEBUG
 #include "Clay/clay.h"
 
+#pragma warning(disable:4477) /* size_t printf with %lu */
+
 extern void c_debug_mem_print(unsigned int min_allocs);
 
 #define C_MEMORY_OVER_ALLOC 256
