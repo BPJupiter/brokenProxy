@@ -1,4 +1,5 @@
 settings.xml
+imgui.ini
 # C extensions
 # Object files
 *.o
