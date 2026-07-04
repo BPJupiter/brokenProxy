@@ -10,23 +10,11 @@ You Are free to use, modify, and distribute this software for non-commercial, ac
 For commercial licensing inquiries, please contact: [Frances Telfar: atel215@aucklanduni.ac.nz]
 See the [LICENSE](LICENSE) for more details.
 
-## Settings Page
-
-Here you can hotload proxy configuration.
-
-`http://127.0.0.1:13406`
-
 ## Build
 
-This project is written to the C89 standard on Windows and Linux.
+Windows: `build_win32.bat` in a shell with MSVC compiler environment variables set.
 
-Windows: Build with MSVC
-
-Linux: Build with
-
-``cmake -S . -B build``
-
-``cmake --build build``
+Linux: `build_linux.sh`
 
 ## Curl commandline args
 
