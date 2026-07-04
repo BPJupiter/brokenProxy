@@ -22,8 +22,10 @@ SOURCES="third_party/imgui/src/imgui*.cpp \
          src/proxy/network_tools.c \
          src/main.cpp"
 LIBS="$(pkg-config --libs sdl3)"
+FLAGS="-fpermissive -mshstk"
+NO_WARNINGS="-Wno-write-strings"
 mkdir -p ${OUT_DIR}
 echo "Compiling..."
-g++ -g ${INCLUDES} $SOURCES -o ${OUT_DIR}/${OUT_EXE} ${LIBS}
-cp -r data ${OUT_DIR}/
+g++ -g ${FLAGS} ${NO_WARNINGS} ${INCLUDES} $SOURCES -o ${OUT_DIR}/${OUT_EXE} ${LIBS}
+cp -r assets ${OUT_DIR}/
 echo "Build complete."

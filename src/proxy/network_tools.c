@@ -303,7 +303,7 @@ static uint32 ping(const char *ip)
         }
     }
 
-    printf("%s Ping on %s : %d ms\n", PING_TAG, ip, result);
+    printf("%s Ping on %s : %lld ms\n", PING_TAG, ip, result);
 
     pclose(fp);
 

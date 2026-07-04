@@ -4,6 +4,7 @@
 #include <errno.h>
 
 #include "Clay/clay.h"
+#include "Europa/europa.h"
 
 typedef enum {
     EUROPA_ST_UNDEFINED,
