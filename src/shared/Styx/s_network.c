@@ -65,7 +65,11 @@ static VSocket styx_socket_create(boolean stream, uint16 port, boolean ipv6)
     int s_protocol = stream ? IPPROTO_TCP : IPPROTO_UDP;
 
     int buffer_size = 1 << 20;
+#if defined _WIN32
+    const char option = 1;
+#else
     const int option = 1;
+#endif
     
 #if defined _WIN32
     if (!styx_socket_init_win32()) {
@@ -107,15 +111,10 @@ static VSocket styx_socket_create(boolean stream, uint16 port, boolean ipv6)
             fprintf(stderr, "Styx: Couldn't set broadcast option of socket to %d\n", option);
         }
     }
-#if defined _WIN32
-    if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (const char *)&option, sizeof(option)) < 0) {
-        fprintf(stderr, "Styx: Couldn't set to reuseaddr!\n");
-    }
-#else
     if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option)) < 0) {
         fprintf(stderr, "Styx: Couldn't set to reuseaddr!\n");
     }
-#endif
+    /* @Cleanup: is this necessary on windows? Weird char * shenanigans here. */
     if (setsockopt(s, SOL_SOCKET, SO_SNDBUF, &buffer_size, sizeof buffer_size) != 0) {
         fprintf(stderr, "Styx: Couldn't set send buffer size of socket to %d\n", buffer_size);
     }

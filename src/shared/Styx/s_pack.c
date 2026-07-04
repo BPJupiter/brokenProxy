@@ -11,6 +11,8 @@
 #define STYX_HEADER_SIZE_MAX 0
 #endif
 
+#pragma warning(disable:4477) /* %lu for size_t */
+
 const char *styx_type_strings[] = {"S_TYPE_UINT8",
                                     "S_TYPE_INT8",
                                     "S_TYPE_UINT16",

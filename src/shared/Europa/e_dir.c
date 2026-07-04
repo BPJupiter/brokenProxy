@@ -11,6 +11,8 @@
 #include <tchar.h>
 #include <wchar.h>
 
+#pragma warning(disable:4133) /* char * to LPCWSTR */
+
 typedef struct
 {
     char d_name[EUROPA_WINDOWS_PATH_LENGTH_MAX];

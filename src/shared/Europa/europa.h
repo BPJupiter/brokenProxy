@@ -5,7 +5,9 @@
 #include "Clay/clay.h"
 
 #ifdef _WIN32
-#  define WIN32_LEAN_AND_MEAN
+#  ifndef WIN32_LEAN_AND_MEAN
+#    define WIN32_LEAN_AND_MEAN
+#  endif
 #  include <windows.h>
 #endif
 
@@ -59,7 +61,7 @@ extern void     europa_sleepd(double time);
 
 /* -------- Execution -------- */
 
-extern int  europa_execute(const char *command);     /* Execute command on platform */
+extern int  europa_execute(char *command);     /* Execute command on platform */
 extern void europa_process_shutdown(int pid); /* graceful */
 extern void europa_process_terminate(int pid); /* kills immediately */
 extern void europa_process_reload(int pid);

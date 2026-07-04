@@ -5,7 +5,9 @@
 #  ifndef _CRT_SECURE_NO_WARNINGS
 #    define _CRT_SECURE_NO_WARNINGS
 #  endif
-#  define WIN32_LEAN_AND_MEAN
+#  ifndef WIN32_LEAN_AND_MEAN
+#    define WIN32_LEAN_AND_MEAN
+#  endif
 #  pragma warning(disable:4996)
 #  pragma warning(disable:4703)
 #  pragma warning(disable:4996)
@@ -48,7 +50,6 @@
 #  define FALSE 0
 #endif
 #if defined _WIN32
-#  define WIN32_LEAN_AND_MEAN
 typedef unsigned int uint;
 #else
 #  include <sys/types.h>

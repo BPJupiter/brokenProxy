@@ -345,6 +345,7 @@ int main(int,char**)
     proxy = bp_init(proxy_port, "settings.xml");
     europa_settings_load("settings.xml");
     europa_setting_boolean_set("USE_LOCAL_DNS", TRUE, NULL);
+    europa_setting_integer_set("MAX_LATENCY", 1000, NULL);
     europa_settings_save("settings.xml");
     bp_reload_settings(proxy);
 

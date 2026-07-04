@@ -6,6 +6,7 @@
 #include "Clay/clay.h"
 
 #pragma warning(disable:4477) /* size_t printf with %lu */
+#pragma warning(disable:4311) /* casting pointers to printable ints */
 
 extern void c_debug_mem_print(unsigned int min_allocs);
 

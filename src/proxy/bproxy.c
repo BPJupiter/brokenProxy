@@ -6,7 +6,6 @@
 #include "Talos/talos.h"
 
 #include "network_tools.h"
-#include "memory_usage.h"
 
 #include <signal.h>
 #include <stdarg.h>
@@ -74,7 +73,6 @@ typedef struct {
         boolean active;
     } pairs[MAX_CLIENTS];
     uint count;
-    void *mutex;
 } HandleSet;
 
 typedef struct {
@@ -86,17 +84,15 @@ typedef struct {
 
 typedef struct BProxyHandle {
     BProxySettings settings;
-    HandleSet handles;
-    EThreadPool threadpool;
+    HandleSet connections;
     SHandle *server_handle;
     char *settings_filename;
     uint16 port;
 } BProxyHandle;
 
-static void client_thread(void **args);
+static void handle_client(BProxyHandle *proxy, SHandle *client_handle);
 static boolean target_addr_get_from_buffer(BProxyHandle *proxy, SHandle *client_handle, StyxNetworkAddress *target_addr, char *target_ip_str, char *target_domain);
 static int transfer_data(SHandle *from_handle, SHandle *to_handle);
-static void pipe_handle_data_thread(void *arg);
 
 static int logln(const char *format, ...);
 static void reload_config(BProxyHandle *proxy);
@@ -104,18 +100,12 @@ static void reload_config(BProxyHandle *proxy);
 BProxyHandle *bp_init(uint16 port, const char *settings_filename)
 {
     BProxyHandle *proxy = calloc(1, sizeof(BProxyHandle));
-    proxy->threadpool = europa_threadpool_init(8);
-    proxy->handles.mutex = europa_mutex_create();
     proxy->settings_filename = malloc(strlen(settings_filename) + 1);
     strcpy(proxy->settings_filename, settings_filename);
     proxy->port = port;
     proxy->server_handle = styx_network_stream_address_create(NULL, proxy->port, FALSE);
     if (!proxy->server_handle) {
         logln("FATAL: Could not init server_handle!");
-        exit(1);
-    }
-    if (!europa_threadpool_add_work(proxy->threadpool, pipe_handle_data_thread, proxy)) {
-        logln("FATAL: Couldn't launch pipe thread!");
         exit(1);
     }
 #ifndef _WIN32
@@ -131,8 +121,6 @@ void bp_destroy(BProxyHandle *proxy)
     if (proxy) {
         styx_free(proxy->server_handle);
         free(proxy->settings_filename);
-        europa_mutex_destroy(proxy->handles.mutex);
-        europa_threadpool_destroy(proxy->threadpool);
         free(proxy);
     }
 }
@@ -142,12 +130,7 @@ int bp_start_blocking(BProxyHandle *proxy)
     while (1) {
         SHandle *client_handle = styx_network_stream_wait_for_connection(proxy->server_handle, NULL);
         if (client_handle) {
-            void **args = malloc(sizeof(void *) * 2);
-            args[0] = proxy;
-            args[1] = client_handle;
-            if (!europa_threadpool_add_work(proxy->threadpool, client_thread, args)) {
-                logln("Failed to create new thread");
-            }
+            handle_client(proxy, client_handle);
         }
     }
 
@@ -156,14 +139,48 @@ int bp_start_blocking(BProxyHandle *proxy)
 
 boolean bp_update(BProxyHandle *proxy)
 {
+    SHandle *handles[MAX_CLIENTS * 2];
+    boolean ready[MAX_CLIENTS * 2];
+    uint pair_idxs[MAX_CLIENTS];
+    uint i = 0, n = 0, pairs = 0;
+    int res;
+    for (i = 0; i < MAX_CLIENTS; i++) {
+        if (!proxy->connections.pairs[i].active) {
+            continue;
+        }
+        handles[n]     = proxy->connections.pairs[i].client;
+        handles[n + 1] = proxy->connections.pairs[i].target;
+        ready[n] = ready[n + 1] = TRUE;
+        n += 2;
+        pair_idxs[pairs++] = i;
+    }
+    if (n != 0) {
+        res = 0;
+        res = styx_network_wait(handles, ready, NULL, n, 1000);
+        if (res > 0) {
+            n = 0;
+            for (i = 0; i < pairs; i++) {
+                boolean closed = FALSE;
+                if (!proxy->connections.pairs[pair_idxs[i]].active) {
+                    n += 2;
+                    continue;
+                }
+                if (ready[n])     closed |= transfer_data(handles[n], handles[n + 1]) < 0;
+                if (ready[n + 1]) closed |= transfer_data(handles[n + 1], handles[n]) < 0;
+                if (closed) {
+                    printf("I'm closing connection idx: %d\n", pair_idxs[i]);
+                    styx_free(proxy->connections.pairs[pair_idxs[i]].client);
+                    styx_free(proxy->connections.pairs[pair_idxs[i]].target);
+                    proxy->connections.pairs[pair_idxs[i]].active = FALSE;
+                    proxy->connections.count--;
+                }
+                n += 2;
+            }
+        }
+    }
     SHandle *client_handle = styx_network_stream_wait_for_connection(proxy->server_handle, NULL);
     if (client_handle) {
-        void **args = malloc(sizeof(void *) * 2);
-        args[0] = proxy;
-        args[1] = client_handle;
-        if (!europa_threadpool_add_work(proxy->threadpool, client_thread, args)) {
-            logln("Failed to create new thread");
-        }
+        handle_client(proxy, client_handle);
         return TRUE;
     }
     return FALSE;
@@ -174,10 +191,8 @@ void bp_reload_settings(BProxyHandle *proxy)
     reload_config(proxy);
 }
 
-static void client_thread(void **args)
+static void handle_client(BProxyHandle *proxy, SHandle *client_handle)
 {
-    BProxyHandle *proxy = args[0];
-    SHandle *client_handle = args[1];
     uint8 version, nmethods, command;
     boolean r = FALSE, w = FALSE;
     uint i;
@@ -196,14 +211,14 @@ static void client_thread(void **args)
     }
 
     if (version != VERSION5) {
-        goto end;
+        return;
     }
 
     styx_pack_uint8(client_handle, VERSION5, "VERSION5");
     styx_pack_uint8(client_handle, NOAUTH, "NOAUTH");
     if (styx_network_stream_send_force(client_handle) != 2) {
         logln("Failed to send SOCKS5 response");
-        goto end;
+        return;
     }
 
     r = FALSE;
@@ -214,7 +229,7 @@ static void client_thread(void **args)
 
     version = styx_unpack_uint8(client_handle, "VERSION5");
     if (version != VERSION5) {
-        goto end;
+        return;
     }
 
     command = styx_unpack_uint8(client_handle, "CMD");
@@ -234,7 +249,7 @@ static void client_thread(void **args)
             if (!target_addr_get_from_buffer(proxy, client_handle, &target_addr, target_ip_str, target_domain)) {
                 if (client_handle) styx_free(client_handle);
                 if (target_handle) styx_free(target_handle);
-                goto end;
+                return;
             }
 
             logln("TCP connection target: %s:%d (%s:%d)", target_domain, target_addr.port, target_ip_str, target_addr.port);
@@ -275,25 +290,22 @@ static void client_thread(void **args)
             if (rep != OK) {
                 if (client_handle) styx_free(client_handle);
                 if (target_handle) styx_free(target_handle);
-                goto end;
+                return;
             }
 
             logln("Connection established");
 
-            europa_mutex_lock(proxy->handles.mutex);
             for (i = 0; i < MAX_CLIENTS; i++) {
-                if (!proxy->handles.pairs[i].active) {
-                    proxy->handles.pairs[i].client = client_handle;
-                    proxy->handles.pairs[i].target = target_handle;
-                    proxy->handles.pairs[i].active = TRUE;
-                    proxy->handles.count++;
+                if (!proxy->connections.pairs[i].active) {
+                    proxy->connections.pairs[i].client = client_handle;
+                    proxy->connections.pairs[i].target = target_handle;
+                    proxy->connections.pairs[i].active = TRUE;
+                    proxy->connections.count++;
                     break;
                 }
             }
-            europa_mutex_unlock(proxy->handles.mutex);
-            goto end;
-            break;
-        }
+            return;
+        } break;
         case UDP_ASSOCIATE:
             logln("App requested UDP Association");
             /* TODO: Fix me */
@@ -303,8 +315,6 @@ static void client_thread(void **args)
             logln("Unsupported SOCKS command: 0x%02x!", command);
         break;
     }
-end:
-    free(args);
     return;
 }
 
@@ -383,63 +393,6 @@ static int transfer_data(SHandle *from_handle, SHandle *to_handle)
     styx_network_stream_send_force(to_handle);
 
     return bytes_written;
-}
-
-static void pipe_handle_data_thread(void *arg)
-{
-    BProxyHandle *proxy = (BProxyHandle *)arg;
-    for (;;) {
-        SHandle *handles[MAX_CLIENTS * 2];
-        boolean ready[MAX_CLIENTS * 2];
-        uint pair_idxs[MAX_CLIENTS];
-        uint i, n = 0, pairs = 0;
-        int res;
-
-        europa_mutex_lock(proxy->handles.mutex);
-        for (i = 0; i < MAX_CLIENTS; i++) {
-            if (!proxy->handles.pairs[i].active) {
-                continue;
-            }
-
-            handles[n]         = proxy->handles.pairs[i].client;
-            handles[n + 1]     = proxy->handles.pairs[i].target;
-            ready[n] = ready[n + 1] = TRUE;
-            n += 2;
-            pair_idxs[pairs++] = i;
-        }
-        europa_mutex_unlock(proxy->handles.mutex);
-
-        if (n == 0) {
-            europa_sleepi(0, 1000000);
-            continue;
-        }
-
-        res = 0;
-        res = styx_network_wait(handles, ready, NULL, n, 100000);
-        if (res <= 0) continue;
-
-        europa_mutex_lock(proxy->handles.mutex);
-        n = 0;
-        for (i = 0; i < pairs; i++) {
-            boolean closed = FALSE;
-            if (!proxy->handles.pairs[pair_idxs[i]].active) {
-                n += 2;
-                continue;
-            }
-            
-            if (ready[n])     closed |= transfer_data(handles[n], handles[n + 1]) < 0;
-            if (ready[n + 1]) closed |= transfer_data(handles[n + 1], handles[n]) < 0;
-
-            if (closed) {
-                styx_free(proxy->handles.pairs[pair_idxs[i]].client);
-                styx_free(proxy->handles.pairs[pair_idxs[i]].target);
-                proxy->handles.pairs[pair_idxs[i]].active = FALSE;
-                proxy->handles.count--;
-            }
-            n += 2;
-        }
-        europa_mutex_unlock(proxy->handles.mutex);
-    }
 }
 
 static void reload_config(BProxyHandle *proxy)

@@ -4,6 +4,8 @@
 
 #include "styx.h"
 
+#pragma warning(disable:4477) /* %lu for size_t */
+
 char *styx_debug_magic_number = "StYxLiBdEbUg";
 
 SHandle *styx_buffer_create(void)

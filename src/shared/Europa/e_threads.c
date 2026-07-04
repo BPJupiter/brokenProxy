@@ -185,7 +185,7 @@ void europa_thread(void (*func)(void *data), void *data, char *name)
     DWORD dwThreadID;
 
     thread_param = malloc(sizeof *thread_param);
-    if (thread_param == NULL) return NULL;
+    if (thread_param == NULL) return;
     thread_param->func = func;
     thread_param->data = data;
 

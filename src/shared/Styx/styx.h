@@ -3,6 +3,8 @@
 #ifndef STYX_H
 #define STYX_H
 
+#pragma warning(disable:4005) /* FD_SETSIZE macro redefinition */
+
 #ifdef _WIN32
 #  define FD_SETSIZE 1024
 #endif
