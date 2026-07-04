@@ -93,7 +93,7 @@ typedef struct BProxyHandle {
     uint16 port;
 } BProxyHandle;
 
-static void client_thread(SHandle *client_handle);
+static void client_thread(void **args);
 static boolean target_addr_get_from_buffer(BProxyHandle *proxy, SHandle *client_handle, StyxNetworkAddress *target_addr, char *target_ip_str, char *target_domain);
 static int transfer_data(SHandle *from_handle, SHandle *to_handle);
 static void pipe_handle_data_thread(void *arg);
@@ -385,8 +385,9 @@ static int transfer_data(SHandle *from_handle, SHandle *to_handle)
     return bytes_written;
 }
 
-static void pipe_handle_data_thread(BProxyHandle *proxy)
+static void pipe_handle_data_thread(void *arg)
 {
+    BProxyHandle *proxy = (BProxyHandle *)arg;
     for (;;) {
         SHandle *handles[MAX_CLIENTS * 2];
         boolean ready[MAX_CLIENTS * 2];
