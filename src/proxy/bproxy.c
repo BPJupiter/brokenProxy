@@ -7,6 +7,7 @@
 
 #include "network_tools.h"
 
+#include <string.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <errno.h>

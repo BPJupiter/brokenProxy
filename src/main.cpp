@@ -179,21 +179,39 @@ static bool load_geojson_data(const std::string &filename)
             // Make points
             const auto coordinates = geometry["coordinates"];
             for (int line = 0; line < coordinates.size(); line++) {
-                std::vector<SDL_FPoint> current_line;
-                for (const auto &coord: coordinates[line]) {
-                    const auto pos = coord.get<std::array<float, 2>>();
-                    current_line.push_back(project_mercator(pos[0], pos[1]));
+                std::vector<SDL_FPoint> current_fat_line;
+                const auto pos = coordinates[line][0].get<std::array<float, 2>>();
+                SDL_FPoint curr_point = project_mercator(pos[0], pos[1]);
+                SDL_FPoint prev_point = curr_point;
+                for (int i = 1; i < coordinates[line].size(); i++) {
+                    pos = coordinates[line][i].get<std::array<float, 2>>();
+                    curr_point = project_mercator(pos[0], pos[1]);
+                    SDL_FPoint direction  = { curr_point.x - prev_point.x,
+                                              curr_point.y - prev_point.y };
+                    float magnitude = sqrtf(direction.x * direction.x + direction.y * direction.y);
+                    magnitude *= 2;
+                    SDL_FPoint prev_left  = { prev_point.x - (direction.y / magnitude), prev_point.y + (direction.x / magnitude) };
+                    SDL_FPoint prev_right = { prev_point.x + (direction.y / magnitude), prev_point.y - (direction.x / magnitude) };
+                    SDL_FPoint curr_left  = { curr_point.x - (direction.y / magnitude), curr_point.y + (direction.x / magnitude) };
+                    SDL_FPoint curr_right = { curr_point.x + (direction.y / magnitude), curr_point.y - (direction.x / magnitude) };
+                    current_fat_line.push_back(prev_right);
+                    current_fat_line.push_back(prev_left);
+                    current_fat_line.push_back(curr_left);
+                    current_fat_line.push_back(prev_right);
+                    current_fat_line.push_back(curr_left);
+                    current_fat_line.push_back(curr_right);
+                    prev_point = curr_point;
                 }
 
-                BBox bbox = { current_line[0].x, current_line[0].x, current_line[0].y, current_line[0].y };
-                for (const auto &pt: current_line) {
+                BBox bbox = { current_fat_line[0].x, current_fat_line[0].x, current_fat_line[0].y, current_fat_line[0].y };
+                for (const auto &pt: current_fat_line) {
                     bbox.x_min = (std::min)(bbox.x_min, pt.x);
                     bbox.x_max = (std::max)(bbox.x_max, pt.x);
                     bbox.y_min = (std::min)(bbox.y_min, pt.y);
                     bbox.y_max = (std::max)(bbox.y_max, pt.y);
                 }
                 Cables.colors.push_back(current_color);
-                Cables.lines.push_back(current_line);
+                Cables.lines.push_back(current_fat_line);
                 Cables.bboxes.push_back(bbox);
             }
         } break;
@@ -354,13 +372,25 @@ int main(int,char**)
         float y = 0.0f;
         float zoom = 1.0f;
         bool is_panning = false;
-        std::vector<SDL_FPoint> cable_render_buffer;
+        std::vector<std::vector<SDL_Vertex>> cable_render_buffer;
         std::vector<SDL_Vertex> world_render_buffer;
     } camera;
 
     for (int i = 0; i < World.polygons.size(); i++) {
         SDL_Vertex vertex = { World.polygons[i], World.color, {0} };
         camera.world_render_buffer.push_back(vertex);
+    }
+    for (int i = 0; i < Cables.lines.size(); i++) {
+        std::vector<SDL_Vertex> current_line;
+        for (int j = 0; j < Cables.lines[i].size(); j++) {
+            SDL_FColor color = { Cables.colors[i].r / 255.0,
+                                 Cables.colors[i].g / 255.0,
+                                 Cables.colors[i].b / 255.0,
+                                 Cables.colors[i].a / 255.0 };
+            SDL_Vertex vertex = { Cables.lines[i][j], color, {0} };
+            current_line.push_back(vertex);
+        }
+        camera.cable_render_buffer.push_back(current_line);
     }
     
     SDL_SetRenderVSync(renderer, 0);
@@ -447,13 +477,16 @@ int main(int,char**)
             { // World map
                 for (int copy = min_copy; copy <= max_copy; copy++) {
                     float x_offset = copy * WORLD_SIZE;
-                    for (size_t i = 0; i < World.polygons.size(); i++) {
-                        camera.world_render_buffer[i].position.x =
-                            (World.polygons[i].x + x_offset + camera.x) * camera.zoom;
-                        camera.world_render_buffer[i].position.y =
-                            (World.polygons[i].y + camera.y) * camera.zoom;
+                    for (size_t v = 0; v < World.polygons.size(); v++) {
+                        camera.world_render_buffer[v].position.x = (World.polygons[v].x + x_offset + camera.x) * camera.zoom;
+                        camera.world_render_buffer[v].position.y = (World.polygons[v].y            + camera.y) * camera.zoom;
                     }
-                    SDL_RenderGeometry(renderer, nullptr, camera.world_render_buffer.data(), static_cast<int>(camera.world_render_buffer.size()), nullptr, 0);
+                    SDL_RenderGeometry(renderer,
+                                       nullptr,
+                                       camera.world_render_buffer.data(),
+                                       static_cast<int>(camera.world_render_buffer.size()),
+                                       nullptr,
+                                       0);
                 }
             }
             { // Cables
@@ -466,8 +499,6 @@ int main(int,char**)
                     if (bbox.y_min > view_bottom) skip_line = true;
                     if (skip_line) continue;
 
-                    SDL_SetRenderDrawColor(renderer, Cables.colors[i].r, Cables.colors[i].g, Cables.colors[i].b, Cables.colors[i].a);
-                    camera.cable_render_buffer.resize(Cables.lines[i].size());
                     for (int copy = min_copy; copy <= max_copy; copy++) {
                         float x_offset = copy * WORLD_SIZE;
                         bool skip_copy = false;
@@ -475,11 +506,16 @@ int main(int,char**)
                         if (bbox.x_min + x_offset > view_right) skip_copy = true;
                         if (skip_copy) continue;
                         
-                        for (size_t p = 0; p < Cables.lines[i].size(); p++) {
-                            camera.cable_render_buffer[p].x = (Cables.lines[i][p].x + x_offset + camera.x) * camera.zoom;
-                            camera.cable_render_buffer[p].y = (Cables.lines[i][p].y + camera.y) * camera.zoom;
+                        for (size_t v = 0; v < Cables.lines[i].size(); v++) {
+                            camera.cable_render_buffer[i][v].position.x = (Cables.lines[i][v].x + x_offset + camera.x) * camera.zoom;
+                            camera.cable_render_buffer[i][v].position.y = (Cables.lines[i][v].y            + camera.y) * camera.zoom;
                         }
-                        SDL_RenderLines(renderer, camera.cable_render_buffer.data(), static_cast<int>(Cables.lines[i].size()));
+                        SDL_RenderGeometry(renderer,
+                                           nullptr,
+                                           camera.cable_render_buffer[i].data(),
+                                           static_cast<int>(camera.cable_render_buffer[i].size()),
+                                           nullptr,
+                                           0);
                     }
                 }
             }
