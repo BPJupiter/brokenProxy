@@ -21,7 +21,6 @@
 #define BUFFER_SIZE (1 << 16)
 #define UDP_HEADER_IPV4_LEN 10
 #define IP_SIZE 4
-#define MAX_CLIENTS 256
 #define PROJECT_ROOT_FOLDER_NAME "brokenProxy"
 
 enum socks {
@@ -67,36 +66,13 @@ enum socks_status {
     UNSUPPORTED_ADDRESS = 0x08
 };
 
-typedef struct {
-    struct {
-        SHandle *client;
-        SHandle *target;
-        boolean active;
-    } pairs[MAX_CLIENTS];
-    uint count;
-} HandleSet;
-
-typedef struct {
-    boolean do_ping;
-    boolean do_traceroute;
-    boolean use_local_dns;
-    uint32 max_rtt_ns;
-} BProxySettings;
-
-typedef struct BProxyHandle {
-    BProxySettings settings;
-    HandleSet connections;
-    SHandle *server_handle;
-    char *settings_filename;
-    uint16 port;
-} BProxyHandle;
-
 static void handle_client(BProxyHandle *proxy, SHandle *client_handle);
 static boolean target_addr_get_from_buffer(BProxyHandle *proxy, SHandle *client_handle, StyxNetworkAddress *target_addr, char *target_ip_str, char *target_domain);
 static int transfer_data(SHandle *from_handle, SHandle *to_handle);
 
 static int logln(const char *format, ...);
-static void reload_config(BProxyHandle *proxy);
+static void load_config(BProxyHandle *proxy);
+static void save_config(BProxyHandle *proxy);
 
 BProxyHandle *bp_init(uint16 port, const char *settings_filename)
 {
@@ -112,7 +88,7 @@ BProxyHandle *bp_init(uint16 port, const char *settings_filename)
 #ifndef _WIN32
     signal(SIGPIPE, SIG_IGN);
 #endif
-    reload_config(proxy);
+    load_config(proxy);
     logln("SOCKS5 Proxy setup on port: %d", proxy->port);
     return proxy;
 }
@@ -128,12 +104,8 @@ void bp_destroy(BProxyHandle *proxy)
 
 int bp_start_blocking(BProxyHandle *proxy)
 {
-    while (1) {
-        SHandle *client_handle = styx_network_stream_wait_for_connection(proxy->server_handle, NULL);
-        if (client_handle) {
-            handle_client(proxy, client_handle);
-        }
-    }
+    while (1)
+        bp_update(proxy);
 
     return 0;
 }
@@ -157,7 +129,7 @@ boolean bp_update(BProxyHandle *proxy)
     }
     if (n != 0) {
         res = 0;
-        res = styx_network_wait(handles, ready, NULL, n, 1000);
+        res = styx_network_wait(handles, ready, NULL, n, 10);
         if (res > 0) {
             n = 0;
             for (i = 0; i < pairs; i++) {
@@ -169,7 +141,7 @@ boolean bp_update(BProxyHandle *proxy)
                 if (ready[n])     closed |= transfer_data(handles[n], handles[n + 1]) < 0;
                 if (ready[n + 1]) closed |= transfer_data(handles[n + 1], handles[n]) < 0;
                 if (closed) {
-                    printf("I'm closing connection idx: %d\n", pair_idxs[i]);
+                    logln("Closing connection %d\n", pair_idxs[i]);
                     styx_free(proxy->connections.pairs[pair_idxs[i]].client);
                     styx_free(proxy->connections.pairs[pair_idxs[i]].target);
                     proxy->connections.pairs[pair_idxs[i]].active = FALSE;
@@ -187,9 +159,14 @@ boolean bp_update(BProxyHandle *proxy)
     return FALSE;
 }
 
-void bp_reload_settings(BProxyHandle *proxy)
+void bp_load_settings_from_disk(BProxyHandle *proxy)
 {
-    reload_config(proxy);
+    load_config(proxy);
+}
+
+void bp_save_settings_to_disk(BProxyHandle *proxy)
+{
+    save_config(proxy);
 }
 
 static void handle_client(BProxyHandle *proxy, SHandle *client_handle)
@@ -197,7 +174,7 @@ static void handle_client(BProxyHandle *proxy, SHandle *client_handle)
     uint8 version, nmethods, command;
     boolean r = FALSE, w = FALSE;
     uint i;
-
+    
     UNUSED(w);
     r = FALSE;
     while (!r) {
@@ -225,7 +202,7 @@ static void handle_client(BProxyHandle *proxy, SHandle *client_handle)
     r = FALSE;
     while (!r) {
         r = TRUE;
-        styx_network_wait(&client_handle, &r, NULL, 1, 1000);
+        styx_network_wait(&client_handle, &r, NULL, 1, 100);
     }
 
     version = styx_unpack_uint8(client_handle, "VERSION5");
@@ -396,15 +373,57 @@ static int transfer_data(SHandle *from_handle, SHandle *to_handle)
     return bytes_written;
 }
 
-static void reload_config(BProxyHandle *proxy)
+static char *setting_desc[] =
+    { "Do a ping measurement on every address touched by the Proxy.",
+      "Do a traceroute measurement on every address touched by the Proxy.",
+      "Use the local DNS resolver rather than the Proxy's custom iterative one.",
+      "Drop connections measured to have a latency greater than this value. "
+      "Requires DO_PING or DO_TRACEROUTE to have effect."
+};
+
+enum {
+    DESC_PING = 0,
+    DESC_TRACEROUTE,
+    DESC_DNS,
+    DESC_RTT
+};
+
+static void load_config(BProxyHandle *proxy)
 {
-    if (!europa_settings_load(proxy->settings_filename)) {
-        printf("Creating settings file %s\n", proxy->settings_filename);
-    }
-    proxy->settings.do_ping = europa_setting_boolean_get("DO_PING", TRUE, "Do a ping measurement on every address touched by the Proxy.");
-    proxy->settings.do_traceroute = europa_setting_boolean_get("DO_TRACEROUTE", FALSE, "Do a traceroute on every address touched by the Proxy.");
-    proxy->settings.use_local_dns = europa_setting_boolean_get("USE_LOCAL_DNS", FALSE, "Use the local system DNS resolver rather than the Proxy's iterative one.");
-    proxy->settings.max_rtt_ns = europa_setting_integer_get("MAX_LATENCY", 200, "Drop connections measured to have a latency greater than this value. Requires DO_PING or DO_TRACEROUTE to be enabled.") * 1000000;
+    europa_settings_load(proxy->settings_filename);
+    proxy->settings.do_ping =
+        europa_setting_boolean_get("DO_PING",
+                                   TRUE,
+                                   setting_desc[DESC_PING]);
+    proxy->settings.do_traceroute =
+        europa_setting_boolean_get("DO_TRACEROUTE",
+                                   FALSE,
+                                   setting_desc[DESC_TRACEROUTE]);
+    proxy->settings.use_local_dns =
+        europa_setting_boolean_get("USE_LOCAL_DNS",
+                                   FALSE,
+                                   setting_desc[DESC_DNS]);
+    proxy->settings.max_rtt_ns =
+        europa_setting_integer_get("MAX_LATENCY",
+                                   200,
+                                   setting_desc[DESC_RTT]) * 1000000;
+    europa_settings_save(proxy->settings_filename);
+}
+
+static void save_config(BProxyHandle *proxy)
+{
+    europa_setting_boolean_set("DO_PING",
+                               proxy->settings.do_ping,
+                               setting_desc[DESC_PING]);
+    europa_setting_boolean_set("DO_TRACEROUTE",
+                               proxy->settings.do_traceroute,
+                               setting_desc[DESC_TRACEROUTE]);
+    europa_setting_boolean_set("USE_LOCAL_DNS",
+                               proxy->settings.use_local_dns,
+                               setting_desc[DESC_DNS]);
+    europa_setting_integer_set("MAX_LATENCY",
+                               proxy->settings.max_rtt_ns / 1000000,
+                               setting_desc[DESC_RTT]);
     europa_settings_save(proxy->settings_filename);
 }
 

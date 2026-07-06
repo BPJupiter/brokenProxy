@@ -150,7 +150,7 @@ static VSocket styx_socket_create(boolean stream, uint16 port, boolean ipv6)
         }
 
         if (stream) {
-            if (listen(s, 5) < 0) {
+            if (listen(s, 128) < 0) {
 #if defined _WIN32
                 fprintf(stderr, "Styx: Failed to listen(), Winsock error %d\n", WSAGetLastError());
 #else

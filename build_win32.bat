@@ -7,12 +7,10 @@
               /Ithird_party\nlohmann\include ^
               /Ithird_party\nanosvg\include ^
               /Ithird_party\mapbox\include ^
-              /Ithird_party\cjson\include ^
               /Isrc\shared ^
               /Isrc\proxy ^
               /Ilib
 @set SOURCES=third_party\imgui\src\imgui*.cpp ^
-             third_party\cjson\src\cJSON.c ^
              src\shared\Clay\*.c ^
              src\shared\Europa\*.c ^
              src\shared\Styx\*.c ^
@@ -25,4 +23,4 @@
 mkdir %OUT_DIR%
 cl /nologo /Zi /EHsc /MD /utf-8 %INCLUDES% %SOURCES% /Fd%OUT_DIR%/ /Fe%OUT_DIR%/%OUT_EXE%.exe /Fo%OUT_DIR%/ /link /CETCOMPAT %LIBS% /subsystem:console
 copy /y lib\SDL3\SDL3.dll %OUT_DIR%\
-xcopy /y /s /e /i data %OUT_DIR%\data
+xcopy /y /s /e /i assets %OUT_DIR%\assets

@@ -7,12 +7,10 @@ INCLUDES="-I. \
           -Ithird_party/nlohmann/include \
           -Ithird_party/nanosvg/include \
           -Ithird_party/mapbox/include \
-          -Ithird_party/cjson/include \
           -Isrc/shared \
           -Isrc/proxy \
           $(pkg-config --cflags sdl3)"
 SOURCES="third_party/imgui/src/imgui*.cpp \
-         third_party/cjson/src/cJSON.c \
          src/shared/Clay/*.c \
          src/shared/Europa/*.c \
          src/shared/Styx/*.c \

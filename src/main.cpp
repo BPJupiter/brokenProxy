@@ -86,7 +86,7 @@ namespace GeoJson {
 
 struct MainMenuWindowData
 {
-    bool show_main_menu_bar = false;
+    bool show_proxy_settings = true;
     bool show_geojson_info = false;
 };
 
@@ -94,8 +94,8 @@ struct BBox { float x_min, x_max, y_min, y_max; };
 
 struct {
     SDL_FColor color = {0xCE / 255.0, 0xCE / 255.0, 0xCE / 255.0, 0xFF / 255.0};
-    std::vector<SDL_FPoint> polygons;
-    std::vector<uint32_t> polygon_indices;
+    std::vector<std::vector<SDL_FPoint>> polygons;
+    std::vector<BBox> bboxes;
 } World;
 
 struct {
@@ -180,7 +180,7 @@ static bool load_geojson_data(const std::string &filename)
             const auto coordinates = geometry["coordinates"];
             for (int line = 0; line < coordinates.size(); line++) {
                 std::vector<SDL_FPoint> current_fat_line;
-                const auto pos = coordinates[line][0].get<std::array<float, 2>>();
+                auto pos = coordinates[line][0].get<std::array<float, 2>>();
                 SDL_FPoint curr_point = project_mercator(pos[0], pos[1]);
                 SDL_FPoint prev_point = curr_point;
                 for (int i = 1; i < coordinates[line].size(); i++) {
@@ -189,7 +189,7 @@ static bool load_geojson_data(const std::string &filename)
                     SDL_FPoint direction  = { curr_point.x - prev_point.x,
                                               curr_point.y - prev_point.y };
                     float magnitude = sqrtf(direction.x * direction.x + direction.y * direction.y);
-                    magnitude *= 2;
+                    magnitude *= 4;
                     SDL_FPoint prev_left  = { prev_point.x - (direction.y / magnitude), prev_point.y + (direction.x / magnitude) };
                     SDL_FPoint prev_right = { prev_point.x + (direction.y / magnitude), prev_point.y - (direction.x / magnitude) };
                     SDL_FPoint curr_left  = { curr_point.x - (direction.y / magnitude), curr_point.y + (direction.x / magnitude) };
@@ -234,18 +234,30 @@ static bool load_geojson_data(const std::string &filename)
                 points.insert(points.end(), ring.begin(), ring.end());
             }
 
+            if (indices.empty()) {
+                continue;
+            }
+
             std::vector<SDL_FPoint> current_polygon;
             current_polygon.reserve(indices.size());
             for (uint32_t idx: indices) {
                 current_polygon.push_back(points[idx]);
             }
-            
-            for (const auto &point: current_polygon) {
-                World.polygons.push_back(point);
+
+            BBox bbox = { current_polygon[0].x, current_polygon[0].x, current_polygon[0].y, current_polygon[0].y };
+            for (const auto &pt: current_polygon) {
+                bbox.x_min = (std::min)(bbox.x_min, pt.x);
+                bbox.x_max = (std::max)(bbox.x_max, pt.x);
+                bbox.y_min = (std::min)(bbox.y_min, pt.y);
+                bbox.y_max = (std::max)(bbox.y_max, pt.y);
             }
+            World.polygons.push_back(current_polygon);
+            World.bboxes.push_back(bbox);
         } break;
         case GeoJson::GeometryType::MultiPolygon: {
             const auto coordinates = geometry["coordinates"];
+            //auto properties = feature["properties"];
+            //std::string name = properties["name"].get<std::string>();
             for (int i = 0; i < coordinates.size(); i++) {
                 std::vector<std::vector<SDL_FPoint>> earcut_input;
                 for (int j = 0; j < coordinates[i].size(); j++) {
@@ -262,15 +274,25 @@ static bool load_geojson_data(const std::string &filename)
                     points.insert(points.end(), ring.begin(), ring.end());
                 }
 
+                if (indices.empty()) {
+                    continue;
+                }
+
                 std::vector<SDL_FPoint> current_polygon;
                 current_polygon.reserve(indices.size());
                 for (uint32_t idx: indices) {
                     current_polygon.push_back(points[idx]);
                 }
 
-                for (const auto &point: current_polygon) {
-                    World.polygons.push_back(point);
+                BBox bbox = { current_polygon[0].x, current_polygon[0].x, current_polygon[0].y, current_polygon[0].y };
+                for (const auto &pt: current_polygon) {
+                    bbox.x_min = (std::min)(bbox.x_min, pt.x);
+                    bbox.x_max = (std::max)(bbox.x_max, pt.x);
+                    bbox.y_min = (std::min)(bbox.y_min, pt.y);
+                    bbox.y_max = (std::max)(bbox.y_max, pt.y);
                 }
+                World.polygons.push_back(current_polygon);
+                World.bboxes.push_back(bbox);
             }
         } break;
         default: {
@@ -289,15 +311,92 @@ static void show_geojson_info()
     ImGui::End();
 }
 
-void show_main_menu_window(bool *p_open)
+static void HelpMarker(const char *desc)
+{
+    ImGui::TextDisabled("(?)");
+    if (ImGui::BeginItemTooltip()) {
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+        ImGui::TextUnformatted(desc);
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
+}
+
+static void show_proxy_settings(BProxyHandle *proxy)
+{
+    static int max_rtt_ms = proxy->settings.max_rtt_ns / 1000000;
+    static bool do_ping = proxy->settings.do_ping;
+    static bool do_traceroute = proxy->settings.do_traceroute;
+    static char *dns_items[] = { "Custom Iterative (Default)",
+                                 "Local System Default" };
+    static int dns_selected_idx = proxy->settings.use_local_dns ? 1 : 0;
+    ImGui::Begin("Settings");
+    ImGui::InputInt("Max Latency (ms)", &max_rtt_ms);
+    ImGui::Checkbox("Enable Ping", &do_ping);
+    ImGui::SameLine(); HelpMarker("The Proxy will ping each IP address it touches. Results are compared against Max Latency. (TODO) Cache results.");
+    ImGui::Checkbox("Enable Traceroute", &do_traceroute);
+    ImGui::SameLine(); HelpMarker("The Proxy will perform a traceroute on each IP address it touches. Results are compared against Max Latency. (TODO) Implement a list of blocked IPs; Cache results.");
+    const char *dns_preview_value = dns_items[dns_selected_idx];
+    if (ImGui::BeginCombo("DNS Resolution", dns_preview_value, 0)) {
+        for (int n = 0; n > IM_COUNTOF(dns_items); n++) {
+            const bool is_selected = (dns_selected_idx == n);
+            if (ImGui::Selectable(dns_items[n], is_selected))
+                dns_selected_idx = n;
+            if (is_selected)
+                ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
+    float cable_button_hue = 200 / 360.f;
+    float save_button_hue = 120 / 360.0f;
+    ImGui::PushStyleColor(ImGuiCol_Button, (ImVec4)ImColor::HSV(cable_button_hue, 0.7f, 0.7f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, (ImVec4)ImColor::HSV(cable_button_hue, 0.8f, 0.8f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, (ImVec4)ImColor::HSV(cable_button_hue, 0.9f, 0.9f));
+    if (ImGui::Button("All Cables ON")) {
+    }
+    ImGui::PopStyleColor(3);
+    ImGui::SameLine();
+    ImGui::PushStyleColor(ImGuiCol_Button, (ImVec4)ImColor::HSV(cable_button_hue, 0.0f, 0.5f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, (ImVec4)ImColor::HSV(cable_button_hue, 0.0f, 0.6f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, (ImVec4)ImColor::HSV(cable_button_hue, 0.0f, 0.7f));
+    if (ImGui::Button("All Cables OFF")) {
+    }
+    ImGui::PopStyleColor(3);
+    ImGui::PushStyleColor(ImGuiCol_Button, (ImVec4)ImColor::HSV(save_button_hue, 0.7f, 0.7f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, (ImVec4)ImColor::HSV(save_button_hue, 0.8f, 0.8f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, (ImVec4)ImColor::HSV(save_button_hue, 0.9f, 0.9f));
+    if (ImGui::Button("Apply Settings", ImVec2(-1.0f, 0.0f))) {
+        proxy->settings.max_rtt_ns = max_rtt_ms * 1000000;
+        proxy->settings.do_ping = do_ping;
+        proxy->settings.do_traceroute = do_traceroute;
+        proxy->settings.use_local_dns = (dns_selected_idx == 1);
+        bp_save_settings_to_disk(proxy);
+    }
+    ImGui::PopStyleColor(3);
+    ImGui::End();
+}
+
+void show_gui_windows(BProxyHandle *proxy)
 {
     IM_ASSERT(ImGui::GetCurrentContext() != NULL && "Missing Dear ImGui context. Refer to examples app!");
     IMGUI_CHECKVERSION();
 
     static MainMenuWindowData menu_data;
 
-    if (menu_data.show_main_menu_bar) { }
+    if (menu_data.show_proxy_settings) { show_proxy_settings(proxy); }
     if (menu_data.show_geojson_info) { show_geojson_info(); }
+}
+
+bool is_mouse_over_triangle(int px, int py, int ax, int ay, int bx, int by, int cx, int cy)
+{
+    auto sign = [](int p1x, int p1y, int p2x, int p2y, int p3x, int p3y) {
+        return (p1x - p3x) * (p2y - p3y) - (p2x - p3x) * (p1y - p3y);
+    };
+
+    bool b1 = sign(px, py, ax, ay, bx, by) < 0.0f;
+    bool b2 = sign(px, py, bx, by, cx, cy) < 0.0f;
+    bool b3 = sign(px, py, cx, cy, ax, ay) < 0.0f;
+    return ((b1 == b2) && (b2 == b3));
 }
 
 int main(int,char**)
@@ -321,10 +420,11 @@ int main(int,char**)
             return 1;
         }
         main_scale = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
-        SDL_WindowFlags window_flags = SDL_WINDOW_RESIZABLE
+        SDL_WindowFlags window_flags = SDL_WINDOW_MAXIMIZED
+            | SDL_WINDOW_RESIZABLE
             | SDL_WINDOW_HIDDEN
             | SDL_WINDOW_HIGH_PIXEL_DENSITY;
-        window = SDL_CreateWindow("Dear ImGUI SDL3+SDL_Renderer example", width, height, window_flags);
+        window = SDL_CreateWindow("The Broken Proxy", width, height, window_flags);
         if (window == nullptr) {
             fprintf(stderr, "Error: SDL_CreateWindow(): %s\n", SDL_GetError());
             return 1;
@@ -361,32 +461,32 @@ int main(int,char**)
 
     c_debug_memory_init(europa_mutex_lock, europa_mutex_unlock, europa_mutex_create());
     proxy = bp_init(proxy_port, "settings.xml");
-    europa_settings_load("settings.xml");
-    europa_setting_boolean_set("USE_LOCAL_DNS", TRUE, NULL);
-    europa_setting_integer_set("MAX_LATENCY", 1000, NULL);
-    europa_settings_save("settings.xml");
-    bp_reload_settings(proxy);
+    proxy->settings.use_local_dns = true;
 
     struct {
         float x = 0.0f;
-        float y = 0.0f;
-        float zoom = 1.0f;
+        float y = -75.0f;
+        float zoom = 1.75f;
         bool is_panning = false;
         std::vector<std::vector<SDL_Vertex>> cable_render_buffer;
-        std::vector<SDL_Vertex> world_render_buffer;
+        std::vector<std::vector<SDL_Vertex>> world_render_buffer;
     } camera;
 
     for (int i = 0; i < World.polygons.size(); i++) {
-        SDL_Vertex vertex = { World.polygons[i], World.color, {0} };
-        camera.world_render_buffer.push_back(vertex);
+        std::vector<SDL_Vertex> current_polygon;
+        for (int j = 0; j < World.polygons[i].size(); j++) {
+            SDL_Vertex vertex = { World.polygons[i][j], World.color, {0} };
+            current_polygon.push_back(vertex);
+        }
+        camera.world_render_buffer.push_back(current_polygon);
     }
     for (int i = 0; i < Cables.lines.size(); i++) {
         std::vector<SDL_Vertex> current_line;
         for (int j = 0; j < Cables.lines[i].size(); j++) {
-            SDL_FColor color = { Cables.colors[i].r / 255.0,
-                                 Cables.colors[i].g / 255.0,
-                                 Cables.colors[i].b / 255.0,
-                                 Cables.colors[i].a / 255.0 };
+            SDL_FColor color = { Cables.colors[i].r / 255.0f,
+                                 Cables.colors[i].g / 255.0f,
+                                 Cables.colors[i].b / 255.0f,
+                                 Cables.colors[i].a / 255.0f };
             SDL_Vertex vertex = { Cables.lines[i][j], color, {0} };
             current_line.push_back(vertex);
         }
@@ -397,12 +497,17 @@ int main(int,char**)
     const Uint32 target_frametime_ms = 1000 / 60;
     bool window_occluded = false;
     bool show_demo_window = false;
-    bool show_main_window = true;
+    bool show_gui = true;
     bool done = false;
     while (!done) {
         Uint32 frame_start = SDL_GetTicks();
-
+        int hovered_cable_idx = -1;
         { // Event handling
+            float mouse_x, mouse_y;
+            SDL_GetMouseState(&mouse_x, &mouse_y);
+            for (int i = 0; i < Cables.lines.size(); i++) {
+                // Detect cable hover
+            }
             SDL_Event event;
             while (SDL_PollEvent(&event)) {
                 if (!io.WantCaptureMouse) {
@@ -419,10 +524,9 @@ int main(int,char**)
                     if (event.type == SDL_EVENT_MOUSE_WHEEL) {
                         float factor = 1.1f;
                         float prev_zoom = camera.zoom;
-                        if (event.wheel.y > 0) camera.zoom *= factor;
+                        if      (event.wheel.y > 0) camera.zoom *= factor;
                         else if (event.wheel.y < 0) camera.zoom /= factor;
-                        float mouse_x, mouse_y;
-                        SDL_GetMouseState(&mouse_x, &mouse_y);
+                        
                         camera.x = (mouse_x / camera.zoom) - (mouse_x / prev_zoom) + camera.x;
                         camera.y = (mouse_y / camera.zoom) - (mouse_y / prev_zoom) + camera.y;
                     }
@@ -453,7 +557,8 @@ int main(int,char**)
 
             {
                 if (show_demo_window) ImGui::ShowDemoWindow(&show_demo_window);
-                if (show_main_window) show_main_menu_window(&show_main_window);
+                if (show_gui)         show_gui_windows(proxy);
+                if (hovered_cable_idx != -1) ImGui::SetTooltip("Debug");
             }
         
             ImGui::Render();
@@ -475,18 +580,32 @@ int main(int,char**)
             int min_copy = static_cast<int>(std::floor(view_left / WORLD_SIZE)) - 1;
             int max_copy = static_cast<int>(std::ceil(view_right / WORLD_SIZE)) + 1;
             { // World map
-                for (int copy = min_copy; copy <= max_copy; copy++) {
-                    float x_offset = copy * WORLD_SIZE;
-                    for (size_t v = 0; v < World.polygons.size(); v++) {
-                        camera.world_render_buffer[v].position.x = (World.polygons[v].x + x_offset + camera.x) * camera.zoom;
-                        camera.world_render_buffer[v].position.y = (World.polygons[v].y            + camera.y) * camera.zoom;
+                for (size_t i = 0; i < World.polygons.size(); i++) {
+                    const BBox &bbox = World.bboxes[i];
+                    bool skip_polygon = false;
+                    if (bbox.y_max < view_top)    skip_polygon = true;
+                    if (bbox.y_min > view_bottom) skip_polygon = true;
+                    if (skip_polygon) continue;
+
+                    
+                    for (int copy = min_copy; copy <= max_copy; copy++) {
+                        float x_offset = copy * WORLD_SIZE;
+                        bool skip_copy = false;
+                        if (bbox.x_max + x_offset < view_left)  skip_copy = true;
+                        if (bbox.x_min + x_offset > view_right) skip_copy = true;
+                        if (skip_copy) continue;
+                        
+                        for (size_t v = 0; v < World.polygons[i].size(); v++) {
+                            camera.world_render_buffer[i][v].position.x = (World.polygons[i][v].x + x_offset + camera.x) * camera.zoom;
+                            camera.world_render_buffer[i][v].position.y = (World.polygons[i][v].y            + camera.y) * camera.zoom;
+                        }
+                        SDL_RenderGeometry(renderer,
+                                           nullptr,
+                                           camera.world_render_buffer[i].data(),
+                                           static_cast<int>(camera.world_render_buffer[i].size()),
+                                           nullptr,
+                                           0);
                     }
-                    SDL_RenderGeometry(renderer,
-                                       nullptr,
-                                       camera.world_render_buffer.data(),
-                                       static_cast<int>(camera.world_render_buffer.size()),
-                                       nullptr,
-                                       0);
                 }
             }
             { // Cables
@@ -495,14 +614,14 @@ int main(int,char**)
                     bool skip_line = false;
                     if (Cables.colors[i].r == 0x93 && Cables.colors[i].g == 0x95 && Cables.colors[i].b == 0x97) skip_line = true;
                     if (Cables.lines[i].size() < 2) skip_line = true;
-                    if (bbox.y_max < view_top) skip_line = true;
-                    if (bbox.y_min > view_bottom) skip_line = true;
+                    if (bbox.y_max < view_top)      skip_line = true;
+                    if (bbox.y_min > view_bottom)   skip_line = true;
                     if (skip_line) continue;
 
                     for (int copy = min_copy; copy <= max_copy; copy++) {
                         float x_offset = copy * WORLD_SIZE;
                         bool skip_copy = false;
-                        if (bbox.x_max + x_offset < view_left) skip_copy = true;
+                        if (bbox.x_max + x_offset < view_left)  skip_copy = true;
                         if (bbox.x_min + x_offset > view_right) skip_copy = true;
                         if (skip_copy) continue;
                         
