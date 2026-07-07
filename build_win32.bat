@@ -21,6 +21,6 @@
              src\main.cpp
 @set LIBS=lib\SDL3\SDL3.lib
 mkdir %OUT_DIR%
-cl /nologo /Zi /EHsc /MD /utf-8 %INCLUDES% %SOURCES% /Fd%OUT_DIR%/ /Fe%OUT_DIR%/%OUT_EXE%.exe /Fo%OUT_DIR%/ /link /CETCOMPAT %LIBS% /subsystem:console
+cl /fsanitize=address /nologo /Zi /EHsc /MD /utf-8 %INCLUDES% %SOURCES% /Fd%OUT_DIR%/ /Fe%OUT_DIR%/%OUT_EXE%.exe /Fo%OUT_DIR%/ /link /CETCOMPAT %LIBS% /subsystem:console
 copy /y lib\SDL3\SDL3.dll %OUT_DIR%\
 xcopy /y /s /e /i assets %OUT_DIR%\assets

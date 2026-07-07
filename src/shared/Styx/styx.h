@@ -3,6 +3,18 @@
 #ifndef STYX_H
 #define STYX_H
 
+#ifdef _WIN32
+#include <winsock2.h>
+typedef SOCKET VSocket;
+#define INVALID_VSOCKET INVALID_SOCKET
+#else
+typedef int VSocket;
+#define INVALID_VSOCKET -1
+#endif
+
+#define STYX_MINIMUM_WRITE_SPACE 1024
+
+
 #pragma warning(disable:4005) /* FD_SETSIZE macro redefinition */
 
 #ifdef _WIN32
@@ -28,6 +40,33 @@ typedef enum {
     S_HT_FILE_WRITE,
     S_HT_BUFFER
 }SHandleType;
+
+typedef struct {
+    union {
+        uint32 v4;
+        uint8 v6[16]; 
+    } ip;
+    uint16 port;
+    VSocket socket;
+    SHandleType type;
+    uint8 *read_buffer;
+    size_t read_buffer_used;
+    size_t read_buffer_pos;
+    size_t read_buffer_size;
+    size_t read_marker;
+    uint64 read_raw_progress;
+    uint8 *write_buffer;
+    size_t write_buffer_pos;
+    size_t write_buffer_size;
+    uint64 write_raw_progress;
+    FILE *file;
+    void *text_copy;
+    char *file_name;
+    boolean is_ipv6;
+    boolean debug_descriptor;
+    boolean debug_header;
+    boolean connected;
+} SHandle;
 
 #include "s_internal.h"
 

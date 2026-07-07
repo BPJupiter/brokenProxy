@@ -144,6 +144,8 @@ boolean bp_update(BProxyHandle *proxy)
                     logln("Closing connection %d\n", pair_idxs[i]);
                     styx_free(proxy->connections.pairs[pair_idxs[i]].client);
                     styx_free(proxy->connections.pairs[pair_idxs[i]].target);
+                    proxy->connections.pairs[pair_idxs[i]].client = NULL;
+                    proxy->connections.pairs[pair_idxs[i]].target = NULL;
                     proxy->connections.pairs[pair_idxs[i]].active = FALSE;
                     proxy->connections.count--;
                 }
@@ -183,13 +185,13 @@ static void handle_client(BProxyHandle *proxy, SHandle *client_handle)
     }
 
     version = styx_unpack_uint8(client_handle, "VERSION5");
+    if (version != VERSION5) {
+        logln("Client packet has a malformed socks5 header!");
+        return;
+    }
     nmethods = styx_unpack_uint8(client_handle, "NMETHODS");
     for (i = 0; i < nmethods; i++) {
         (void)styx_unpack_uint8(client_handle, "METHODS");
-    }
-
-    if (version != VERSION5) {
-        return;
     }
 
     styx_pack_uint8(client_handle, VERSION5, "VERSION5");
@@ -218,6 +220,7 @@ static void handle_client(BProxyHandle *proxy, SHandle *client_handle)
             SHandle *target_handle = NULL;
             StyxNetworkAddress target_addr;
             uint8 rep = OK;
+            int free_slot = -1;
 
             char target_ip_str[64];
             char target_domain[256];
@@ -257,6 +260,19 @@ static void handle_client(BProxyHandle *proxy, SHandle *client_handle)
                 rep = GENERAL_FAILURE;
             }
 
+            if (rep == OK) {
+                for (i = 0; i < MAX_CLIENTS; i++) {
+                    if (!proxy->connections.pairs[i].active) {
+                        free_slot = i;
+                        break;
+                    }
+                }
+                if (free_slot < 0) {
+                    logln("Conntion pool full, dropping request.");
+                    rep = GENERAL_FAILURE;
+                }
+            }
+
             styx_pack_uint8(client_handle, VERSION5, "VERSION5");
             styx_pack_uint8(client_handle, rep, "REP");
             styx_pack_uint8(client_handle, 0x00, "RSV");
@@ -273,24 +289,21 @@ static void handle_client(BProxyHandle *proxy, SHandle *client_handle)
 
             logln("Connection established");
 
-            for (i = 0; i < MAX_CLIENTS; i++) {
-                if (!proxy->connections.pairs[i].active) {
-                    proxy->connections.pairs[i].client = client_handle;
-                    proxy->connections.pairs[i].target = target_handle;
-                    proxy->connections.pairs[i].active = TRUE;
-                    proxy->connections.count++;
-                    break;
-                }
-            }
+            proxy->connections.pairs[free_slot].client = client_handle;
+            proxy->connections.pairs[free_slot].target = target_handle;
+            proxy->connections.pairs[free_slot].active = TRUE;
+            proxy->connections.count++;
             return;
         } break;
         case UDP_ASSOCIATE:
             logln("App requested UDP Association");
             /* TODO: Fix me */
             logln("This UDP Association is unsupported!");
+            styx_free(client_handle);
         break;
         default:
             logln("Unsupported SOCKS command: 0x%02x!", command);
+            styx_free(client_handle);
         break;
     }
     return;
@@ -361,16 +374,16 @@ static int transfer_data(SHandle *from_handle, SHandle *to_handle)
     uint64 bytes_written;
     uint64 bytes_read;
     
-    bytes_read = styx_unpack_raw(from_handle, buffer, sizeof(buffer), NULL);
+    bytes_read = (int64)styx_unpack_raw(from_handle, buffer, sizeof(buffer), NULL);
 
     if (bytes_read <= 0) {
         return -1;
     }
 
-    bytes_written = styx_pack_raw(to_handle, buffer, bytes_read, NULL);
+    bytes_written = (int64)styx_pack_raw(to_handle, buffer, (size_t)bytes_read, NULL);
     styx_network_stream_send_force(to_handle);
 
-    return bytes_written;
+    return (int)bytes_written;
 }
 
 static char *setting_desc[] =
