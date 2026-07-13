@@ -3,17 +3,35 @@
 
 #include "Clay/clay.h"
 #include "Styx/styx.h"
+#include "vepoll.h"
 
-#define MAX_CLIENTS 256
+#define MAX_CONNECTIONS 256
+#define MAX_EVENTS  256
+
+typedef enum {
+    CS_DISCONNCETED = 0,
+    CS_CLIENT_SENDING_METHODS,
+    CS_SERVER_SENDING_METHOD,
+    CS_CLIENT_SENDING_REQUEST,
+    CS_SERVER_SENDING_REPLY,
+    CS_CONNECTED
+} ConnectionState;
 
 typedef struct {
-    struct {
-        SHandle *client;
-        SHandle *target;
-        boolean active;
-    } pairs[MAX_CLIENTS];
+    SHandle *handle;
+    boolean write_pending;
+} Connection;
+
+typedef struct {
+    Connection clients[MAX_CONNECTIONS];
+    Connection targets[MAX_CONNECTIONS];
+    ConnectionState states[MAX_CONNECTIONS];
+    boolean used[MAX_CONNECTIONS];
+    int free_list[MAX_CONNECTIONS];
+    int free_list_count;
+    int next_empty_slot;
     uint count;
-} HandleSet;
+} Connections;
 
 typedef struct {
     boolean do_ping;
@@ -24,10 +42,14 @@ typedef struct {
 
 typedef struct BProxyHandle {
     BProxySettings settings;
-    HandleSet connections;
-    SHandle *server_handle;
     char *settings_filename;
+    
+    SHandle *server_handle;
     uint16 port;
+    Connections connections;
+    
+    struct epoll_event events[MAX_EVENTS];
+    VHandle epoll_handle;
 } BProxyHandle;
 
 #ifdef __cplusplus

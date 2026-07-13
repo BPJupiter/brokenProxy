@@ -7,10 +7,12 @@
               /Ithird_party\nlohmann\include ^
               /Ithird_party\nanosvg\include ^
               /Ithird_party\mapbox\include ^
+              /Ithird_party\wepoll\include ^
               /Isrc\shared ^
               /Isrc\proxy ^
               /Ilib
 @set SOURCES=third_party\imgui\src\imgui*.cpp ^
+             third_party\wepoll\src\wepoll.c ^
              src\shared\Clay\*.c ^
              src\shared\Europa\*.c ^
              src\shared\Styx\*.c ^
