@@ -10,6 +10,7 @@ typedef HANDLE VHandle;
 #  define VEPOLL_ERROR -1
 #else
 #  include <sys/epoll.h>
+#  include <unistd.h>
 typedef int VHandle;
 #  define INVALID_VEPOLL_HANDLE -1
 #  define VEPOLL_ERROR -1
