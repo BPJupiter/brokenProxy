@@ -46,7 +46,7 @@ namespace mapbox {
 
 #include "Clay/clay.h"
 #include "Europa/europa.h"
-#include "bproxy.h"
+#include "broken_proxy.h"
 
 namespace GeoJson {
     enum class GeometryType {

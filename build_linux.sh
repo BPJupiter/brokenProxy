@@ -15,7 +15,7 @@ SOURCES="third_party/imgui/src/imgui*.cpp \
          src/shared/Europa/*.c \
          src/shared/Styx/*.c \
          src/shared/Talos/*.c \
-         src/proxy/bproxy.c \
+         src/proxy/broken_proxy.c \
          src/proxy/dns_resolution.c \
          src/proxy/network_tools.c \
          src/main.cpp"

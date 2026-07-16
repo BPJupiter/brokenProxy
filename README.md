@@ -28,6 +28,12 @@ curl -x socks5h://127.0.0.1:13407 <url>
 
 For testing on Chromium, use the following cmdline arguments:
 
+Linux
 ```
 chromium --proxy-server="socks5://127.0.0.1:13407" --user-data-dir="/tmp/chromium_proxy_serssion" 
+```
+
+Windows (with Chromium's 'chrome.exe' executable in your PATH)
+```
+chrome --enable-logging=stderr --proxy-server="socks5://127.0.0.1:13407"
 ```
