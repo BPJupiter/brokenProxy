@@ -435,14 +435,14 @@ static void read_authorities(DNS_HEADER *dns, RES_RECORD *auth, uint8 **reader, 
         {
         uint8 rname[256];
             case T_NS:
-                auth[i].rdata = malloc(256 * sizeof(*(auth[i].rdata)));
+                auth[i].rdata = (uint8 *)malloc(256 * sizeof(*(auth[i].rdata)));
                 talos_malloc_assert(auth[i].rdata);
                 read_name(auth[i].rdata, *reader, buf, stop);
                 *reader += *stop;
             break;
             case T_SOA:
                 /* Read MNAME */
-                auth[i].rdata = malloc(256 * sizeof(*(auth[i].rdata)));
+                auth[i].rdata = (uint8 *)malloc(256 * sizeof(*(auth[i].rdata)));
                 talos_malloc_assert(auth[i].rdata);
                 read_name(auth[i].rdata, *reader, buf, stop);
                 *reader += *stop;
@@ -532,7 +532,7 @@ static boolean handle_found_answers(StyxNetworkAddress *out,
 
             for (i = 0; i < ans_count; i++)
             {
-                StyxNetworkAddress *node = malloc(sizeof(*node));
+                StyxNetworkAddress *node = (StyxNetworkAddress *)malloc(sizeof(*node));
                 talos_malloc_assert(node);
                 memset(node, 0, sizeof(*node));
 
@@ -560,7 +560,7 @@ static boolean handle_found_answers(StyxNetworkAddress *out,
 
             for (i = 0; i < ans_count; i++)
             {
-                StyxNetworkAddress *node = malloc(sizeof(*node));
+                StyxNetworkAddress *node = (StyxNetworkAddress *)malloc(sizeof(*node));
                 talos_malloc_assert(node);
                 memset(node, 0, sizeof(*node));
 

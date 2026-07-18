@@ -48,6 +48,11 @@ namespace mapbox {
 #include "Europa/europa.h"
 #include "broken_proxy.h"
 
+#include "bplibxx/types.hpp"
+#include "bplibxx/array.hpp"
+#include "bplibxx/string.hpp"
+#include "bplibxx/utils.hpp"
+
 namespace GeoJson {
     enum class GeometryType {
         Unknown,
@@ -90,61 +95,63 @@ struct MainMenuWindowData
     bool show_geojson_info = false;
 };
 
-struct BBox { float x_min, x_max, y_min, y_max; };
+struct BBox { f32 x_min, x_max, y_min, y_max; };
 
 struct {
     SDL_FColor color = {0xCE / 255.0, 0xCE / 255.0, 0xCE / 255.0, 0xFF / 255.0};
-    std::vector<std::vector<SDL_FPoint>> polygons;
-    std::vector<BBox> bboxes;
+    Array<Array<SDL_FPoint> *> polygons;
+    Array<BBox> bboxes;
 } World;
 
 struct {
-    std::vector<SDL_Color> colors;
-    std::vector<std::vector<SDL_FPoint>> lines;
-    std::vector<BBox> bboxes;
-    std::vector<SDL_FPoint> landings;
+    Array<SDL_Color> colors;
+    Array<Array<SDL_FPoint> *> lines;
+    Array<BBox> bboxes;
+    Array<SDL_FPoint> landings;
 } Cables;
 
 namespace JsonPaths {
-    const std::string cables("assets/telegeography/cable-geo.json");
-    const std::string landing_points("assets/telegeography/landing-point-geo.json");
+    String cables = "assets/telegeography/cable-geo.json";
+    String landing_points = "assets/telegeography/landing-point-geo.json";
 
     namespace WorldMap {
-        const std::string low("assets/world-map-low.json");
-        const std::string medium("assets/world-map-medium.json");
-        const std::string high("assets/world-map-high.json");
+        String low = "assets/world-map-low.json";
+        String medium = "assets/world-map-medium.json";
+        String high = "assets/world-map-high.json";
     }
 }
 
 int width = 1280;
 int height = 800;
-constexpr float WORLD_SIZE = 1000.0f;
+constexpr f32 WORLD_SIZE = 1000.0f;
 constexpr ImVec4 background_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
-float lat_to_y_norm(float lat)
+f32 lat_to_y_norm(f32 lat)
 {
     lat = (std::max)(-85.051129f, (std::min)(lat, 85.051129f));
-    double lat_rad = lat * (PI / 180.0);
-    double y = std::log(std::tan((PI / 4.0) + (lat_rad / 2.0)));
-    return static_cast<float>(0.5 - (y / (2.0 * PI)));
+    f64 lat_rad = lat * (PI / 180.0);
+    f64 y = std::log(std::tan((PI / 4.0) + (lat_rad / 2.0)));
+    return (f32)(0.5 - (y / (2.0 * PI)));
 }
 
-SDL_FPoint project_mercator(float longitude, float latitude)
+SDL_FPoint project_mercator(f32 longitude, f32 latitude)
 {
-    double x = (longitude + 180.0) / 360.0;
-    float y = lat_to_y_norm(latitude);
+    f64 x = (longitude + 180.0) / 360.0;
+    f32 y = lat_to_y_norm(latitude);
     
     return {
-        static_cast<float>(x * WORLD_SIZE),
-        static_cast<float>(y * WORLD_SIZE)
+        (f32)(x * WORLD_SIZE),
+        (f32)(y * WORLD_SIZE)
     };
 }
 
-static bool load_geojson_data(const std::string &filename)
+static bool load_geojson_data(String filename)
 {
-    std::ifstream f(filename);
+    char *c_str_filename = (char *)to_c_string(filename);
+    defer { free(c_str_filename); };
+    std::ifstream f(c_str_filename);
     if (!f.is_open()) {
-        fprintf(stderr, "Error: Could not open file %s\n", filename.c_str());
+        fprintf(stderr, "Error: Could not open file %s\n", c_str_filename);
         fprintf(stderr, "Reason: %s\n", std::strerror(errno));
         return false;
     }
@@ -158,101 +165,120 @@ static bool load_geojson_data(const std::string &filename)
         switch (type) {
         case GeoJson::GeometryType::MultiLineString: {
             const auto properties = feature["properties"];
-            std::string hex = properties["color"].get<std::string>();
-            hex = hex.substr(1); // Remove leading '#'
-            std::string r, g, b;
-            if (hex.length() == 6) {
-                r = hex.substr(0, 2);
-                g = hex.substr(2, 2);
-                b = hex.substr(4, 2);
+            String hex = to_string((u8 *)properties["color"].get<std::string>().c_str());
+            replace_chars(hex, "#", ' ');
+            hex = trim_left(hex);
+            String r, g, b;
+            if (hex.count == 6) {
+                r = slice(hex, 0, 2);
+                g = slice(hex, 2, 2);
+                b = slice(hex, 4, 2);
             } else {
-                fprintf(stderr, "Invalid RGB parameter! %s\n", hex.c_str());
-                r = "FF";
-                g = "00";
-                b = "00";
+                u8 *temp = to_c_string(hex);
+                defer { free(temp); };
+                fprintf(stderr, "hex length: %d; Invalid RGB parameter! :%s\n", hex.count, temp);
+                r = to_string((u8 *)"FF");
+                g = to_string((u8 *)"00");
+                b = to_string((u8 *)"00");
             }
+            char *r2 = (char *)to_c_string(r);
+            char *g2 = (char *)to_c_string(g);
+            char *b2 = (char *)to_c_string(b);
+            defer { free(r2); };
+            defer { free(g2); };
+            defer { free(b2); };
             SDL_Color current_color = {
-                static_cast<Uint8>(std::stoi(r, nullptr, 16)),
-                static_cast<Uint8>(std::stoi(g, nullptr, 16)),
-                static_cast<Uint8>(std::stoi(b, nullptr, 16)),
+                (Uint8)(std::stoi(std::string(r2), nullptr, 16)),
+                (Uint8)(std::stoi(std::string(g2), nullptr, 16)),
+                (Uint8)(std::stoi(std::string(b2), nullptr, 16)),
                 SDL_ALPHA_OPAQUE};
             // Make points
             const auto coordinates = geometry["coordinates"];
-            for (int line = 0; line < coordinates.size(); line++) {
-                std::vector<SDL_FPoint> current_fat_line;
+            for (u32 line = 0; line < coordinates.size(); line++) {
+                Array<SDL_FPoint> *current_fat_line = new Array<SDL_FPoint>();
                 auto pos = coordinates[line][0].get<std::array<float, 2>>();
                 SDL_FPoint curr_point = project_mercator(pos[0], pos[1]);
                 SDL_FPoint prev_point = curr_point;
-                for (int i = 1; i < coordinates[line].size(); i++) {
+                for (u32 i = 1; i < coordinates[line].size(); i++) {
                     pos = coordinates[line][i].get<std::array<float, 2>>();
                     curr_point = project_mercator(pos[0], pos[1]);
                     SDL_FPoint direction  = { curr_point.x - prev_point.x,
                                               curr_point.y - prev_point.y };
-                    float magnitude = sqrtf(direction.x * direction.x + direction.y * direction.y);
+                    f32 magnitude = sqrtf(direction.x * direction.x + direction.y * direction.y);
                     magnitude *= 4;
                     SDL_FPoint prev_left  = { prev_point.x - (direction.y / magnitude), prev_point.y + (direction.x / magnitude) };
                     SDL_FPoint prev_right = { prev_point.x + (direction.y / magnitude), prev_point.y - (direction.x / magnitude) };
                     SDL_FPoint curr_left  = { curr_point.x - (direction.y / magnitude), curr_point.y + (direction.x / magnitude) };
                     SDL_FPoint curr_right = { curr_point.x + (direction.y / magnitude), curr_point.y - (direction.x / magnitude) };
-                    current_fat_line.push_back(prev_right);
-                    current_fat_line.push_back(prev_left);
-                    current_fat_line.push_back(curr_left);
-                    current_fat_line.push_back(prev_right);
-                    current_fat_line.push_back(curr_left);
-                    current_fat_line.push_back(curr_right);
+                    current_fat_line->append(prev_right);
+                    current_fat_line->append(prev_left);
+                    current_fat_line->append(curr_left);
+                    current_fat_line->append(prev_right);
+                    current_fat_line->append(curr_left);
+                    current_fat_line->append(curr_right);
                     prev_point = curr_point;
                 }
 
-                BBox bbox = { current_fat_line[0].x, current_fat_line[0].x, current_fat_line[0].y, current_fat_line[0].y };
-                for (const auto &pt: current_fat_line) {
+                BBox bbox = { (*current_fat_line)[0].x, (*current_fat_line)[0].x, (*current_fat_line)[0].y, (*current_fat_line)[0].y };
+                for (u32 i = 0; i < current_fat_line->items; i++) {
+                    SDL_FPoint pt = (*current_fat_line)[i];
                     bbox.x_min = (std::min)(bbox.x_min, pt.x);
                     bbox.x_max = (std::max)(bbox.x_max, pt.x);
                     bbox.y_min = (std::min)(bbox.y_min, pt.y);
                     bbox.y_max = (std::max)(bbox.y_max, pt.y);
                 }
-                Cables.colors.push_back(current_color);
-                Cables.lines.push_back(current_fat_line);
-                Cables.bboxes.push_back(bbox);
+                Cables.colors.append(current_color);
+                Cables.lines.append(current_fat_line);
+                Cables.bboxes.append(bbox);
             }
         } break;
         case GeoJson::GeometryType::Polygon: {
             const auto coordinates = geometry["coordinates"];
             // auto properties = feature["properties"];
             // std::string name = properties["name"].get<std::string>();
-            std::vector<std::vector<SDL_FPoint>> earcut_input;
+            std::vector<std::vector<SDL_FPoint>> earcut_input; // TODO: Allow earcut input to use Array<T>
             for (int i = 0; i < coordinates.size(); i++) {
-                std::vector<SDL_FPoint> ring;
-                for (const auto &coord: coordinates[i]) {
+                std::vector<SDL_FPoint> ring; // sigh
+                for (int j = 0; j < coordinates[i].size(); j++) {
+                    const auto &coord = coordinates[i][j];
                     const auto pos = coord.get<std::array<float, 2>>();
-                    ring.push_back(project_mercator(pos[0], pos[1]));
+                    ring.push_back(project_mercator(pos[0], pos[1])); // sigh
                 }
-                earcut_input.push_back(ring);
+                earcut_input.push_back(ring); // sigh
             }
-            std::vector<uint32_t> indices = mapbox::earcut<uint32_t>(earcut_input);
-            std::vector<SDL_FPoint> points;
-            for (const auto &ring: earcut_input) {
-                points.insert(points.end(), ring.begin(), ring.end());
+            std::vector<uint32_t> temp = mapbox::earcut<uint32_t>(earcut_input);
+            Array<u32> indices;
+            for (u32 i = 0; i < temp.size(); i++) {
+                indices.append(temp[i]);
+            }
+            Array<SDL_FPoint> points;
+            for (u32 i = 0; i < earcut_input.size(); i++) {
+                const auto &inner_ring = earcut_input[i];
+                for (u32 j = 0; j < inner_ring.size(); j++) {
+                    points.append(inner_ring[j]);
+                }
             }
 
-            if (indices.empty()) {
+            if (indices.items == 0) {
                 continue;
             }
 
-            std::vector<SDL_FPoint> current_polygon;
-            current_polygon.reserve(indices.size());
-            for (uint32_t idx: indices) {
-                current_polygon.push_back(points[idx]);
+            Array<SDL_FPoint> *current_polygon = new Array<SDL_FPoint>();
+            current_polygon->make_space(indices.items);
+            for (u32 i = 0; i < indices.items; i++) {
+                current_polygon->append(points[indices[i]]);
             }
 
-            BBox bbox = { current_polygon[0].x, current_polygon[0].x, current_polygon[0].y, current_polygon[0].y };
-            for (const auto &pt: current_polygon) {
+            BBox bbox = { (*current_polygon)[0].x, (*current_polygon)[0].x, (*current_polygon)[0].y, (*current_polygon)[0].y };
+            for (u32 i = 0; i < current_polygon->items; i++) {
+                SDL_FPoint pt = (*current_polygon)[i];
                 bbox.x_min = (std::min)(bbox.x_min, pt.x);
                 bbox.x_max = (std::max)(bbox.x_max, pt.x);
                 bbox.y_min = (std::min)(bbox.y_min, pt.y);
                 bbox.y_max = (std::max)(bbox.y_max, pt.y);
             }
-            World.polygons.push_back(current_polygon);
-            World.bboxes.push_back(bbox);
+            World.polygons.append(current_polygon);
+            World.bboxes.append(bbox);
         } break;
         case GeoJson::GeometryType::MultiPolygon: {
             const auto coordinates = geometry["coordinates"];
@@ -268,31 +294,39 @@ static bool load_geojson_data(const std::string &filename)
                     }
                     earcut_input.push_back(ring);
                 }
-                std::vector<uint32_t> indices = mapbox::earcut<uint32_t>(earcut_input);
-                std::vector<SDL_FPoint> points;
-                for (const auto &ring: earcut_input) {
-                    points.insert(points.end(), ring.begin(), ring.end());
+                std::vector<uint32_t> temp = mapbox::earcut<uint32_t>(earcut_input);
+                Array<u32> indices;
+                for (u32 j = 0; j < temp.size(); j++) {
+                    indices.append(temp[j]);
+                }
+                Array<SDL_FPoint> points;
+                for (u32 j = 0; j < earcut_input.size(); j++) {
+                    const auto &inner_ring = earcut_input[j];
+                    for (u32 k = 0; k < inner_ring.size(); k++) {
+                        points.append(inner_ring[k]);
+                    }
                 }
 
-                if (indices.empty()) {
+                if (indices.items == 0) {
                     continue;
                 }
 
-                std::vector<SDL_FPoint> current_polygon;
-                current_polygon.reserve(indices.size());
-                for (uint32_t idx: indices) {
-                    current_polygon.push_back(points[idx]);
+                Array<SDL_FPoint> *current_polygon = new Array<SDL_FPoint>();
+                current_polygon->make_space(indices.items);
+                for (u32 j = 0; j < indices.items; j++) {
+                    current_polygon->append(points[indices[j]]);
                 }
 
-                BBox bbox = { current_polygon[0].x, current_polygon[0].x, current_polygon[0].y, current_polygon[0].y };
-                for (const auto &pt: current_polygon) {
+                BBox bbox = { (*current_polygon)[0].x, (*current_polygon)[0].x, (*current_polygon)[0].y, (*current_polygon)[0].y };
+                for (u32 i = 0; i < current_polygon->items; i++) {
+                    SDL_FPoint pt = (*current_polygon)[i];
                     bbox.x_min = (std::min)(bbox.x_min, pt.x);
                     bbox.x_max = (std::max)(bbox.x_max, pt.x);
                     bbox.y_min = (std::min)(bbox.y_min, pt.y);
                     bbox.y_max = (std::max)(bbox.y_max, pt.y);
                 }
-                World.polygons.push_back(current_polygon);
-                World.bboxes.push_back(bbox);
+                World.polygons.append(current_polygon);
+                World.bboxes.append(bbox);
             }
         } break;
         default: {
@@ -468,29 +502,29 @@ int main(int,char**)
         float y = -75.0f;
         float zoom = 1.75f;
         bool is_panning = false;
-        std::vector<std::vector<SDL_Vertex>> cable_render_buffer;
-        std::vector<std::vector<SDL_Vertex>> world_render_buffer;
+        Array<Array<SDL_Vertex> *> cable_render_buffer;
+        Array<Array<SDL_Vertex> *> world_render_buffer;
     } camera;
 
-    for (int i = 0; i < World.polygons.size(); i++) {
-        std::vector<SDL_Vertex> current_polygon;
-        for (int j = 0; j < World.polygons[i].size(); j++) {
-            SDL_Vertex vertex = { World.polygons[i][j], World.color, {0} };
-            current_polygon.push_back(vertex);
+    for (int i = 0; i < World.polygons.items; i++) {
+        Array<SDL_Vertex> *current_polygon = new Array<SDL_Vertex>();
+        for (int j = 0; j < World.polygons[i]->items; j++) {
+            SDL_Vertex vertex = { (*World.polygons[i])[j], World.color, {0} };
+            current_polygon->append(vertex);
         }
-        camera.world_render_buffer.push_back(current_polygon);
+        camera.world_render_buffer.append(current_polygon);
     }
-    for (int i = 0; i < Cables.lines.size(); i++) {
-        std::vector<SDL_Vertex> current_line;
-        for (int j = 0; j < Cables.lines[i].size(); j++) {
+    for (int i = 0; i < Cables.lines.items; i++) {
+        Array<SDL_Vertex> *current_line = new Array<SDL_Vertex>();
+        for (int j = 0; j < Cables.lines[i]->items; j++) {
             SDL_FColor color = { Cables.colors[i].r / 255.0f,
                                  Cables.colors[i].g / 255.0f,
                                  Cables.colors[i].b / 255.0f,
                                  Cables.colors[i].a / 255.0f };
-            SDL_Vertex vertex = { Cables.lines[i][j], color, {0} };
-            current_line.push_back(vertex);
+            SDL_Vertex vertex = { (*Cables.lines[i])[j], color, {0} };
+            current_line->append(vertex);
         }
-        camera.cable_render_buffer.push_back(current_line);
+        camera.cable_render_buffer.append(current_line);
     }
     
     SDL_SetRenderVSync(renderer, 0);
@@ -505,7 +539,7 @@ int main(int,char**)
         { // Event handling
             float mouse_x, mouse_y;
             SDL_GetMouseState(&mouse_x, &mouse_y);
-            for (int i = 0; i < Cables.lines.size(); i++) {
+            for (int i = 0; i < Cables.lines.items; i++) {
                 // Detect cable hover
             }
             SDL_Event event;
@@ -580,7 +614,7 @@ int main(int,char**)
             int min_copy = static_cast<int>(std::floor(view_left / WORLD_SIZE)) - 1;
             int max_copy = static_cast<int>(std::ceil(view_right / WORLD_SIZE)) + 1;
             { // World map
-                for (size_t i = 0; i < World.polygons.size(); i++) {
+                for (size_t i = 0; i < World.polygons.items; i++) {
                     const BBox &bbox = World.bboxes[i];
                     bool skip_polygon = false;
                     if (bbox.y_max < view_top)    skip_polygon = true;
@@ -595,25 +629,25 @@ int main(int,char**)
                         if (bbox.x_min + x_offset > view_right) skip_copy = true;
                         if (skip_copy) continue;
                         
-                        for (size_t v = 0; v < World.polygons[i].size(); v++) {
-                            camera.world_render_buffer[i][v].position.x = (World.polygons[i][v].x + x_offset + camera.x) * camera.zoom;
-                            camera.world_render_buffer[i][v].position.y = (World.polygons[i][v].y            + camera.y) * camera.zoom;
+                        for (size_t v = 0; v < World.polygons[i]->items; v++) {
+                            (*camera.world_render_buffer[i])[v].position.x = ((*World.polygons[i])[v].x + x_offset + camera.x) * camera.zoom;
+                            (*camera.world_render_buffer[i])[v].position.y = ((*World.polygons[i])[v].y            + camera.y) * camera.zoom;
                         }
                         SDL_RenderGeometry(renderer,
                                            nullptr,
-                                           camera.world_render_buffer[i].data(),
-                                           static_cast<int>(camera.world_render_buffer[i].size()),
+                                           camera.world_render_buffer[i]->data,
+                                           (int)(camera.world_render_buffer[i]->items),
                                            nullptr,
                                            0);
                     }
                 }
             }
             { // Cables
-                for (size_t i = 0; i < Cables.lines.size(); i++) {
+                for (size_t i = 0; i < Cables.lines.items; i++) {
                     const BBox &bbox = Cables.bboxes[i];
                     bool skip_line = false;
                     if (Cables.colors[i].r == 0x93 && Cables.colors[i].g == 0x95 && Cables.colors[i].b == 0x97) skip_line = true;
-                    if (Cables.lines[i].size() < 2) skip_line = true;
+                    if (Cables.lines[i]->items < 2) skip_line = true;
                     if (bbox.y_max < view_top)      skip_line = true;
                     if (bbox.y_min > view_bottom)   skip_line = true;
                     if (skip_line) continue;
@@ -625,14 +659,14 @@ int main(int,char**)
                         if (bbox.x_min + x_offset > view_right) skip_copy = true;
                         if (skip_copy) continue;
                         
-                        for (size_t v = 0; v < Cables.lines[i].size(); v++) {
-                            camera.cable_render_buffer[i][v].position.x = (Cables.lines[i][v].x + x_offset + camera.x) * camera.zoom;
-                            camera.cable_render_buffer[i][v].position.y = (Cables.lines[i][v].y            + camera.y) * camera.zoom;
+                        for (size_t v = 0; v < Cables.lines[i]->items; v++) {
+                            (*camera.cable_render_buffer[i])[v].position.x = ((*Cables.lines[i])[v].x + x_offset + camera.x) * camera.zoom;
+                            (*camera.cable_render_buffer[i])[v].position.y = ((*Cables.lines[i])[v].y            + camera.y) * camera.zoom;
                         }
                         SDL_RenderGeometry(renderer,
                                            nullptr,
-                                           camera.cable_render_buffer[i].data(),
-                                           static_cast<int>(camera.cable_render_buffer[i].size()),
+                                           camera.cable_render_buffer[i]->data,
+                                           (int)(camera.cable_render_buffer[i]->items),
                                            nullptr,
                                            0);
                     }

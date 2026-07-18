@@ -311,7 +311,7 @@ SHandle *styx_network_stream_address_create(const char *host_name, uint16 port, 
     }
 #endif
 
-    handle = malloc(sizeof *handle);
+    handle = (SHandle *)malloc(sizeof *handle);
     if (handle == NULL) {
         styx_socket_destroy(socket);
         return NULL;
@@ -382,7 +382,7 @@ SHandle *styx_network_stream_ip_create(StyxNetworkAddress ip)
     }
 #endif
 
-    handle = malloc(sizeof *handle);
+    handle = (SHandle *)malloc(sizeof *handle);
     if (handle == NULL) {
         styx_socket_destroy(socket);
         return NULL;
@@ -405,10 +405,10 @@ static void styx_network_stream_address_destroy(SHandle *handle)
         free(handle->write_buffer);
     }
     if (handle->file != NULL) {
-        fclose(handle->file);
+        fclose((FILE *)handle->file);
     }
     if (handle->text_copy != NULL) {
-        fclose(handle->text_copy);
+        fclose((FILE *)handle->text_copy);
     }
 }
 
@@ -450,7 +450,7 @@ SHandle *styx_network_stream_wait_for_connection(SHandle *listener, StyxNetworkA
                 }
             }
 #endif
-            handle = malloc(sizeof *handle);
+            handle = (SHandle *)malloc(sizeof *handle);
             if (handle == NULL) {
                 styx_socket_destroy(socket);
                 return NULL;
@@ -501,19 +501,19 @@ SHandle *styx_network_datagram_create(uint16 port, boolean ipv6)
     if (socket == INVALID_VSOCKET) {
         return NULL;
     }
-    handle = malloc(sizeof *handle);
+    handle = (SHandle *)malloc(sizeof *handle);
     if (handle == NULL) {
         styx_socket_destroy(socket);
         return NULL;
     }
     memset(handle, 0, sizeof(*handle));
-    handle->read_buffer = malloc((sizeof *handle->read_buffer) * 1500);
+    handle->read_buffer = (uint8 *)malloc((sizeof *handle->read_buffer) * 1500);
     if (handle->read_buffer == NULL) {
         free(handle);
         styx_socket_destroy(socket);
         return NULL;
     }
-    handle->write_buffer = malloc((sizeof *handle->write_buffer) * 1500);
+    handle->write_buffer = (uint8 *)malloc((sizeof *handle->write_buffer) * 1500);
     if (handle->write_buffer == NULL) {
         free(handle->read_buffer);
         free(handle);

@@ -29,6 +29,6 @@ typedef enum {
 
 extern uint     styx_unpack_buffer_get(SHandle *handle);
 extern boolean     styx_pack_buffer_clear(SHandle *handle);
-extern void     styx_handle_clear(SHandle *handle, uint type);
+extern void     styx_handle_clear(SHandle *handle, SHandleType type);
 extern size_t     styx_network_stream_receive(SHandle *handle, uint8 *buffer, size_t length);
 extern size_t     styx_network_stream_send(SHandle *handle, uint8 *buffer, size_t length);

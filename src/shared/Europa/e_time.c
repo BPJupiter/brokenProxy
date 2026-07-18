@@ -56,25 +56,31 @@ int64 europa_current_system_time_get(void)
 
 void europa_current_date_local(int64 time, uint *seconds, uint *minutes, uint *hours, uint *week_days, uint *month_days, uint *month, uint *year)
 {
-    time_t rawtime;
-    struct tm *timeinfo;
-    rawtime = (time_t)time;
-    UNUSED(rawtime);
-    timeinfo = localtime(&time);
+    time_t rawtime = (time_t)time;
+    struct tm timeinfo;
+
+#ifdef _WIN32
+    if (localtime_s(&timeinfo, &rawtime) != 0) {
+#else
+    if (localtime_r(&rawtime, &timeinfo) == NULL) {
+#endif
+        return;
+    }
+    
     if (NULL != seconds)
-        *seconds = timeinfo->tm_sec;
+        *seconds = timeinfo.tm_sec;
     if (NULL != minutes)
-        *minutes = timeinfo->tm_min;
+        *minutes = timeinfo.tm_min;
     if (NULL != hours)
-        *hours = timeinfo->tm_hour;
+        *hours = timeinfo.tm_hour;
     if (NULL != week_days)
-        *week_days = timeinfo->tm_wday;
+        *week_days = timeinfo.tm_wday;
     if (NULL != month_days)
-        *month_days = timeinfo->tm_mday;
+        *month_days = timeinfo.tm_mday;
     if (NULL != month)
-        *month = timeinfo->tm_mon;
+        *month = timeinfo.tm_mon + 1;
     if (NULL != year)
-        *year = timeinfo->tm_year + 1900;
+        *year = timeinfo.tm_year + 1900;
 }
 
 #ifdef _WIN32

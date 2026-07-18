@@ -11,7 +11,7 @@ char *styx_debug_magic_number = "StYxLiBdEbUg";
 SHandle *styx_buffer_create(void)
 {
     SHandle *handle;
-    handle = malloc(sizeof *handle);
+    handle = (SHandle *)malloc(sizeof *handle);
     if (handle == NULL) {
         return NULL;
     }
@@ -62,7 +62,7 @@ void styx_buffer_set(SHandle *handle, void *data, uint32 size)
         uint8 *temp;
         uint32 new_size = handle->write_buffer_pos + size;
 
-        temp = realloc(handle->write_buffer, new_size);
+        temp = (uint8 *)realloc(handle->write_buffer, new_size);
         if (temp == NULL) {
             fprintf(stderr, "Styx: Out of memory in styxBufferSet!\n");
             return;
@@ -78,7 +78,7 @@ void styx_buffer_set(SHandle *handle, void *data, uint32 size)
     handle->write_buffer_pos += size;
 }
 
-void styx_handle_clear(SHandle *handle, uint type)
+void styx_handle_clear(SHandle *handle, SHandleType type)
 {
     uint styx_buffer_size[] = {4096, /* S_HT_STREAMING_SERVER */
                                 4096, /* S_HT_STREAMING_CONNECTION */
@@ -92,7 +92,7 @@ void styx_handle_clear(SHandle *handle, uint type)
     handle->type = type;
     handle->read_buffer_size = styx_buffer_size[handle->type];
     if (type != S_HT_FILE_WRITE) {
-        handle->read_buffer = malloc((sizeof *handle->read_buffer) * handle->read_buffer_size);
+        handle->read_buffer = (uint8 *)malloc((sizeof *handle->read_buffer) * handle->read_buffer_size);
     }
     else {
         handle->read_buffer = NULL;
@@ -107,7 +107,7 @@ void styx_handle_clear(SHandle *handle, uint type)
     }
     else if (type != S_HT_FILE_READ) {
         handle->write_buffer_size = styx_buffer_size[handle->type];
-        handle->write_buffer = malloc((sizeof *handle->write_buffer) * handle->write_buffer_size);
+        handle->write_buffer = (uint8 *)malloc((sizeof *handle->write_buffer) * handle->write_buffer_size);
     }
     else {
         handle->write_buffer = NULL;
@@ -167,7 +167,7 @@ uint styx_unpack_buffer_get(SHandle *handle)
 
     if (handle->type != S_HT_BUFFER && handle->read_buffer_used + 1024 > handle->read_buffer_size) {
         size_t new_size = handle->read_buffer_size == 0 ? 1024 : handle->read_buffer_size * 2;
-        uint8 *temp = realloc(handle->read_buffer, sizeof(*handle->read_buffer) * new_size);
+        uint8 *temp = (uint8 *)realloc(handle->read_buffer, sizeof(*handle->read_buffer) * new_size);
         if (temp == NULL) {
             fprintf(stderr, "Styx: Out of memory in styx_unpack_buffer_get\n");
             return FALSE;
@@ -238,7 +238,7 @@ boolean styx_pack_buffer_clear(SHandle *handle)
         size_t new_size = handle->write_buffer_size + STYX_MINIMUM_WRITE_SPACE;
         uint8 *temp;
 
-        temp = realloc(handle->write_buffer, new_size);
+        temp = (uint8 *)realloc(handle->write_buffer, new_size);
         if (temp == NULL) {
             fprintf(stderr, "Styx: Out of memory during buffer expansion!\n");
             return FALSE;

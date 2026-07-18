@@ -61,7 +61,7 @@ void c_debug_memory_init(void (*lock)(void *mutex), void (*unlock)(void *mutex),
     c_alloc_mutex_unlock = unlock;
 }
 
-void *c_debug_mem_fopen(const char *file_name, const char *mode, char *file, uint line)
+FILE *c_debug_mem_fopen(const char *file_name, const char *mode, char *file, uint line)
 {
     FILE *f;
     UNUSED(file);
@@ -70,7 +70,7 @@ void *c_debug_mem_fopen(const char *file_name, const char *mode, char *file, uin
     return f;
 }
 
-void c_debug_mem_fclose(void *f, char *file, uint line)
+void c_debug_mem_fclose(FILE *f, char *file, uint line)
 {
     UNUSED(file);
     UNUSED(line);
@@ -90,7 +90,7 @@ boolean c_debug_memory(void)
         {
             uint8 *buf;
             size_t size;
-            buf = c_alloc_lines[i].allocs[j].buf;
+            buf = (uint8 *)c_alloc_lines[i].allocs[j].buf;
             size = c_alloc_lines[i].allocs[j].size;
             for (k = 0; k < C_MEMORY_OVER_ALLOC; k++)
                 if (buf[size + k] != C_MEMORY_MAGIC_NUMBER)
@@ -139,7 +139,7 @@ void c_debug_mem_add(void *pointer, size_t size, char *file, uint line)
         if (c_alloc_lines[i].alloc_allocated == c_alloc_lines[i].alloc_count)
         {
             c_alloc_lines[i].alloc_allocated += C_MEMORY_MAX_ALLOCS;
-            c_alloc_lines[i].allocs = realloc(c_alloc_lines[i].allocs, (sizeof *c_alloc_lines[i].allocs) * c_alloc_lines[i].alloc_allocated);
+            c_alloc_lines[i].allocs = (STMemAllocBuf *)realloc(c_alloc_lines[i].allocs, (sizeof *c_alloc_lines[i].allocs) * c_alloc_lines[i].alloc_allocated);
         }
         c_alloc_lines[i].allocs[c_alloc_lines[i].alloc_count].size = size;
         c_alloc_lines[i].allocs[c_alloc_lines[i].alloc_count].comment = NULL;
@@ -156,7 +156,7 @@ void c_debug_mem_add(void *pointer, size_t size, char *file, uint line)
                 c_alloc_lines[i].file[j] = file[j];
             c_alloc_lines[i].file[j] = 0;
             c_alloc_lines[i].alloc_allocated = 256;
-            c_alloc_lines[i].allocs = malloc((sizeof *c_alloc_lines[i].allocs) * c_alloc_lines[i].alloc_allocated);
+            c_alloc_lines[i].allocs = (STMemAllocBuf *)malloc((sizeof *c_alloc_lines[i].allocs) * c_alloc_lines[i].alloc_allocated);
             c_alloc_lines[i].allocs[0].size = size;
             c_alloc_lines[i].allocs[0].buf = pointer;
             c_alloc_lines[i].allocs[0].comment = NULL;
@@ -183,7 +183,7 @@ void *c_debug_mem_malloc(size_t size, char *file, uint line)
     uint i;
     if (c_alloc_mutex != NULL)
         c_alloc_mutex_lock(c_alloc_mutex);
-    pointer = malloc(size + C_MEMORY_OVER_ALLOC);
+    pointer = (void *)malloc(size + C_MEMORY_OVER_ALLOC);
 
 #ifdef C_MEMORY_PRINT
     printf("Malloc %u bytes at pointer %p at %s line %u\n", size, pointer, file, line);
@@ -338,8 +338,8 @@ void *c_debug_mem_realloc(void *pointer, size_t size, char *file, uint line)
         {
             for (j = 0; j < c_alloc_lines[i].alloc_count; j++)
             {
-                uint *buf;
-                buf = c_alloc_lines[i].allocs[j].buf;
+                uint8 *buf;
+                buf = (uint8 *)c_alloc_lines[i].allocs[j].buf;
                 for (k = 0; k < c_alloc_lines[i].allocs[j].size; k++)
                 {
                     if (&buf[k] == pointer)
@@ -356,7 +356,7 @@ void *c_debug_mem_realloc(void *pointer, size_t size, char *file, uint line)
     if (move > size)
         move = size;
 
-    pointer2 = malloc(size + C_MEMORY_OVER_ALLOC);
+    pointer2 = (void *)malloc(size + C_MEMORY_OVER_ALLOC);
     if (pointer2 == NULL)
     {
         printf("MEM ERROR: Realloc returns NULL when trying to allocate %lu bytes at line %u in file %s\n", size, line, file);
@@ -469,7 +469,7 @@ boolean c_debug_mem_test(void *pointer, size_t size, boolean ignore_not_found)
             {
                 if (((uint8 *)c_alloc_lines[i].allocs[j].buf) + c_alloc_lines[i].allocs[j].size < ((uint8 *)pointer) + size)
                 {
-                    printf("CLAY Mem Debugger error: Not enough memory to access pointer %p, %u bytes missing\n", pointer, (uint)(((uint8 *)c_alloc_lines[i].allocs[j].buf) + c_alloc_lines[i].allocs[j].size) - (uint)(((uint8 *)pointer) + size));
+                    printf("CLAY Mem Debugger error: Not enough memory to access pointer %p, %u bytes missing\n", pointer, (uint64)(((uint8 *)c_alloc_lines[i].allocs[j].buf) + c_alloc_lines[i].allocs[j].size) - (uint64)(((uint8 *)pointer) + size));
                     if (c_alloc_mutex != NULL)
                         c_alloc_mutex_unlock(c_alloc_mutex);
                     return TRUE;

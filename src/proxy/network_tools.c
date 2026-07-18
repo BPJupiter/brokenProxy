@@ -118,8 +118,8 @@ static TracertResult traceroute(const char *address)
     }
 
     result.hopCount = i;
-    result.hopRtt = malloc(i * (sizeof *result.hopRtt));
-    result.hopAddress = malloc(i * (sizeof *result.hopAddress));
+    result.hopRtt = (uint *)malloc(i * (sizeof *result.hopRtt));
+    result.hopAddress = (char **)malloc(i * (sizeof *result.hopAddress));
     for (i = 0; i < result.hopCount; i++)
     {
         result.hopRtt[i] = hopRtt_temp[i];
@@ -217,8 +217,8 @@ static TracertResult traceroute(const char *address)
     }
 
     result.hopCount = i;
-    result.hopRtt = malloc(i * (sizeof *result.hopRtt));
-    result.hopAddress = malloc(i * (sizeof *result.hopAddress));
+    result.hopRtt = (uint *)malloc(i * (sizeof *result.hopRtt));
+    result.hopAddress = (char **)malloc(i * (sizeof *result.hopAddress));
     for (i = 0; i < result.hopCount; i++)
     {
         result.hopRtt[i] = hopRtt_temp[i];

@@ -43,7 +43,7 @@ DIR *opendir(char *path)
         unicode_path[i] = 0;
         if ((handle = FindFirstFileW(unicode_path, &data)) != INVALID_HANDLE_VALUE)
         {
-            dir = malloc(sizeof *dir);
+            dir = (DIR *)malloc(sizeof *dir);
             if (dir == NULL) return NULL;
             dir->handle = handle;
             dir->data = data;
@@ -55,7 +55,7 @@ DIR *opendir(char *path)
     }
     else
     {
-        dir = malloc(sizeof *dir);
+        dir = (DIR *)malloc(sizeof *dir);
         if (dir == NULL) return NULL;
         dir->handle = NULL;
         dir->ent.d_name[0] = 64;
@@ -260,7 +260,7 @@ boolean europa_path_search(char *file, boolean partial, char *path, boolean fold
     return FALSE;
 }
 
-void *europa_path_dir_open(char *path)
+DIR *europa_path_dir_open(char *path)
 {
     return opendir(path);
 }
@@ -373,7 +373,7 @@ boolean europa_path_volume_stats(char *path, size_t *block_size, size_t *free_si
 void europa_path_test(void)
 {
     char file[128];
-    void *dir;
+    DIR *dir;
 
     dir = europa_path_dir_open("./");
     printf("dir Poninter %p\n", dir);
@@ -462,7 +462,7 @@ uint8 *europa_path_load(char *path, size_t *size)
         return NULL;
     }
     rewind(f);
-    buffer = malloc(allocation + 1);
+    buffer = (char *)malloc(allocation + 1);
     if (buffer == NULL) return NULL;
     memset(buffer, 0, allocation + 1);
     fread(buffer, 1, allocation, f);

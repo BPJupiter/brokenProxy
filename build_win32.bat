@@ -10,10 +10,12 @@
               /Ithird_party\mapbox\include ^
               /Ithird_party\wepoll\include ^
               /Isrc\shared ^
+              /Isrc\shared\bplibxx\include
               /Isrc\proxy ^
               /Ilib
 @set SOURCES=third_party\imgui\src\imgui*.cpp ^
              third_party\wepoll\src\wepoll.c ^
+             src\shared\bplibxx\src\*.cpp ^
              src\shared\Clay\*.c ^
              src\shared\Europa\*.c ^
              src\shared\Styx\*.c ^

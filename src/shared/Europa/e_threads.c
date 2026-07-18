@@ -15,7 +15,7 @@
 void *europa_mutex_create(void)
 {
     CRITICAL_SECTION *mutex;
-    mutex = malloc(sizeof *mutex);
+    mutex = (void *)malloc(sizeof *mutex);
     if (mutex == NULL) return NULL;
     InitializeCriticalSection(mutex);
     return mutex;
@@ -49,30 +49,30 @@ void europa_mutex_unlock(void *mutex)
 void *europa_mutex_create(void)
 {
     pthread_mutex_t *mutex;
-    mutex = malloc(sizeof *mutex);
+    mutex = (pthread_mutex_t *)malloc(sizeof *mutex);
     pthread_mutex_init(mutex, NULL);
     return mutex;
 }
 
 void europa_mutex_destroy(void *mutex)
 {
-    pthread_mutex_destroy(mutex);
+    pthread_mutex_destroy((pthread_mutex_t *)mutex);
     free(mutex);
 }
 
 void europa_mutex_lock(void *mutex)
 {
-    pthread_mutex_lock(mutex);
+    pthread_mutex_lock((pthread_mutex_t *)mutex);
 }
 
 boolean europa_mutex_lock_try(void *mutex)
 {
-    return pthread_mutex_trylock(mutex);
+    return pthread_mutex_trylock((pthread_mutex_t *)mutex);
 }
 
 void europa_mutex_unlock(void *mutex)
 {
-    pthread_mutex_unlock(mutex);
+    pthread_mutex_unlock((pthread_mutex_t *)mutex);
 }
 
 #endif
@@ -83,7 +83,7 @@ void europa_mutex_unlock(void *mutex)
 void *europa_signal_create(void)
 {
     CONDITION_VARIABLE *p;
-    p = malloc(sizeof *p);
+    p = (CONDITION_VARIABLE *)malloc(sizeof *p);
     if (p == NULL) return NULL;
     InitializeConditionVariable(p);
     return p;
@@ -117,32 +117,32 @@ boolean europa_signal_activate_all(void *signal)
 void *europa_signal_create(void)
 {
     pthread_cond_t *p;
-    p = malloc(sizeof *p);
+    p = (pthread_cond_t *)malloc(sizeof *p);
     pthread_cond_init(p, NULL);
     return p;
 }
 
 void europa_signal_destroy(void *signal)
 {
-    pthread_cond_destroy(signal);
+    pthread_cond_destroy((pthread_cond_t *)signal);
     free(signal);
 }
 
 boolean europa_signal_wait(void *signal, void *mutex)
 {
-    pthread_cond_wait(signal, mutex);
+    pthread_cond_wait((pthread_cond_t *)signal, (pthread_mutex_t *)mutex);
     return TRUE;
 }
 
 boolean europa_signal_activate(void *signal)
 {
-    pthread_cond_signal(signal);
+    pthread_cond_signal((pthread_cond_t *)signal);
     return TRUE;
 }
 
 boolean europa_signal_activate_all(void *signal)
 {
-    pthread_cond_broadcast(signal);
+    pthread_cond_broadcast((pthread_cond_t *)signal);
     return TRUE;
 }
 
@@ -184,7 +184,7 @@ void europa_thread(void (*func)(void *data), void *data, char *name)
     HANDLE thread_h;
     DWORD dwThreadID;
 
-    thread_param = malloc(sizeof *thread_param);
+    thread_param = (EuropaThreadParams *)malloc(sizeof *thread_param);
     if (thread_param == NULL) return;
     thread_param->func = func;
     thread_param->data = data;
@@ -211,7 +211,7 @@ void europa_thread(void (*func)(void *data), void *data, char *name)
 
     UNUSED(name);
 
-    thread_param = malloc(sizeof *thread_param);
+    thread_param = (EuropaThreadParams *)malloc(sizeof *thread_param);
     thread_param->func = func;
     thread_param->data = data;
 

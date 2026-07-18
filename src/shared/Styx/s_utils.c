@@ -1,4 +1,3 @@
-
 #include <string.h>
 
 #include "styx.h"
@@ -18,8 +17,8 @@ void styx_free(SHandle *handle)
     }
 
     if (handle->text_copy != NULL) {
-        fprintf(handle->text_copy, "styxFree\n");
-        fclose(handle->text_copy);
+        fprintf((FILE *)handle->text_copy, "styxFree\n");
+        fclose((FILE *)handle->text_copy);
     }
 
     if (handle->read_buffer != NULL) {
@@ -29,7 +28,7 @@ void styx_free(SHandle *handle)
         free(handle->write_buffer);
     }
     if (handle->file != NULL) {
-        fclose(handle->file);
+        fclose((FILE *)handle->file);
     }
 
     if (handle->socket != INVALID_VSOCKET) {
@@ -38,13 +37,13 @@ void styx_free(SHandle *handle)
 
     if (handle->type == S_HT_FILE_WRITE && handle->file_name != NULL) {
         size_t len = strlen(handle->file_name);
-        char *tmp = malloc(len + 5);
+        char *tmp = (char *)malloc(len + 5);
 
         if (tmp != NULL) {
             sprintf(tmp, "%s.tmp", handle->file_name);
             remove(handle->file_name);
             if (0 != rename(tmp, handle->file_name)) {
-                char *alt = malloc(len + 32);
+                char *alt = (char *)malloc(len + 32);
                 if (alt != NULL) {
                     uint i;
                     sprintf(alt, "%s.emergency", handle->file_name);

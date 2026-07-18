@@ -75,12 +75,12 @@ static boolean c_hashtable_resize(cHashTable *table)
     size_t stride = table->key_size + table->data_size;
     size_t i;
 
-    new_ctrl = malloc(new_capacity + GROUP_SIZE);
+    new_ctrl = (uint8 *)malloc(new_capacity + GROUP_SIZE);
     if (!new_ctrl) {
         return FALSE;
     }
 
-    new_slots = calloc(new_capacity, stride);
+    new_slots = (uint8 *)calloc(new_capacity, stride);
     if (!new_slots) {
         free(new_ctrl);
         return FALSE;
@@ -145,7 +145,7 @@ static boolean c_hashtable_resize(cHashTable *table)
 
 cHashTable *c_hashtable_init(size_t key_size, size_t data_size, uint64 (*hash_func)(const void *), boolean (*eq_func)(const void *, const void *))
 {
-    cHashTable *table = malloc(sizeof(*table));
+    cHashTable *table = (cHashTable *)malloc(sizeof(*table));
     if (!table) {
         return NULL;
     }
@@ -155,13 +155,13 @@ cHashTable *c_hashtable_init(size_t key_size, size_t data_size, uint64 (*hash_fu
     table->key_size = key_size;
     table->data_size = data_size;
 
-    table->ctrl = malloc(CAPACITY + GROUP_SIZE); /* padding for SIMD bounds safety */
+    table->ctrl = (uint8 *)malloc(CAPACITY + GROUP_SIZE); /* padding for SIMD bounds safety */
     if (!table->ctrl) {
         free(table);
         return NULL;
     }
 
-    table->slots = calloc(CAPACITY, key_size + data_size);
+    table->slots = (uint8 *)calloc(CAPACITY, key_size + data_size);
     if (!table->slots) {
         free(table->ctrl);
         free(table);

@@ -182,7 +182,7 @@ char *c_text_copy_allocate(char *source)
     char *text;
     for (i = 0; source[i] != 0; i++)
         ;
-    text = malloc((sizeof *text) * (i + 1));
+    text = (char *)malloc((sizeof *text) * (i + 1));
     for (i = 0; source[i] != 0; i++)
         text[i] = source[i];
     text[i] = 0;
@@ -379,7 +379,7 @@ char *c_text_load(char *file_name, size_t *size)
         return NULL;
     }
     rewind(f);
-    buffer = malloc(allocation + 1);
+    buffer = (char *)malloc(allocation + 1);
     memset(buffer, 0, allocation + 1);
     fread(buffer, 1, allocation, f);
     fclose(f);
@@ -463,7 +463,7 @@ uint c_text_parse_real(char *text, int64 *integer_output, double *real_output, b
     {
         *decimal = FALSE;
         i += 2;
-        i += c_text_parse_hex(&text[i], integer_output);
+        i += c_text_parse_hex(&text[i], (uint64 *)integer_output);
         if (neg)
             *integer_output = -*integer_output;
         *real_output = (double)*integer_output;

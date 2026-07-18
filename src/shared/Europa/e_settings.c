@@ -42,7 +42,7 @@ static void init_setting(void)
         return;
     init = TRUE;
 
-    EuropaGlobalSettings.array = malloc((sizeof *EuropaGlobalSettings.array) * 128);
+    EuropaGlobalSettings.array = (EuropaSetting *)malloc((sizeof *EuropaGlobalSettings.array) * 128);
     EuropaGlobalSettings.count = 0;
     EuropaGlobalSettings.version = 1;
 }
@@ -50,7 +50,7 @@ static void init_setting(void)
 static void clear_setting(void)
 {
     free(EuropaGlobalSettings.array);
-    EuropaGlobalSettings.array = malloc((sizeof *EuropaGlobalSettings.array) * 128);
+    EuropaGlobalSettings.array = (EuropaSetting *)malloc((sizeof *EuropaGlobalSettings.array) * 128);
     EuropaGlobalSettings.count = 0;
     EuropaGlobalSettings.version = 1;
 }
@@ -71,7 +71,7 @@ static EuropaSetting *europa_add_setting(const char *name, const char *comment)
     }
     if (s == NULL) {
         if (EuropaGlobalSettings.count % 64 == 0)
-            EuropaGlobalSettings.array = realloc(EuropaGlobalSettings.array, (sizeof *EuropaGlobalSettings.array) * (EuropaGlobalSettings.count + 64));
+            EuropaGlobalSettings.array = (EuropaSetting *)realloc(EuropaGlobalSettings.array, (sizeof *EuropaGlobalSettings.array) * (EuropaGlobalSettings.count + 64));
         s = &EuropaGlobalSettings.array[EuropaGlobalSettings.count++];
         for (i = 0; i < SETTINGS_NAME_LENGTH - 1 && name[i] != 0; i++)
             s->name[i] = name[i];
@@ -229,7 +229,7 @@ char *europa_setting_text_get(const char *setting, char *default_text, const cha
     if (s == NULL) {
         s = europa_add_setting(setting, comment);
         for (i = 0; default_text[i] != 0; i++);
-        text = malloc((sizeof *text) * (i + 1));
+        text = (char *)malloc((sizeof *text) * (i + 1));
         for (i = 0; default_text[i] != 0; i++)
             text[i] = default_text[i];
         text[i] = 0;
@@ -254,7 +254,7 @@ void europa_setting_text_set(const char *setting, char *text, const char *commen
         free(s->data.text);
     }
     for (i = 0; text[i] != 0; i++);
-    t = malloc((sizeof *t) * (i + 1));
+    t = (char *)malloc((sizeof *t) * (i + 1));
     for (i = 0; text[i] != 0; i++)
         t[i] = text[i];
     t[i] = 0;
@@ -338,7 +338,7 @@ boolean europa_settings_load(const char *file_name)
         fseek(settings, 0, SEEK_END);
         size = ftell(settings) + 1;
         fseek(settings, 0, SEEK_SET);
-        buffer = malloc(size + 1);
+        buffer = (char *)malloc(size + 1);
         fread(buffer, sizeof(char), size, settings);
         buffer[size] = 0;
         for (i = 0; buffer[i] != 0; i++) {
@@ -353,7 +353,7 @@ boolean europa_settings_load(const char *file_name)
                     if (buffer[i + j] != 0 && j != 0) {
                         j++;
                         if (buffer[i + j] == '/') {
-                            text = malloc(sizeof(char) * j);
+                            text = (char *)malloc(sizeof(char) * j);
                             for (j = 0; buffer[i + j] != 0 && buffer[i + j] != '<'; j++)
                                 text[j] = buffer[i + j];
                             text[j] = 0;

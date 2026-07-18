@@ -88,16 +88,16 @@ static boolean styx_pack_debug_header(SHandle *handle, STypes type, uint vector_
 
     if (handle->text_copy != NULL) {
         if (vector_length > 1 || type == S_TYPE_RAW) {
-            fprintf(handle->text_copy, "%s %s length %u\n", styx_type_strings[type], name, value_int);
+            fprintf((FILE *)handle->text_copy, "%s %s length %u\n", styx_type_strings[type], name, value_int);
         }
         else if (type == S_TYPE_STRING) {
-            fprintf(handle->text_copy, "%s %s = %s\n", styx_type_strings[type], name, value_string);
+            fprintf((FILE *)handle->text_copy, "%s %s = %s\n", styx_type_strings[type], name, value_string);
         }
         else if (type >= S_TYPE_FLOAT) {
-            fprintf(handle->text_copy, "%s %s = %f\n", styx_type_strings[type], name, value_double);
+            fprintf((FILE *)handle->text_copy, "%s %s = %f\n", styx_type_strings[type], name, value_double);
         }
         else {
-            fprintf(handle->text_copy, "%s %s = %i\n", styx_type_strings[type], name, value_int);
+            fprintf((FILE *)handle->text_copy, "%s %s = %i\n", styx_type_strings[type], name, value_int);
         }
     }
     return TRUE;
@@ -940,7 +940,7 @@ char *styx_unpack_string_with_ownership_internal(SHandle *handle)
                 handle->read_buffer_pos++;
                 return NULL;
             }
-            string = malloc((sizeof *string) * ++size);
+            string = (char *)malloc((sizeof *string) * ++size);
             for (i = 0; handle->read_buffer[i + handle->read_buffer_pos] != 0; i++) {
                 string[i] = handle->read_buffer[i + handle->read_buffer_pos];
             }

@@ -81,10 +81,10 @@ static void save_config(BProxyHandle *proxy);
 
 BProxyHandle *bp_init(uint16 port, const char *settings_filename)
 {
-    BProxyHandle *proxy = calloc(1, sizeof(BProxyHandle));
+    BProxyHandle *proxy = (BProxyHandle *)calloc(1, sizeof(BProxyHandle));
     
     (void)proxy->settings;
-    proxy->settings_filename = malloc(strlen(settings_filename) + 1);
+    proxy->settings_filename = (char *)malloc(strlen(settings_filename) + 1);
     strcpy(proxy->settings_filename, settings_filename);
     
     proxy->server_handle = styx_network_stream_address_create(NULL, port, FALSE);

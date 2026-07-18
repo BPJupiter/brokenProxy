@@ -8,9 +8,11 @@ INCLUDES="-I. \
           -Ithird_party/nanosvg/include \
           -Ithird_party/mapbox/include \
           -Isrc/shared \
+          -Isrc/shared/bplibxx/include \
           -Isrc/proxy \
           $(pkg-config --cflags sdl3)"
 SOURCES="third_party/imgui/src/imgui*.cpp \
+         src/shared/bplibxx/src/*.cpp \
          src/shared/Clay/*.c \
          src/shared/Europa/*.c \
          src/shared/Styx/*.c \
@@ -20,7 +22,7 @@ SOURCES="third_party/imgui/src/imgui*.cpp \
          src/proxy/network_tools.c \
          src/main.cpp"
 LIBS="$(pkg-config --libs sdl3)"
-FLAGS="-fpermissive -mshstk"
+FLAGS="-mshstk"
 NO_WARNINGS="-Wno-write-strings"
 mkdir -p ${OUT_DIR}
 echo "Compiling..."

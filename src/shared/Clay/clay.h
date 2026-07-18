@@ -95,8 +95,8 @@ typedef float freal;
 
 #if !defined(C_NO_MEMORY_DEBUG)
 /* turns on the memory debugging system */
-#  define C_MEMORY_DEBUG
-/*#define C_MEMORY_PRINT */
+/*#  define C_MEMORY_DEBUG */ // TODO: Fix with cpp files?
+/*#  define C_MEMORY_PRINT */
 #endif
 #if !defined(C_EXIT_CRASH)
 /* turns on  the crash on exit */
@@ -126,8 +126,8 @@ extern boolean  c_debug_mem_query(void *pointer, uint *line, char **file, size_t
 extern boolean  c_debug_mem_test(void *pointer, size_t size, boolean ignore_not_found); /* query if a bit of memory is safe to access */
 extern boolean  c_debug_memory(void); /*f_debug_memory checks if any of the bounds of any allocation has been over written and reports where to standard out. The function returns TRUE if any error was found*/
 
-extern void     *c_debug_mem_fopen(const char *file_name, const char *mode, char *file, uint line);
-extern void     c_debug_mem_fclose(void *f, char *file, uint line);
+extern FILE     *c_debug_mem_fopen(const char *file_name, const char *mode, char *file, uint line);
+extern void     c_debug_mem_fclose(FILE *f, char *file, uint line);
 
 extern void     c_no_debug_free(void *buf); /* Introduced as some libraries require use of stdlib free on certain lib objects. malloc and realloc calls within these libs are not tracked by the debugging program and as such calls to free normally crash. */
 
