@@ -23,7 +23,7 @@ SOURCES="third_party/imgui/src/imgui*.cpp \
          src/main.cpp"
 LIBS="$(pkg-config --libs sdl3)"
 FLAGS="-mshstk"
-NO_WARNINGS="-Wno-write-strings"
+NO_WARNINGS="-Wno-write-strings -Wno-volatile -Wno-array-compare"
 mkdir -p ${OUT_DIR}
 echo "Compiling..."
 g++ -g ${FLAGS} ${NO_WARNINGS} ${INCLUDES} $SOURCES -o ${OUT_DIR}/${OUT_EXE} ${LIBS}
