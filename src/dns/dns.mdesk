@@ -30,44 +30,16 @@ dns_friendly_name_from_class:
     @expand(DNS_ClassTable a) `case DNS_Class_$(a.class):{result = str8_lit("$(a.friendly_name)");}break`;
 }
 
-@gen(functions)
+@enum2bool_switch(DNS_Class)
+dns_is_obsolete_class:
 {
-    `internal bool32 dns_is_obsolete_class(DNS_Class v);`;
+    @expand(DNS_ClassTable a) `case DNS_Class_$(a.class):{result = $(a.obsolete);}break`;
 }
 
-@gen(functions) @c_file
+@enum2bool_switch(DNS_Class)
+dns_is_query_exclusive_class:
 {
-    `internal bool32`;
-    `dns_is_obsolete_class(DNS_Class v)`;
-    `{`;
-        `bool32 result = 1;`;
-        `switch(v)`;
-        `{`;
-            `default:{}break;`;
-            @expand(DNS_ClassTable a) `case DNS_Class_$(a.class):{result = $(a.obsolete);}break;`;
-            `}`;
-        `return result;`;
-    `}`;
-}
-
-@gen(functions)
-{
-    `internal bool32 dns_is_query_exclusive_class(DNS_Class v);`;
-}
-
-@gen(functions) @c_file
-{
-    `internal bool32`;
-    `dns_is_query_exclusive_class(DNS_Class v)`;
-    `{`;
-        `bool32 result = 1;`;
-        `switch(v)`;
-        `{`;
-            `default:{}break;`;
-            @expand(DNS_ClassTable a) `case DNS_Class_$(a.class):{result = $(a.question_only);}break;`;
-            `}`;
-        `return result;`;
-    `}`;    
+    @expand(DNS_ClassTable a) `case DNS_Class_$(a.class):{result = $(a.question_only);}break`;
 }
 
 @enum2string_switch(DNS_Class)
@@ -246,46 +218,17 @@ dns_string_from_type:
     @expand(DNS_TypeTable a) `case DNS_Type_$(a.type):{result = str8_lit("$(a.type)");}break`;
 }
 
-@gen(functions)
+@enum2bool_switch(DNS_Type)
+dns_is_obsolete_type:
 {
-    `internal bool32 dns_is_obsolete_type(DNS_Type v);`;
+    @expand(DNS_TypeTable a) `case DNS_Type_$(a.type):{result = $(a.obsolete);}break`;
 }
 
-@gen(functions) @c_file
+@enum2bool_switch(DNS_Type)
+dns_is_query_exclusive_type:
 {
-    `internal bool32`;
-    `dns_is_obsolete_type(DNS_Type v)`;
-    `{`;
-        `bool32 result = 1;`;
-        `switch(v)`;
-        `{`;
-            `default:{}break;`;
-            @expand(DNS_TypeTable a) `case DNS_Type_$(a.type):{result = $(a.obsolete);}break;`;
-            `}`;
-        `return result;`;
-    `}`;
+    @expand(DNS_TypeTable a) `case DNS_Type_$(a.type):{result = $(a.question_only);}break`;
 }
-
-@gen(functions)
-{
-    `internal bool32 dns_is_query_exclusive_type(DNS_Type v);`;
-}
-
-@gen(functions) @c_file
-{
-    `internal bool32`;
-    `dns_is_query_exclusive_type(DNS_Type v)`;
-    `{`;
-        `bool32 result = 1;`;
-        `switch(v)`;
-        `{`;
-            `default:{}break;`;
-            @expand(DNS_TypeTable a) `case DNS_Type_$(a.type):{result = $(a.question_only);}break;`;
-            `}`;
-        `return result;`;
-    `}`;
-}
-
 
 @table(id obsolete opcode friendly_name rfc_csv)
 DNS_OpCodeTable:

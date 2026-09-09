@@ -309,7 +309,7 @@ return result;
 internal bool32
 dns_is_obsolete_class(DNS_Class v)
 {
-bool32 result = 1;
+bool32 result = 0;
 switch(v)
 {
 default:{}break;
@@ -322,10 +322,11 @@ case DNS_Class_ANY:{result = 0;}break;
 }
 return result;
 }
+
 internal bool32
 dns_is_query_exclusive_class(DNS_Class v)
 {
-bool32 result = 1;
+bool32 result = 0;
 switch(v)
 {
 default:{}break;
@@ -338,10 +339,11 @@ case DNS_Class_ANY:{result = 1;}break;
 }
 return result;
 }
+
 internal bool32
 dns_is_obsolete_type(DNS_Type v)
 {
-bool32 result = 1;
+bool32 result = 0;
 switch(v)
 {
 default:{}break;
@@ -445,10 +447,11 @@ case DNS_Type_DLV:{result = 1;}break;
 }
 return result;
 }
+
 internal bool32
 dns_is_query_exclusive_type(DNS_Type v)
 {
-bool32 result = 1;
+bool32 result = 0;
 switch(v)
 {
 default:{}break;
@@ -552,3 +555,4 @@ case DNS_Type_DLV:{result = 0;}break;
 }
 return result;
 }
+

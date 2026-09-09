@@ -312,6 +312,67 @@ internal void entry_point(Cmd_Line *cmdline)
       }
     }
   }
+
+  /////////////////////////////////
+  //- fbt: generate string -> enum mapping functions
+  //
+  for (MG_File_Parse_Node *n = parses.first; n != 0; n = n->next)
+  {
+      MD_Node *file = n->v.root;
+      for MD_EachNode(node, file->first)
+      {
+          MD_Node *tag = md_tag_from_string(node, str8_lit("string2enum_match"), 0);
+          if (!md_node_is_nil(tag))
+          {
+              String8 enum_type = tag->first->string;
+              String8 layer_key = mg_layer_key_from_path(file->string);
+              MG_Layer *layer = mg_layer_from_key(layer_key);
+              String8_List gen_strings = mg_string_list_from_table_gen(mg_arena, table_grid_map, table_col_map, str8_lit(""), node);
+              str8_list_pushf(mg_arena, &layer->h_functions, "internal %S %S(String8 v);\n", enum_type, node->string);
+              str8_list_pushf(mg_arena, &layer->c_functions, "internal %S\n%S(String8 v)\n{\n", enum_type, node->string);
+              str8_list_pushf(mg_arena, &layer->c_functions, "%S result = 0;\n", enum_type);
+              str8_list_pushf(mg_arena, &layer->c_functions, "if (0) {}\n");
+              for (String8_Node *n = gen_strings.first; n != 0; n = n->next)
+              {
+                  str8_list_pushf(mg_arena, &layer->c_functions, "%S\n", n->string);
+              }
+              str8_list_pushf(mg_arena, &layer->c_functions, "return result;\n");
+              str8_list_pushf(mg_arena, &layer->c_functions, "}\n\n");
+          }
+      }
+  }
+
+  ///////////////////////////////
+  //- fbt: generate enum -> bool mapping functions
+  //
+  for (MG_File_Parse_Node *n = parses.first; n != 0; n = n->next)
+  {
+      MD_Node *file = n->v.root;
+      for MD_EachNode(node, file->first)
+      {
+          MD_Node *tag = md_tag_from_string(node, str8_lit("enum2bool_switch"), 0);
+          if (!md_node_is_nil(tag))
+          {
+              String8 enum_type = tag->first->string;
+              String8 layer_key = mg_layer_key_from_path(file->string);
+              MG_Layer *layer = mg_layer_from_key(layer_key);
+              String8_List gen_strings = mg_string_list_from_table_gen(mg_arena, table_grid_map, table_col_map, str8_lit(""), node);
+              str8_list_pushf(mg_arena, &layer->h_functions, "internal bool32 %S(%S v);\n", node->string, enum_type);
+              str8_list_pushf(mg_arena, &layer->c_functions, "internal bool32\n%S(%S v)\n{\n", node->string, enum_type);
+              str8_list_pushf(mg_arena, &layer->c_functions, "bool32 result = 0;\n", enum_type);
+              str8_list_pushf(mg_arena, &layer->c_functions, "switch(v)\n");
+              str8_list_pushf(mg_arena, &layer->c_functions, "{\n");
+              str8_list_pushf(mg_arena, &layer->c_functions, "default:{}break;\n");
+              for (String8_Node *n = gen_strings.first; n != 0; n = n->next)
+              {
+                  str8_list_pushf(mg_arena, &layer->c_functions, "%S;\n", n->string);
+              }
+              str8_list_pushf(mg_arena, &layer->c_functions, "}\n");
+              str8_list_pushf(mg_arena, &layer->c_functions, "return result;\n");
+              str8_list_pushf(mg_arena, &layer->c_functions, "}\n\n");
+          }
+      }
+  }
   
   //////////////////////////////
   //- rjf: generate catch-all generations

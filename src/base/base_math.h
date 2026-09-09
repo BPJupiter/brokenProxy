@@ -123,6 +123,31 @@ union Vec4s32 {
     s32 v[4];
 };
 
+///////////////////////
+// Vector List Types
+
+typedef struct Vec3f32_Node Vec3f32_Node;
+struct Vec3f32_Node
+{
+    Vec3f32_Node *next;
+    Vec3f32 v;
+};
+
+typedef struct Vec3f32_List Vec3f32_List;
+struct Vec3f32_List
+{
+    Vec3f32_Node *first;
+    Vec3f32_Node *last;
+    u64 count;
+};
+
+typedef struct Vec3f32_Array Vec3f32_Array;
+struct Vec3f32_Array
+{
+    Vec3f32 *v;
+    u64 count;
+};
+
 ////////////////////////////////
 //~ rjf: Matrix Types
 
@@ -695,6 +720,11 @@ internal Vec4f32 rgba_from_u32(u32 hex);
 
 ////////////////////////////////
 //~ rjf: List Type Functions
+
+internal void vec3f32_list_push_node(Vec3f32_List *list, Vec3f32_Node *n);
+internal Vec3f32_Node * vec3f32_list_push(Arena *arena, Vec3f32_List *list, Vec3f32 vec);
+internal void vec3f32_list_concat(Vec3f32_List *list, Vec3f32_List *to_concat);
+internal Vec3f32_Array vec3f32_array_from_list(Arena *arena, Vec3f32_List *list);
 
 internal void rng1u64_list_push_node(Rng1u64_List *list, Rng1u64_Node *n);
 internal Rng1u64_Node * rng1u64_list_push(Arena *arena, Rng1u64_List *list, Rng1u64 rng);

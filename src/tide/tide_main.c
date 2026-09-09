@@ -34,6 +34,7 @@
 #include "font_cache/font_cache.h"
 #include "draw/draw.h"
 #include "ui/ui_inc.h"
+//#include "geo/geo_inc.h"
 #include "tide_inc.h"
 
 #include "base/base_inc.c"
@@ -53,6 +54,7 @@
 #include "font_cache/font_cache.c"
 #include "draw/draw.c"
 #include "ui/ui_inc.c"
+//#include "geo/geo_inc.c"
 #include "tide_inc.c"
 
 ////////////////////////////////

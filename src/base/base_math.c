@@ -720,6 +720,53 @@ rgba_from_u32(u32 hex)
 ////////////////////////////////
 //~ rjf: List Type Functions
 
+internal void vec3f32_list_push_node(Vec3f32_List *list, Vec3f32_Node *n)
+{
+    SLLQueuePush(list->first, list->last, n);
+    list->count += 1;
+}
+
+internal Vec3f32_Node * vec3f32_list_push(Arena *arena, Vec3f32_List *list, Vec3f32 vec)
+{
+    Vec3f32_Node *n = push_array(arena, Vec3f32_Node, 1);
+    MemoryCopyStruct(&n->v, &vec);
+    vec3f32_list_push_node(list, n);
+    return n;
+}
+
+internal void vec3f32_list_concat(Vec3f32_List *list, Vec3f32_List *to_concat)
+{
+    if (to_concat->first)
+    {
+        if (list->first)
+        {
+            list->last->next = to_concat->first;
+            list->last       = to_concat->last;
+        }
+        else
+        {
+            list->first = to_concat->first;
+            list->last  = to_concat->last;
+        }
+        list->count += to_concat->count;
+        MemoryZeroStruct(to_concat);
+    }
+}
+
+internal Vec3f32_Array vec3f32_array_from_list(Arena *arena, Vec3f32_List *list)
+{
+    Vec3f32_Array arr = {0};
+    arr.count         = list->count;
+    arr.v             = push_array_no_zero(arena, Vec3f32, arr.count);
+    u64 idx = 0;
+    for (Vec3f32_Node *n = list->first; n != 0; n = n->next)
+    {
+        arr.v[idx] = n->v;
+        idx += 1;
+    }
+    return arr;
+}
+
 internal void
 rng1u64_list_push_node(Rng1u64_List *list, Rng1u64_Node *n)
 {

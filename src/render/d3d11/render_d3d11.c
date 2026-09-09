@@ -1433,6 +1433,15 @@ r_window_submit(WM_Window window, R_Handle window_equip, R_Pass_List *passes)
                 R_Batch_Group_3D_Params *group_params = &n->params;
                 R_D3D11_Buffer *mesh_vertices = r_d3d11_buffer_from_handle(group_params->mesh_vertices);
                 R_D3D11_Buffer *mesh_indices = r_d3d11_buffer_from_handle(group_params->mesh_indices);
+
+                // get texture
+                R_Handle texture_handle = group_params->albedo_tex;
+                if (r_handle_match(texture_handle, r_handle_zero()))
+                {
+                    texture_handle = r_d3d11_state->backup_texture;
+                }
+                R_D3D11_Tex2D *texture = r_d3d11_tex2d_from_handle(texture_handle);
+                ID3D11SamplerState *mesh_sampler = r_d3d11_state->samplers[group_params->albedo_tex_sample_kind];
                 
                 // rjf: setup input assembly
                 u32 stride = 11 * sizeof(f32);
@@ -1460,6 +1469,11 @@ r_window_submit(WM_Window window, R_Handle window_equip, R_Pass_List *passes)
                 d_ctx->lpVtbl->VSSetConstantBuffers(d_ctx, 0, 1, &uniforms_buffer);
                 d_ctx->lpVtbl->PSSetShader(d_ctx, pshad, 0, 0);
                 d_ctx->lpVtbl->PSSetConstantBuffers(d_ctx, 0, 1, &uniforms_buffer);
+
+                d_ctx->lpVtbl->PSSetShader(d_ctx, pshad, 0, 0);
+                d_ctx->lpVtbl->PSSetConstantBuffers(d_ctx, 0, 1, &uniforms_buffer);
+                d_ctx->lpVtbl->PSSetShaderResources(d_ctx, 0, 1, &texture->view);
+                d_ctx->lpVtbl->PSSetSamplers(d_ctx, 0, 1, &mesh_sampler);
                 
                 // rjf: setup scissor rect
                 {

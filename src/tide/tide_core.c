@@ -782,6 +782,11 @@ internal void ti_window_frame(void)
             }
         }
 
+        if (DEV_draw_3D_test)
+        {
+            ti_test_view_ui_cube(window_rect);
+        }
+
         ///////////////////
         // @window_ui_part top bar
         //
@@ -850,8 +855,7 @@ internal void ti_window_frame(void)
             dr_rect(wm_client_rect_from_window(ws->os), base_border_color, 0, 1.f, border_softness * 0.5f);
         }
 
-        // draw 3D test
-        if (DEV_draw_3D_test)
+        if (DEV_draw_diag_line_test)
         {
             Rng2f32 rect = wm_client_rect_from_window(ws->os);
 
@@ -860,6 +864,9 @@ internal void ti_window_frame(void)
                          3.f,
                          v4f32(1, 0, 0, 1));
         }
+
+        
+        
 
         // recurse & draw
         u64 total_heatmap_sum_count = 0;
@@ -1643,6 +1650,10 @@ internal void ti_init(Cmd_Line *cmdline)
             cfg_node_newf(ti_state->cfg, size, "%f", window_dim.x);
             cfg_node_newf(ti_state->cfg, size, "%f", window_dim.y);
         }
+    }
+
+    // set up world map
+    {
     }
 
     ProfEnd();

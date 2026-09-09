@@ -1,0 +1,54 @@
+
+// GeoJson Type Table
+@table(type  is_geometry)
+GEO_TypeTable:
+{
+    {Feature             0 }
+    {FeatureCollection   0 }
+    {Point               1 }
+    {MultiPoint          1 }
+    {LineString          1 }
+    {MultiLineString     1 }
+    {Polygon             1 }
+    {MultiPolygon        1 }
+    {GeometryCollection  1 }
+}
+
+@enum GEO_Type:
+{
+    Null,
+    @expand(GEO_TypeTable a) `$(a.type)`,
+    COUNT,
+}
+
+@enum2string_switch(GEO_Type)
+gj_string_from_type:
+{
+    @expand(GEO_TypeTable a) `case GEO_Type_$(a.type):{result = str8_lit("$(a.type)");}break`;
+}
+
+@string2enum_match(GEO_Type)
+gj_type_from_string:
+{
+    @expand(GEO_TypeTable a) `else if (str8_match(v, str8_lit("$(a.type)"), 0)) {result = GEO_Type_$(a.type);}`;
+}
+
+@gen(functions)
+{
+    `internal bool32 gj_is_type_geometry(GEO_Type v);`;
+}
+
+@gen(functions) @c_file
+{
+    `internal bool32`;
+    `gj_is_type_geometry(GEO_Type v)`;
+    `{`;
+        `bool32 result = 0;`;
+        `switch(v)`;
+        `{`;
+            `default:{}break;`;
+            @expand(GEO_TypeTable a) `case GEO_Type_$(a.type):{result = $(a.is_geometry);}break;`;
+            `}`;
+        `return result;`;
+    `}`;
+}
