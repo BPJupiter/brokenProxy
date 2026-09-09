@@ -369,6 +369,7 @@ str8_lit_comp(
 "float4 ps_main(Vertex2Pixel v2p) : SV_TARGET\n"
 "{\n"
 "  float4 tex_color = albedo_t2d.Sample(albedo_sampler, v2p.texcoord);\n"
+"  clip(tex_color.a - 0.5);\n"
 "  return tex_color * v2p.color;\n"
 "}\n"
 ""

@@ -367,6 +367,7 @@ Vertex2Pixel vs_main(CPU2Vertex c2v)
 float4 ps_main(Vertex2Pixel v2p) : SV_TARGET
 {
   float4 tex_color = albedo_t2d.Sample(albedo_sampler, v2p.texcoord);
+  clip(tex_color.a - 0.5);
   return tex_color * v2p.color;
 }
 """;
