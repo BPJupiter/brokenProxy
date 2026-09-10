@@ -307,19 +307,31 @@ internal void bdns_c01(bool32 no_vuln)
 
         dns_pack_msg(tcp_client.send_buffer, &msg);
         Ring *ring = make_ring(scratch.arena, Kilobytes(64));
+        msg = query;
+
+        msg.header.query_response = true;
+        msg.header.authoritative  = true;
+        msg.header.rcode          = DNS_RCode_NoError;
         msg.header.answer_count = 1;
+        
         msg.answer = push_array(scratch.arena, DNS_RR, 1);
         msg.answer[0].name = query.question[0].name;
         msg.answer[0].type = query.question[0].type;
         msg.answer[0].class = query.question[0].class;
         msg.answer[0].ttl = 300;
-        msg.answer[0].rdata.PTR.ptrdname = s("example.domain.");
+        if (msg.answer[0].type == DNS_Type_A)
+        {
+            msg.answer[0].rdata.A.addr = TEST_IPV4_ADDR;
+        }
+        else
+        {
+            msg.answer[0].rdata.PTR.ptrdname = s("example.domain.");
+        }
         dns_pack_msg(ring, &msg);
 
         net_client_send_from_ring(&tcp_client);
         tcp_client.send_buffer = ring;
         net_client_send_from_ring(&tcp_client);
-        sleep_ms(50);
         net_client_close(tcp_client);
         printf("Sent data!\n");
     }
