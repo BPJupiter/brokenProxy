@@ -1,0 +1,6 @@
+
+///////////////////
+// Embedded Data
+
+@embed_file map_world_shp_bytes: "../data/World_Countries_Generalized.shp"
+@embed_file map_world_dbf_bytes: "../data/World_Countries_Generalized.dbf"

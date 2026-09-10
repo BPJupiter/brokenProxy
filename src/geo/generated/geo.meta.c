@@ -23,23 +23,6 @@ case GEO_Type_GeometryCollection:{result = str8_lit("GeometryCollection");}break
 return result;
 }
 
-internal GEO_Type
-gj_type_from_string(String8 v)
-{
-GEO_Type result = 0;
-if (0) {}
-else if (str8_match(v, str8_lit("Feature"), 0)) {result = GEO_Type_Feature;}
-else if (str8_match(v, str8_lit("FeatureCollection"), 0)) {result = GEO_Type_FeatureCollection;}
-else if (str8_match(v, str8_lit("Point"), 0)) {result = GEO_Type_Point;}
-else if (str8_match(v, str8_lit("MultiPoint"), 0)) {result = GEO_Type_MultiPoint;}
-else if (str8_match(v, str8_lit("LineString"), 0)) {result = GEO_Type_LineString;}
-else if (str8_match(v, str8_lit("MultiLineString"), 0)) {result = GEO_Type_MultiLineString;}
-else if (str8_match(v, str8_lit("Polygon"), 0)) {result = GEO_Type_Polygon;}
-else if (str8_match(v, str8_lit("MultiPolygon"), 0)) {result = GEO_Type_MultiPolygon;}
-else if (str8_match(v, str8_lit("GeometryCollection"), 0)) {result = GEO_Type_GeometryCollection;}
-return result;
-}
-
 internal bool32
 gj_is_type_geometry(GEO_Type v)
 {
