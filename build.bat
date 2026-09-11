@@ -120,7 +120,7 @@ if not exist local mkdir local
 for /f %%i in ('call git describe --always --dirty')   do set compile=%compile% -DBUILD_GIT_HASH=\"%%i\"
 for /f %%i in ('call git rev-parse HEAD')              do set compile=%compile% -DBUILD_GIT_HASH_FULL=\"%%i\"
 
-:: --- Build & Run Metaprogram ------------------------------------------------
+:: --- Build & Run Metaprograms ------------------------------------------------
 pushd build
 if "%meta%"=="1" (
   echo [building metagen]
@@ -130,7 +130,16 @@ if "%no_meta%"=="" if exist metagen.exe (
   echo [running metagen]
   metagen.exe || exit /b 1
 )
+if "%map%"=="1" (
+  echo [building mapgen]
+  %compile_debug% ..\src\mapgen\mapgen_main.c %compile_link% %out%mapgen.exe || exit /b 1
+)
+if "%no_map%"=="" if exist mapgen.exe (
+  echo [running mapgen]
+  mapgen.exe || exit /n 1
+)
 popd
+
 
 :: --- Build Everything (@build_targets) --------------------------------------
 pushd build

@@ -1,0 +1,31 @@
+
+@table(name  id)
+MAP_SHP_ShapeTable:
+{
+    {Null          0}
+    {Point         1}
+    {PolyLine      3}
+    {Polygon       5}
+    {MultiPoint    8}
+    {PointZ       11}
+    {PolyLineZ    13}
+    {PolygonZ     15}
+    {MultiPointZ  18}
+    {PointM       21}
+    {PolyLineM    23}
+    {PolygonM     25}
+    {MultiPointM  28}
+    {MultiPatch   31}
+}
+
+@enum
+MAP_SHP_ShapeKind:
+{
+    @expand(MAP_SHP_ShapeTable a) `$(a.name .. =>20) = $(a.id)`,
+}
+
+@enum2string_switch(MAP_SHP_ShapeKind)
+map_shp_string_from_shape_kind:
+{
+    @expand(MAP_SHP_ShapeTable a) `case MAP_SHP_ShapeKind_$(a.name): {result = str8_lit("$(a.name)");}break`;
+}

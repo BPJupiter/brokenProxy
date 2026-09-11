@@ -306,3 +306,253 @@ case DNS_RootServer_M:{result = str8_lit("WIDE Project");}break;
 return result;
 }
 
+internal bool32
+dns_is_obsolete_class(DNS_Class v)
+{
+bool32 result = 0;
+switch(v)
+{
+default:{}break;
+case DNS_Class_IN:{result = 0;}break;
+case DNS_Class_CS:{result = 1;}break;
+case DNS_Class_CH:{result = 0;}break;
+case DNS_Class_HS:{result = 0;}break;
+case DNS_Class_NONE:{result = 0;}break;
+case DNS_Class_ANY:{result = 0;}break;
+}
+return result;
+}
+
+internal bool32
+dns_is_query_exclusive_class(DNS_Class v)
+{
+bool32 result = 0;
+switch(v)
+{
+default:{}break;
+case DNS_Class_IN:{result = 0;}break;
+case DNS_Class_CS:{result = 0;}break;
+case DNS_Class_CH:{result = 0;}break;
+case DNS_Class_HS:{result = 0;}break;
+case DNS_Class_NONE:{result = 1;}break;
+case DNS_Class_ANY:{result = 1;}break;
+}
+return result;
+}
+
+internal bool32
+dns_is_obsolete_type(DNS_Type v)
+{
+bool32 result = 0;
+switch(v)
+{
+default:{}break;
+case DNS_Type_A:{result = 0;}break;
+case DNS_Type_NS:{result = 0;}break;
+case DNS_Type_MD:{result = 1;}break;
+case DNS_Type_MF:{result = 1;}break;
+case DNS_Type_CNAME:{result = 0;}break;
+case DNS_Type_SOA:{result = 0;}break;
+case DNS_Type_MB:{result = 1;}break;
+case DNS_Type_MG:{result = 1;}break;
+case DNS_Type_MR:{result = 1;}break;
+case DNS_Type_NULL:{result = 1;}break;
+case DNS_Type_WKS:{result = 1;}break;
+case DNS_Type_PTR:{result = 0;}break;
+case DNS_Type_HINFO:{result = 0;}break;
+case DNS_Type_MINFO:{result = 1;}break;
+case DNS_Type_MX:{result = 0;}break;
+case DNS_Type_TXT:{result = 0;}break;
+case DNS_Type_RP:{result = 1;}break;
+case DNS_Type_AFSDB:{result = 0;}break;
+case DNS_Type_X25:{result = 1;}break;
+case DNS_Type_ISDN:{result = 1;}break;
+case DNS_Type_RT:{result = 1;}break;
+case DNS_Type_NSAP:{result = 1;}break;
+case DNS_Type_NSAPPTR:{result = 1;}break;
+case DNS_Type_SIG:{result = 1;}break;
+case DNS_Type_KEY:{result = 1;}break;
+case DNS_Type_PX:{result = 1;}break;
+case DNS_Type_GPOS:{result = 1;}break;
+case DNS_Type_AAAA:{result = 0;}break;
+case DNS_Type_LOC:{result = 0;}break;
+case DNS_Type_NXT:{result = 1;}break;
+case DNS_Type_EID:{result = 1;}break;
+case DNS_Type_NIMLOC:{result = 1;}break;
+case DNS_Type_SRV:{result = 0;}break;
+case DNS_Type_ATMA:{result = 1;}break;
+case DNS_Type_NAPTR:{result = 0;}break;
+case DNS_Type_KX:{result = 0;}break;
+case DNS_Type_CERT:{result = 0;}break;
+case DNS_Type_A6:{result = 1;}break;
+case DNS_Type_DNAME:{result = 0;}break;
+case DNS_Type_SINK:{result = 1;}break;
+case DNS_Type_OPT:{result = 0;}break;
+case DNS_Type_APL:{result = 1;}break;
+case DNS_Type_DS:{result = 0;}break;
+case DNS_Type_SSHFP:{result = 0;}break;
+case DNS_Type_IPSECKEY:{result = 0;}break;
+case DNS_Type_RRSIG:{result = 0;}break;
+case DNS_Type_NSEC:{result = 0;}break;
+case DNS_Type_DNSKEY:{result = 0;}break;
+case DNS_Type_DHCID:{result = 0;}break;
+case DNS_Type_NSEC3:{result = 0;}break;
+case DNS_Type_NSEC3PARAM:{result = 0;}break;
+case DNS_Type_TLSA:{result = 0;}break;
+case DNS_Type_SMIMEA:{result = 0;}break;
+case DNS_Type_HIP:{result = 0;}break;
+case DNS_Type_NINFO:{result = 1;}break;
+case DNS_Type_RKEY:{result = 1;}break;
+case DNS_Type_TALINK:{result = 1;}break;
+case DNS_Type_CDS:{result = 0;}break;
+case DNS_Type_CDNSKEY:{result = 0;}break;
+case DNS_Type_OPENPGPKEY:{result = 0;}break;
+case DNS_Type_CSYNC:{result = 0;}break;
+case DNS_Type_ZONEMD:{result = 0;}break;
+case DNS_Type_SVCB:{result = 0;}break;
+case DNS_Type_HTTPS:{result = 0;}break;
+case DNS_Type_DSYNC:{result = 0;}break;
+case DNS_Type_HHIT:{result = 0;}break;
+case DNS_Type_BRID:{result = 0;}break;
+case DNS_Type_SPF:{result = 1;}break;
+case DNS_Type_UINFO:{result = 1;}break;
+case DNS_Type_UID:{result = 1;}break;
+case DNS_Type_GID:{result = 1;}break;
+case DNS_Type_UNSPEC:{result = 1;}break;
+case DNS_Type_NID:{result = 0;}break;
+case DNS_Type_L32:{result = 0;}break;
+case DNS_Type_L64:{result = 0;}break;
+case DNS_Type_LP:{result = 0;}break;
+case DNS_Type_EUI48:{result = 0;}break;
+case DNS_Type_EUI64:{result = 0;}break;
+case DNS_Type_NXNAME:{result = 0;}break;
+case DNS_Type_TKEY:{result = 0;}break;
+case DNS_Type_TSIG:{result = 0;}break;
+case DNS_Type_IXFR:{result = 0;}break;
+case DNS_Type_AXFR:{result = 0;}break;
+case DNS_Type_MAILB:{result = 0;}break;
+case DNS_Type_MAILA:{result = 1;}break;
+case DNS_Type_ANY:{result = 0;}break;
+case DNS_Type_URI:{result = 0;}break;
+case DNS_Type_CAA:{result = 0;}break;
+case DNS_Type_AVC:{result = 0;}break;
+case DNS_Type_DOA:{result = 1;}break;
+case DNS_Type_AMTRELAY:{result = 0;}break;
+case DNS_Type_RESINFO:{result = 0;}break;
+case DNS_Type_WALLET:{result = 0;}break;
+case DNS_Type_CLA:{result = 0;}break;
+case DNS_Type_IPN:{result = 0;}break;
+case DNS_Type_TA:{result = 0;}break;
+case DNS_Type_DLV:{result = 1;}break;
+}
+return result;
+}
+
+internal bool32
+dns_is_query_exclusive_type(DNS_Type v)
+{
+bool32 result = 0;
+switch(v)
+{
+default:{}break;
+case DNS_Type_A:{result = 0;}break;
+case DNS_Type_NS:{result = 0;}break;
+case DNS_Type_MD:{result = 0;}break;
+case DNS_Type_MF:{result = 0;}break;
+case DNS_Type_CNAME:{result = 0;}break;
+case DNS_Type_SOA:{result = 0;}break;
+case DNS_Type_MB:{result = 0;}break;
+case DNS_Type_MG:{result = 0;}break;
+case DNS_Type_MR:{result = 0;}break;
+case DNS_Type_NULL:{result = 0;}break;
+case DNS_Type_WKS:{result = 0;}break;
+case DNS_Type_PTR:{result = 0;}break;
+case DNS_Type_HINFO:{result = 0;}break;
+case DNS_Type_MINFO:{result = 0;}break;
+case DNS_Type_MX:{result = 0;}break;
+case DNS_Type_TXT:{result = 0;}break;
+case DNS_Type_RP:{result = 0;}break;
+case DNS_Type_AFSDB:{result = 0;}break;
+case DNS_Type_X25:{result = 0;}break;
+case DNS_Type_ISDN:{result = 0;}break;
+case DNS_Type_RT:{result = 0;}break;
+case DNS_Type_NSAP:{result = 0;}break;
+case DNS_Type_NSAPPTR:{result = 0;}break;
+case DNS_Type_SIG:{result = 0;}break;
+case DNS_Type_KEY:{result = 0;}break;
+case DNS_Type_PX:{result = 0;}break;
+case DNS_Type_GPOS:{result = 0;}break;
+case DNS_Type_AAAA:{result = 0;}break;
+case DNS_Type_LOC:{result = 0;}break;
+case DNS_Type_NXT:{result = 0;}break;
+case DNS_Type_EID:{result = 0;}break;
+case DNS_Type_NIMLOC:{result = 0;}break;
+case DNS_Type_SRV:{result = 0;}break;
+case DNS_Type_ATMA:{result = 0;}break;
+case DNS_Type_NAPTR:{result = 0;}break;
+case DNS_Type_KX:{result = 0;}break;
+case DNS_Type_CERT:{result = 0;}break;
+case DNS_Type_A6:{result = 0;}break;
+case DNS_Type_DNAME:{result = 0;}break;
+case DNS_Type_SINK:{result = 0;}break;
+case DNS_Type_OPT:{result = 0;}break;
+case DNS_Type_APL:{result = 0;}break;
+case DNS_Type_DS:{result = 0;}break;
+case DNS_Type_SSHFP:{result = 0;}break;
+case DNS_Type_IPSECKEY:{result = 0;}break;
+case DNS_Type_RRSIG:{result = 0;}break;
+case DNS_Type_NSEC:{result = 0;}break;
+case DNS_Type_DNSKEY:{result = 0;}break;
+case DNS_Type_DHCID:{result = 0;}break;
+case DNS_Type_NSEC3:{result = 0;}break;
+case DNS_Type_NSEC3PARAM:{result = 0;}break;
+case DNS_Type_TLSA:{result = 0;}break;
+case DNS_Type_SMIMEA:{result = 0;}break;
+case DNS_Type_HIP:{result = 0;}break;
+case DNS_Type_NINFO:{result = 0;}break;
+case DNS_Type_RKEY:{result = 0;}break;
+case DNS_Type_TALINK:{result = 0;}break;
+case DNS_Type_CDS:{result = 0;}break;
+case DNS_Type_CDNSKEY:{result = 0;}break;
+case DNS_Type_OPENPGPKEY:{result = 0;}break;
+case DNS_Type_CSYNC:{result = 0;}break;
+case DNS_Type_ZONEMD:{result = 0;}break;
+case DNS_Type_SVCB:{result = 0;}break;
+case DNS_Type_HTTPS:{result = 0;}break;
+case DNS_Type_DSYNC:{result = 0;}break;
+case DNS_Type_HHIT:{result = 0;}break;
+case DNS_Type_BRID:{result = 0;}break;
+case DNS_Type_SPF:{result = 0;}break;
+case DNS_Type_UINFO:{result = 0;}break;
+case DNS_Type_UID:{result = 0;}break;
+case DNS_Type_GID:{result = 0;}break;
+case DNS_Type_UNSPEC:{result = 0;}break;
+case DNS_Type_NID:{result = 0;}break;
+case DNS_Type_L32:{result = 0;}break;
+case DNS_Type_L64:{result = 0;}break;
+case DNS_Type_LP:{result = 0;}break;
+case DNS_Type_EUI48:{result = 0;}break;
+case DNS_Type_EUI64:{result = 0;}break;
+case DNS_Type_NXNAME:{result = 0;}break;
+case DNS_Type_TKEY:{result = 0;}break;
+case DNS_Type_TSIG:{result = 0;}break;
+case DNS_Type_IXFR:{result = 1;}break;
+case DNS_Type_AXFR:{result = 1;}break;
+case DNS_Type_MAILB:{result = 1;}break;
+case DNS_Type_MAILA:{result = 1;}break;
+case DNS_Type_ANY:{result = 1;}break;
+case DNS_Type_URI:{result = 0;}break;
+case DNS_Type_CAA:{result = 0;}break;
+case DNS_Type_AVC:{result = 0;}break;
+case DNS_Type_DOA:{result = 0;}break;
+case DNS_Type_AMTRELAY:{result = 0;}break;
+case DNS_Type_RESINFO:{result = 0;}break;
+case DNS_Type_WALLET:{result = 0;}break;
+case DNS_Type_CLA:{result = 0;}break;
+case DNS_Type_IPN:{result = 0;}break;
+case DNS_Type_TA:{result = 0;}break;
+case DNS_Type_DLV:{result = 0;}break;
+}
+return result;
+}
+

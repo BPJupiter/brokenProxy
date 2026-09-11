@@ -22,5 +22,6 @@ GEO_Type_COUNT,
 } GEO_Type;
 
 internal String8 gj_string_from_type(GEO_Type v);
+internal GEO_Type gj_type_from_string(String8 v);
 internal bool32 gj_is_type_geometry(GEO_Type v);
 #endif // GEO_META_H

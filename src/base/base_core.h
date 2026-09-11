@@ -536,9 +536,23 @@ struct s32_Array
     u64 count;
 };
 
+typedef struct f32_Array f32_Array;
+struct f32_Array
+{
+    f32 *v;
+    u64 count;
+};
+
 typedef struct u64_Array u64_Array;
 struct u64_Array {
     u64 *v;
+    u64 count;
+};
+
+typedef struct f64_Array f64_Array;
+struct f64_Array
+{
+    f64 *v;
     u64 count;
 };
 

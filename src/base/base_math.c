@@ -25,6 +25,9 @@ internal f32 length_squared_2f32(Vec2f32 v)                     {f32 c = v.x*v.x
 internal f32 length_2f32(Vec2f32 v)                             {f32 c = sqrt_f32(v.x*v.x + v.y*v.y); return c;}
 internal Vec2f32 normalize_2f32(Vec2f32 v)                      {v = scale_2f32(v, 1.f/length_2f32(v)); return v;}
 internal Vec2f32 mix_2f32(Vec2f32 a, Vec2f32 b, f32 t)          {Vec2f32 c = {mix_1f32(a.x, b.x, t), mix_1f32(a.y, b.y, t)}; return c;}
+internal f32 orientation_2f32(Vec2f32 a, Vec2f32 b, Vec2f32 c)  {return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);}
+internal f32 euclidean_dist_2f32(Vec2f32 a, Vec2f32 b)          {f32 dx = a.x - b.x; f32 dy = a.y - b.y; return dx*dx + dy*dy;}
+internal bool32 within_epsilon_2f32(Vec2f32 a,Vec2f32 b,f64 e)  {return abs_f32(a.x - b.x) <= e && abs_f32(a.y - b.y) <= e;}
 
 internal Vec2s64 vec_2s64(s64 x, s64 y)                         {Vec2s64 v = {x, y}; return v;}
 internal Vec2s64 add_2s64(Vec2s64 a, Vec2s64 b)                 {Vec2s64 c = {a.x+b.x, a.y+b.y}; return c;}

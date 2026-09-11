@@ -10,6 +10,17 @@ union Vec2f32 {
     f32 v[2];
 };
 
+typedef union Vec2f64 Vec2f64;
+union Vec2f64
+{
+    struct
+    {
+        f64 x;
+        f64 y;
+    };
+    f64 v[2];
+};
+
 typedef union Vec2s64 Vec2s64;
 union Vec2s64 {
     struct {
@@ -55,6 +66,28 @@ union Vec3f32 {
         Vec2f32 yz;
     };
     f32 v[3];
+};
+
+typedef union Vec3f64 Vec3f64;
+union Vec3f64
+{
+    struct
+    {
+        f64 x;
+        f64 y;
+        f64 z;
+    };
+    struct
+    {
+        Vec2f64 xy;
+        f64 _z0;
+    };
+    struct
+    {
+        f64 _x0;
+        Vec2f64 yz;
+    };
+    f64 v[3];
 };
 
 typedef union Vec3s32 Vec3s32;
@@ -339,6 +372,56 @@ union Rng2s64
   Vec2s64 v[2];
 };
 
+typedef union Rng2f64 Rng2f64;
+union Rng2f64
+{
+    struct
+    {
+        Vec2f64 min;
+        Vec2f64 max;
+    };
+    struct
+    {
+        Vec2f64 p0;
+        Vec2f64 p1;
+    };
+    struct
+    {
+        f64 x0;
+        f64 y0;
+        f64 x1;
+        f64 y1;
+    };
+    Vec2f64 v[2];
+};
+
+//- fbt: 3-range (cubes)
+
+typedef union Rng3f64 Rng3f64;
+union Rng3f64
+{
+    struct
+    {
+        Vec3f64 min;
+        Vec3f64 max;
+    };
+    struct
+    {
+        Vec3f64 p0;
+        Vec3f64 p1;
+    };
+    struct
+    {
+        f64 x0;
+        f64 y0;
+        f64 z0;
+        f64 x1;
+        f64 y1;
+        f64 z1;
+    };
+    Vec3f64 v[2];
+};
+
 ////////////////////////////////
 //~ rjf: Range List Types
 
@@ -442,6 +525,10 @@ internal f32 length_squared_2f32(Vec2f32 v);
 internal f32 length_2f32(Vec2f32 v);
 internal Vec2f32 normalize_2f32(Vec2f32 v);
 internal Vec2f32 mix_2f32(Vec2f32 a, Vec2f32 b, f32 t);
+internal f32 orientation_2f32(Vec2f32 a, Vec2f32 b, Vec2f32 c);
+internal f32 euclidean_dist_2f32(Vec2f32 a, Vec2f32 b);
+internal bool32 within_epsilon_2f32(Vec2f32 a, Vec2f32 b, f64 e);
+internal bool32 end_on_segment_2f32(Vec2f32 p, Vec2f32 a, Vec2f32 b);
 
 #define v2s64(x, y) vec_2s64((x), (y))
 internal Vec2s64 vec_2s64(s64 x, s64 y);
